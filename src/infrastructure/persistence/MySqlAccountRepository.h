@@ -18,6 +18,7 @@ namespace Firelands {
         std::optional<Account> FindByUsername(const std::string& username) override;
         void Create(const Account& account) override;
         void Update(const Account& account) override;
+        void DeleteByUsername(const std::string& username) override;
 
     private:
         std::shared_ptr<sql::Connection> _connection;

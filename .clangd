@@ -1,0 +1,18 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/src
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/src/shared
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/src/application
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/src/domain
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/src/infrastructure
+    - -I/opt/homebrew/opt/boost/include
+    - -I/opt/homebrew/opt/openssl@3/include
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/build/_deps/mariadb-connector-c-src/include
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/build/_deps/mariadb-connector-c-build/include
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/build/_deps/mariadb-connector-cpp-src/include
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/build/_deps/googletest-src/googletest/include
+    - -I/Users/jose.joya/Projects/dev/firelands/firelands-next/build/_deps/googletest-src/googlemock/include
+  CompilationDatabase: /Users/jose.joya/Projects/dev/firelands/firelands-next/build
+Index:
+  Background: Build

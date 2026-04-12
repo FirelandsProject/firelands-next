@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 
 namespace Firelands {
 namespace Crypto {
@@ -20,7 +21,23 @@ namespace Crypto {
 
     inline SHA1Hash CalculateSHA1(const std::string& input) {
         SHA1Hash hash(SHA_DIGEST_LENGTH);
-        SHA1(reinterpret_cast<const uint8_t*>(input.c_str()), input.length(), hash.data());
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        EVP_DigestInit_ex(ctx, EVP_sha1(), nullptr);
+        EVP_DigestUpdate(ctx, input.c_str(), input.length());
+        unsigned int len = 0;
+        EVP_DigestFinal_ex(ctx, hash.data(), &len);
+        EVP_MD_CTX_free(ctx);
+        return hash;
+    }
+
+    inline SHA1Hash CalculateSHA1(const std::vector<uint8_t>& input) {
+        SHA1Hash hash(SHA_DIGEST_LENGTH);
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        EVP_DigestInit_ex(ctx, EVP_sha1(), nullptr);
+        EVP_DigestUpdate(ctx, input.data(), input.size());
+        unsigned int len = 0;
+        EVP_DigestFinal_ex(ctx, hash.data(), &len);
+        EVP_MD_CTX_free(ctx);
         return hash;
     }
 

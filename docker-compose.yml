@@ -5,13 +5,17 @@ services:
     image: mysql:8.0
     container_name: firelands_db
     restart: always
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password", "--require-secure-transport=OFF", "--ssl=0"]
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: firelands_auth
+      MYSQL_DATABASE: firelands
+      MYSQL_USER: firelands
+      MYSQL_PASSWORD: firelands
     ports:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
+      - ./sql/0_init_permissions.sql:/docker-entrypoint-initdb.d/0.sql
       - ./sql/auth_schema.sql:/docker-entrypoint-initdb.d/1.sql
       - ./sql/characters_schema.sql:/docker-entrypoint-initdb.d/2.sql
       - ./sql/world_schema.sql:/docker-entrypoint-initdb.d/3.sql

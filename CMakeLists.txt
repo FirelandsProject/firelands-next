@@ -3,6 +3,7 @@ project(Firelands CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -14,13 +15,27 @@ include(FetchContent)
 # 1. OpenSSL (Required by MariaDB)
 find_package(OpenSSL REQUIRED)
 
+# 1.1 Boost (Required for Networking)
+find_package(Boost REQUIRED COMPONENTS thread)
+include_directories(${Boost_INCLUDE_DIRS})
+
 # 2. GoogleTest
 FetchContent_Declare(
   googletest
-  URL https://github.com/google/googletest/archive/refs/heads/main.zip
+  URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
+
+# 2.1 spdlog (Logging)
+FetchContent_Declare(
+    spdlog
+    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.14.1.zip
+)
+set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+set(SPDLOG_INSTALL       OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(spdlog)
 
 # 3. MariaDB Connector/C
 FetchContent_Declare(
@@ -49,6 +64,7 @@ FetchContent_Populate(mariadb-connector-cpp)
 
 set(MARIADB_CLIENT_LIBS mariadbclient CACHE STRING "" FORCE)
 set(USE_SYSTEM_INSTALLED_LIB TRUE CACHE BOOL "" FORCE)
+set(WITH_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 include_directories(SYSTEM ${mariadb-connector-c_SOURCE_DIR}/include ${mariadb-connector-c_BINARY_DIR}/include)
 add_subdirectory(${mariadb-connector-cpp_SOURCE_DIR} ${mariadb-connector-cpp_BINARY_DIR})
 
@@ -64,5 +80,23 @@ add_subdirectory(src/shared)
 add_subdirectory(src/domain)
 add_subdirectory(src/infrastructure)
 add_subdirectory(tests)
+
+# Main Executables
+add_executable(FirelandsAuth src/main.cpp)
+target_link_libraries(FirelandsAuth 
+    PRIVATE FirelandsInfrastructure 
+    PRIVATE FirelandsDomain 
+    PRIVATE FirelandsShared
+    PRIVATE Boost::thread
+)
+
+# Tools
+add_executable(FirelandsAccountGen src/tools/AccountGen.cpp)
+target_link_libraries(FirelandsAccountGen
+    PRIVATE FirelandsInfrastructure
+    PRIVATE FirelandsDomain
+    PRIVATE FirelandsShared
+    PRIVATE Boost::thread
+)
 
 message(STATUS "Firelands WoW Emulator (4.3.4.15595) project initialized.")

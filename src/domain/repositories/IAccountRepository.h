@@ -12,7 +12,8 @@ namespace Firelands {
         uint32 id;
         std::string username;
         std::string email;
-        std::string shaPassHash;
+        std::vector<uint8_t> salt;
+        std::vector<uint8_t> verifier;
         uint8 expansion;
     };
 
@@ -23,6 +24,7 @@ namespace Firelands {
         virtual std::optional<Account> FindByUsername(const std::string& username) = 0;
         virtual void Create(const Account& account) = 0;
         virtual void Update(const Account& account) = 0;
+        virtual void DeleteByUsername(const std::string& username) = 0;
     };
 
 } // namespace Firelands

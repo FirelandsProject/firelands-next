@@ -1,5 +1,7 @@
 #include "MySqlAccountRepository.h"
 #include <conncpp.hpp>
+#include <sstream>
+#include <shared/Logger.h>
 
 namespace Firelands {
 
@@ -9,7 +11,7 @@ namespace Firelands {
     std::optional<Account> MySqlAccountRepository::FindByUsername(const std::string& username) {
         try {
             std::shared_ptr<sql::PreparedStatement> stmnt(
-                _connection->prepareStatement("SELECT id, username, email, sha_pass_hash, expansion FROM account WHERE username = ?")
+                _connection->prepareStatement("SELECT id, username, email, salt, verifier, expansion FROM account WHERE username = ?")
             );
             stmnt->setString(1, username);
             
@@ -20,13 +22,20 @@ namespace Firelands {
                 acc.id = res->getInt("id");
                 acc.username = res->getString("username");
                 acc.email = res->getString("email");
-                acc.shaPassHash = res->getString("sha_pass_hash");
+                
+                // Read Binary Salt
+                auto saltStream = res->getBlob("salt");
+                acc.salt.assign(std::istreambuf_iterator<char>(*saltStream), std::istreambuf_iterator<char>());
+                
+                // Read Binary Verifier
+                auto verifierStream = res->getBlob("verifier");
+                acc.verifier.assign(std::istreambuf_iterator<char>(*verifierStream), std::istreambuf_iterator<char>());
+
                 acc.expansion = static_cast<uint8>(res->getInt("expansion"));
                 return acc;
             }
         } catch (sql::SQLException& e) {
-            // Skill-01: Log in English
-            // TODO: Use a proper Logger in infrastructure
+            LOG_ERROR("Database error in FindByUsername: {}", e.what());
             return std::nullopt;
         }
         
@@ -36,14 +45,25 @@ namespace Firelands {
     void MySqlAccountRepository::Create(const Account& account) {
         try {
             std::shared_ptr<sql::PreparedStatement> stmnt(
-                _connection->prepareStatement("INSERT INTO account (username, email, expansion) VALUES (?, ?, ?)")
+                _connection->prepareStatement("INSERT INTO account (username, email, salt, verifier, expansion) VALUES (?, ?, ?, ?, ?)")
             );
             stmnt->setString(1, account.username);
             stmnt->setString(2, account.email);
-            stmnt->setInt(3, account.expansion);
+            
+            // Set Salt as Blob
+            std::string saltStr(account.salt.begin(), account.salt.end());
+            std::istringstream saltStream(saltStr);
+            stmnt->setBlob(3, &saltStream);
+
+            // Set Verifier as Blob
+            std::string verifierStr(account.verifier.begin(), account.verifier.end());
+            std::istringstream verifierStream(verifierStr);
+            stmnt->setBlob(4, &verifierStream);
+
+            stmnt->setInt(5, account.expansion);
             stmnt->executeUpdate();
         } catch (sql::SQLException& e) {
-            // TODO: Error handling
+            LOG_ERROR("Database error in Create: {}", e.what());
         }
     }
 
@@ -57,7 +77,19 @@ namespace Firelands {
             stmnt->setInt(3, account.id);
             stmnt->executeUpdate();
         } catch (sql::SQLException& e) {
-            // TODO: Error handling
+            LOG_ERROR("Database error in Update: {}", e.what());
+        }
+    }
+
+    void MySqlAccountRepository::DeleteByUsername(const std::string& username) {
+        try {
+            std::shared_ptr<sql::PreparedStatement> stmnt(
+                _connection->prepareStatement("DELETE FROM account WHERE username = ?")
+            );
+            stmnt->setString(1, username);
+            stmnt->executeUpdate();
+        } catch (sql::SQLException& e) {
+            LOG_ERROR("Database error in DeleteByUsername: {}", e.what());
         }
     }
 

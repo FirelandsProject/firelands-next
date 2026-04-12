@@ -12,19 +12,9 @@ namespace Firelands {
         explicit AuthService(std::shared_ptr<IAccountRepository> accountRepo)
             : _accountRepo(std::move(accountRepo)) {}
 
-        bool Authenticate(const std::string& username, const std::string& password) {
-            auto account = _accountRepo->FindByUsername(Crypto::ToUpper(username));
-            
-            if (!account) {
-                return false;
-            }
 
-            // WoW SRP/Auth Rule: SHA1(UPPER(username) + ":" + UPPER(password))
-            std::string calculatedHash = Crypto::ToHexString(
-                Crypto::CalculateSHA1(Crypto::ToUpper(username) + ":" + Crypto::ToUpper(password))
-            );
-            
-            return (calculatedHash == account->shaPassHash);
+        std::optional<Account> FindAccount(const std::string& username) {
+            return _accountRepo->FindByUsername(Crypto::ToUpper(username));
         }
 
     private:
