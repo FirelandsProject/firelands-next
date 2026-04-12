@@ -4,7 +4,9 @@
 #include <application/ports/IAuthSession.h>
 #include <application/services/AuthService.h>
 #include <application/services/CharacterService.h>
+#include <shared/network/BitWriter.h>
 #include <shared/network/ByteBuffer.h>
+#include <shared/network/WorldPacket.h>
 #include <shared/network/WorldOpcodes.h>
 #include <boost/asio.hpp>
 #include <memory>
@@ -20,6 +22,7 @@ namespace Firelands {
         
         void Start();
         
+        void SendPacket(WorldPacket& packet);
         void SendPacket(ByteBuffer& buffer) override;
         void SendAuthChallenge();
         void Close() override;
@@ -28,11 +31,15 @@ namespace Firelands {
     private:
         void DoRead();
         void HandlePacket(ByteBuffer& buffer);
-        void HandleAuthSession(ByteBuffer& buffer);
-        void HandleCharEnum(ByteBuffer& buffer);
-        void HandleCharCreate(ByteBuffer& buffer);
-        void HandleCharDelete(ByteBuffer& buffer);
-        void HandlePlayerLogin(ByteBuffer& buffer);
+        void ProcessPacket(WorldPacket& packet);
+        
+        void HandleAuthSession(WorldPacket& packet);
+        void HandleCharEnum(WorldPacket& packet);
+        void HandleCharCreate(WorldPacket& packet);
+        void HandleCharDelete(WorldPacket& packet);
+        void HandlePlayerLogin(WorldPacket& packet);
+        void SendInitialObjectUpdate(uint64 guid);
+        void WritePackedGuid(uint64 guid, BitWriter& bw, ByteBuffer& bb);
 
         tcp::socket _socket;
         std::shared_ptr<AuthService> _authService;

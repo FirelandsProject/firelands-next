@@ -9,7 +9,7 @@ add_library(FirelandsInfrastructure STATIC
 )
 
 target_link_libraries(FirelandsInfrastructure 
-    PRIVATE FirelandsDomain FirelandsApplication
+    PUBLIC FirelandsApplication
     PUBLIC mariadbcpp-static mariadbclient ${OPENSSL_LIBRARIES} ${MARIADB_EXTRA_LIBS}
     PUBLIC Boost::thread
     PUBLIC nlohmann_json::nlohmann_json

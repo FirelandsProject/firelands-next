@@ -13,6 +13,13 @@ namespace Firelands {
         DoRead();
     }
 
+    void AuthSession::SendPacket(AuthPacket& packet) {
+        // Auth packets are simple: opcode + payload
+        // No extra header size like World packets, except for specific responses 
+        // that are handled by the packet struct itself.
+        SendPacket(static_cast<ByteBuffer&>(packet));
+    }
+
     void AuthSession::SendPacket(ByteBuffer& buffer) {
         auto self(shared_from_this());
         boost::asio::async_write(_socket, boost::asio::buffer(buffer.GetBuffer(), buffer.Size()),
@@ -55,15 +62,27 @@ namespace Firelands {
         if (buffer.Size() == 0) return;
         
         uint8 opcode = buffer.Read<uint8>();
+        AuthPacket packet(opcode, buffer.Size());
+        if (buffer.Size() > 0) {
+            packet.Append(buffer.GetBuffer() + 1, buffer.Size() - 1);
+        }
+
+        ProcessPacket(packet);
+    }
+
+    void AuthSession::ProcessPacket(AuthPacket& packet) {
+        uint8 opcode = packet.GetOpcode();
+        LOG_INFO("AuthSession received packet: {}, size: {}", packet.GetOpcodeName(), packet.Size());
+
         switch (opcode) {
             case AUTH_LOGON_CHALLENGE:
-                HandleLogonChallenge(buffer);
+                HandleLogonChallenge(packet);
                 break;
             case AUTH_LOGON_PROOF:
-                HandleLogonProof(buffer);
+                HandleLogonProof(packet);
                 break;
             case AUTH_REALM_LIST:
-                HandleRealmList(buffer);
+                HandleRealmList(packet);
                 break;
             default:
                 LOG_WARN("Unknown opcode received: 0x{:02X}", opcode);
@@ -72,9 +91,9 @@ namespace Firelands {
         }
     }
 
-    void AuthSession::HandleLogonChallenge(ByteBuffer& buffer) {
+    void AuthSession::HandleLogonChallenge(AuthPacket& packet) {
         AuthLogonChallenge_C challenge;
-        challenge.Read(buffer);
+        challenge.Read(packet);
         
         _username = challenge.username;
         LOG_INFO("Login challenge for user: {} ({})", _username, GetIpAddress());
@@ -114,14 +133,14 @@ namespace Firelands {
             response.securityFlags = 0;
         }
         
-        ByteBuffer resBuffer;
-        response.Write(resBuffer);
-        SendPacket(resBuffer);
+        AuthPacket res(AUTH_LOGON_CHALLENGE);
+        response.Write(res);
+        SendPacket(res);
     }
 
-    void AuthSession::HandleLogonProof(ByteBuffer& buffer) {
+    void AuthSession::HandleLogonProof(AuthPacket& packet) {
         AuthLogonProof_C proof;
-        proof.Read(buffer);
+        proof.Read(packet);
 
         if (!_v || !_b || !_B) {
             Close();
@@ -157,12 +176,12 @@ namespace Firelands {
             }
         }
 
-        ByteBuffer resBuffer;
-        response.Write(resBuffer);
-        SendPacket(resBuffer);
+        AuthPacket res(AUTH_LOGON_PROOF);
+        response.Write(res);
+        SendPacket(res);
     }
 
-    void AuthSession::HandleRealmList(ByteBuffer& /*buffer*/) {
+    void AuthSession::HandleRealmList(AuthPacket& /*packet*/) {
         LOG_INFO("Realm list requested by user: {}", _username);
 
         AuthRealmList_S response;
@@ -199,9 +218,9 @@ namespace Firelands {
         
         response.payload = std::vector<uint8>(payloadBuffer.GetBuffer(), payloadBuffer.GetBuffer() + payloadBuffer.Size());
 
-        ByteBuffer resBuffer;
-        response.Write(resBuffer);
-        SendPacket(resBuffer);
+        AuthPacket res(AUTH_REALM_LIST);
+        response.Write(res);
+        SendPacket(res);
     }
 
     void AuthSession::DoWrite() {

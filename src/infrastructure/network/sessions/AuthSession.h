@@ -6,6 +6,7 @@
 #include <application/services/SRPService.h>
 #include <application/services/RealmListService.h>
 #include <shared/network/AuthPackets.h>
+#include <shared/network/AuthPacket.h>
 #include <boost/asio.hpp>
 #include <memory>
 #include <queue>
@@ -21,6 +22,7 @@ namespace Firelands {
         void Start();
         
         // IAuthSession implementation
+        void SendPacket(AuthPacket& packet);
         void SendPacket(ByteBuffer& buffer) override;
         void Close() override;
         std::string GetIpAddress() const override;
@@ -28,9 +30,11 @@ namespace Firelands {
     private:
         void DoRead();
         void HandlePacket(ByteBuffer& buffer);
-        void HandleLogonChallenge(ByteBuffer& buffer);
-        void HandleLogonProof(ByteBuffer& buffer);
-        void HandleRealmList(ByteBuffer& buffer);
+        void ProcessPacket(AuthPacket& packet);
+        
+        void HandleLogonChallenge(AuthPacket& packet);
+        void HandleLogonProof(AuthPacket& packet);
+        void HandleRealmList(AuthPacket& packet);
         void DoWrite();
 
         tcp::socket _socket;

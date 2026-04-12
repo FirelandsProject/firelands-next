@@ -15,8 +15,6 @@ add_executable(FirelandsUnitTests
 target_link_libraries(FirelandsUnitTests
     GTest::gtest_main
     GTest::gmock
-    FirelandsDomain
-    FirelandsApplication
     FirelandsInfrastructure
 )
 

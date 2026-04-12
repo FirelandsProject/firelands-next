@@ -93,29 +93,18 @@ add_subdirectory(tests)
 # Main Executables
 add_executable(auth src/auth/main.cpp)
 target_link_libraries(auth 
-    PRIVATE FirelandsInfrastructure 
-    PRIVATE FirelandsApplication
-    PRIVATE FirelandsDomain 
-    PRIVATE FirelandsShared
-    PRIVATE Boost::thread
+    PRIVATE FirelandsInfrastructure
 )
 
 add_executable(world src/world/main.cpp)
 target_link_libraries(world 
-    PRIVATE FirelandsInfrastructure 
-    PRIVATE FirelandsApplication
-    PRIVATE FirelandsDomain 
-    PRIVATE FirelandsShared
-    PRIVATE Boost::thread
+    PRIVATE FirelandsInfrastructure
 )
 
 # Tools
 add_executable(FirelandsDevTools src/tools/DevTools.cpp)
 target_link_libraries(FirelandsDevTools
     PRIVATE FirelandsInfrastructure
-    PRIVATE FirelandsDomain
-    PRIVATE FirelandsShared
-    PRIVATE Boost::thread
 )
 
 message(STATUS "Firelands WoW Emulator (4.3.4.15595) project initialized.")
