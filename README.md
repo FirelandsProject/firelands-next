@@ -15,6 +15,3 @@ We operate under a strict set of "Skills" to maintain code quality and architect
 To get started:
 1. Ensure you have CMake and a C++17 compliant compiler.
 2. Follow the implementation plan in [implementation_plan.md](implementation_plan.md) (internal reference).
-
----
-*Developed by Antigravity AI.*
