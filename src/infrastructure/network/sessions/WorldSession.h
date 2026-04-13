@@ -45,9 +45,29 @@ namespace Firelands {
         void HandlePlayerLogin(WorldPacket& packet);
         void HandleMovement(WorldPacket& packet);
         void HandleMessageChat(WorldPacket& packet);
+        void HandleReadyForAccountDataTimes(WorldPacket& packet);
         void SendInitialObjectUpdate(uint64 guid);
         
         void ReadMovementInfo(WorldPacket& packet, MovementInfo& move);
+
+        // Auth Refactor
+        void HandleAuthSessionScattered(WorldPacket& packet, uint8* digest, std::vector<uint8>& localChallenge, uint16& build, uint32& realmId, int32& loginServerId);
+        void HandleAuthSessionStandard(WorldPacket& packet, uint16& build, uint8* digest, std::vector<uint8>& localChallenge, uint32& realmId);
+        
+        void SendAuthResponse();
+        void SendAddonInfo();
+        void SendClientCacheVersion();
+        void SendTutorialFlags();
+        void SendAccountDataTimes();
+        void SendFeatureSystemStatus();
+        void SendRealmSplit(uint32 realmId);
+        void SendLoginSetTimeSpeed();
+        void SendSetTimeZoneInformation();
+        void SendLearnedDanceMoves();
+        void SendMotd();
+        void SendAccountRestrictedUpdate();
+        void SendSetDfFastLaunchResources();
+        void SendInitialRaidGroupError();
 
         void DoWrite();
 

@@ -64,6 +64,15 @@ namespace Firelands {
             return val;
         }
 
+        void Read(uint8* dest, size_t count) {
+            if (_readPos + count > _storage.size()) {
+                std::memset(dest, 0, count);
+                return;
+            }
+            std::memcpy(dest, &_storage[_readPos], count);
+            _readPos += count;
+        }
+
         std::string ReadString() {
             std::string res;
             while (_readPos < _storage.size()) {
