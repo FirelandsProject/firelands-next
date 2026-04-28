@@ -2,7 +2,7 @@
 name: language-and-naming
 description: Ensures all code, comments, and git history use consistent English and technical nomenclature. Use whenever writing code, adding comments, or preparing commit messages.
 ---
-# SKILL-001: Language and Naming
+# Language and Naming
 
 ## Directives
 1. **Total English:** All code components (variables, functions, types, constants) must be named in English.

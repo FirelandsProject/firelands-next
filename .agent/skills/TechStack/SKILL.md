@@ -2,7 +2,7 @@
 name: tech-stack
 description: Defines C++17, CMake, and MySQL standards for cross-platform support. Use to ensure compatibility across Windows, Linux, and macOS.
 ---
-# SKILL-004: Technical Stack & Platform Support
+# Technical Stack & Platform Support
 
 ## Stack Definition
 - **Language:** C++17 (Use `<filesystem>`, `std::optional`, `std::variant`, etc.).

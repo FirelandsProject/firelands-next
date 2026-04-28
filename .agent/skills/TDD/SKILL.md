@@ -2,7 +2,7 @@
 name: test-driven-development
 description: Ensures logic correctness via Red-Green-Refactor cycle. Use for all logic changes to maintain project integrity.
 ---
-# SKILL-003: Test-Driven Development (TDD)
+# Test-Driven Development (TDD)
 
 ## Workflow
 1. **Red Stage:** Write a unit test that defines a small piece of functionality. Run it and watch it fail.

@@ -2,7 +2,7 @@
 name: strategic-delegation
 description: Manages task delegation to specialized virtual agents (Auth, World, DB, Core). Use for complex tasks spanning multiple domains.
 ---
-# SKILL-06: Strategic Delegation and Roles
+# Strategic Delegation and Roles
 
 ## Specialized Roles
 ### 1. Auth Architect (`auth-agent`)

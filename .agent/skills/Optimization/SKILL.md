@@ -2,7 +2,7 @@
 name: build-optimization
 description: Optimizes build times using Ninja, ccache, and Precompiled Headers (PCH). Use when adding new targets or heavy dependencies.
 ---
-# SKILL-005: Build Optimization & Performance
+# Build Optimization & Performance
 
 ## Core Principles
 To maintain a fast development cycle, the build system is optimized for speed and efficiency. All modifications should respect these optimization patterns.
@@ -13,6 +13,9 @@ To maintain a fast development cycle, the build system is optimized for speed an
 3. **Precompiled Headers (PCH)**: 
    - Heavy headers (STL, spdlog, nlohmann_json) are precompiled.
    - Every new target should apply `${PROJECT_PCH_HEADERS}` or `${TEST_PCH_HEADERS}` using `target_precompile_headers`.
+
+## Build Directive
+- **Compile with Ninja:** all builds should be executed using Ninja (i.e., a build directory configured with the Ninja generator). Do not use Make-based builds.
 
 ## Build Configurations
 1. **Unity Builds**: Grouping multiple source files to reduce preprocessor load. Toggle with `-DENABLE_UNITY_BUILD=ON/OFF`.
