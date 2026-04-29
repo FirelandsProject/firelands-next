@@ -13,6 +13,7 @@ add_executable(FirelandsUnitTests
     unit/application/AuthServiceTests.cpp
     unit/application/CharacterServiceTests.cpp
     unit/domain/MapTests.cpp
+    unit/infrastructure/LuaGameScriptHostTests.cpp
 )
 
 target_link_libraries(FirelandsUnitTests

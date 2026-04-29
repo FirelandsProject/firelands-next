@@ -124,6 +124,16 @@ set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
 
+# 3.3 Lua 5.4 (gameplay scripting via C API; see docs/PARITY_AND_LUA_ROADMAP.md)
+set(LUA_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(LUA_ENABLE_SHARED OFF CACHE BOOL "" FORCE)
+set(LUA_BUILD_COMPILER OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  lua_cmake
+  URL https://github.com/walterschell/Lua/archive/refs/tags/v5.4.7.zip
+)
+FetchContent_MakeAvailable(lua_cmake)
+
 # 4. MariaDB Connector/C++ 1.1.7
 FetchContent_Declare(
     mariadb-connector-cpp

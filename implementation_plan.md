@@ -35,6 +35,7 @@ This document serves as the single source of truth for the step-by-step developm
 - [x] **Movement Network:** Basic handling and broadcasting of movement opcodes. (Basic handling implemented, broadcasting to other players pending further network implementation)
 
 ## Phase 6: Gameplay Mechanics (IN PROGRESS)
+- [x] **Lua scripting host (MVP):** `IGameScriptHost`, `LuaGameScriptHost`, config `Scripting.ScriptsDirectory`, bootstrap under `scripts/lua/`. Tracked in [docs/PARITY_AND_LUA_ROADMAP.md](docs/PARITY_AND_LUA_ROADMAP.md).
 - [x] **Chat System Base:** Implement spatial chat, server announcements, and whispers base. (Basic echo implemented; spatial chat and broadcasting to other players pending further network implementation)
 - [ ] **Entity Spawning:** Creatures, GameObjects, and NPCs base grid architecture.
 - [ ] **Spells and Auras:** Basic spell casting flow and GCD (Global Cooldown) implementation.

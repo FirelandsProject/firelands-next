@@ -6,13 +6,18 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/WorldSession.cpp
     network/asio/AsyncNetworkServer.cpp
     network/rest/RestAuthServer.cpp
+    scripting/LuaGameScriptHost.cpp
 )
+
+set_source_files_properties(scripting/LuaGameScriptHost.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 target_link_libraries(FirelandsInfrastructure 
     PUBLIC FirelandsApplication
     PUBLIC mariadbcpp-static mariadbclient ${OPENSSL_LIBRARIES} ${MARIADB_EXTRA_LIBS}
     PUBLIC Boost::thread
     PUBLIC nlohmann_json::nlohmann_json
+    PUBLIC Lua::Library
 )
 target_precompile_headers(FirelandsInfrastructure PRIVATE ${PROJECT_PCH_HEADERS})
 

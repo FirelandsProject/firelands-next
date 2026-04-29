@@ -1,0 +1,2 @@
+-- Optional bootstrap loaded by LuaGameScriptHost when present.
+-- Define globals or register shared helpers here.

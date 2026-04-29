@@ -8,6 +8,10 @@ Network:
 World:
   RealmName: "Firelands"
 
+# Lua gameplay scripts (bootstrap.lua optional under this directory).
+Scripting:
+  ScriptsDirectory: "scripts/lua"
+
 Database:
   User: "firelands"
   Password: "firelands"

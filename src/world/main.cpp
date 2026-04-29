@@ -7,6 +7,7 @@
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
+#include <infrastructure/scripting/LuaGameScriptHost.h>
 #include <shared/Banner.h>
 #include <shared/Config.h>
 #include <shared/Logger.h>
@@ -47,6 +48,16 @@ int main() {
   LOG_INFO("Starting World Server...");
 
   try {
+    std::string scriptsRoot = config.GetNested<std::string>(
+        {"Scripting", "ScriptsDirectory"}, "scripts/lua");
+    LuaGameScriptHost scriptHost;
+    if (!scriptHost.Init(scriptsRoot)) {
+      LOG_WARN("Lua script host failed to initialize (continuing without scripts)");
+    } else {
+      LOG_INFO("Lua script host ready, root: {}", scriptsRoot);
+      scriptHost.FireEvent("world_startup", 0);
+    }
+
     // General DB Setup
     std::string dbUser =
         config.GetNested<std::string>({"Database", "User"}, "firelands");
