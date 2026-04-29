@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS `version` (
   PRIMARY KEY (`core_version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `version` (`core_version`, `db_version`) VALUES ('Firelands 4.3.4.15595', 'Initial Schema 2026-04-11');
+INSERT IGNORE INTO `version` (`core_version`, `db_version`) VALUES ('Firelands 4.3.4.15595', 'Initial Schema 2026-04-11');

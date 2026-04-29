@@ -1,12 +1,6 @@
--- Fix characters table structure for Cataclysm 4.3.4 (Build 15595)
--- Adding missing customization columns
-
+-- Customization columns are defined in `characters_schema.sql` for new installs.
+-- This file remains as a no-op so existing deployments keep the same migration name
+-- in `schema_migrations` without failing on duplicate ALTERs.
 USE `firelands_characters`;
+SELECT 1;
 
-ALTER TABLE `characters` 
-ADD COLUMN `skin` tinyint(3) unsigned NOT NULL DEFAULT '0' AFTER `gender`,
-ADD COLUMN `face` tinyint(3) unsigned NOT NULL DEFAULT '0' AFTER `skin`,
-ADD COLUMN `hairStyle` tinyint(3) unsigned NOT NULL DEFAULT '0' AFTER `face`,
-ADD COLUMN `hairColor` tinyint(3) unsigned NOT NULL DEFAULT '0' AFTER `hairStyle`,
-ADD COLUMN `facialHair` tinyint(3) unsigned NOT NULL DEFAULT '0' AFTER `hairColor`,
-ADD COLUMN `customizationFlags` int(10) unsigned NOT NULL DEFAULT '0' AFTER `characterFlags`;

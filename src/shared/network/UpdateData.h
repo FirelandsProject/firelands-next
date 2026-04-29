@@ -88,7 +88,8 @@ public:
       bw.WriteBit(hasFallData);
       bw.WriteBit(!hasSplineElevation); // !Has spline elevation
       bw.WriteBit(guidBytes[5] != 0);
-      bw.WriteBit(!hasTransport); // Has transport data
+      // Reference (FirelandsCore): this bit is true only when transport guid is present.
+      bw.WriteBit(hasTransport); // Has transport data
       bw.WriteBit(false);         // !HasTime (always send time in bytes)
 
       bw.WriteBit(guidBytes[4] != 0);
@@ -103,11 +104,15 @@ public:
     bw.Flush();
 
     if (flags & UPDATEFLAG_LIVING) {
+      // Byte order must match Object::BuildMovementUpdate (FirelandsCore
+      // Object.cpp) for this flag combination: no fall, no spline elevation,
+      // no spline, no transport, no pitch, orientation omitted when zero.
       _data.WriteByteSeq(guidBytes[4]);
       _data.Append<float>(4.5f); // MOVE_RUN_BACK
       _data.Append<float>(4.5f); // MOVE_SWIM_BACK
       _data.Append<float>(move.z);
       _data.WriteByteSeq(guidBytes[5]);
+      // transport block omitted (no transport guid)
       _data.Append<float>(move.x);
       _data.Append<float>(3.14159f); // MOVE_PITCH_RATE
       _data.WriteByteSeq(guidBytes[3]);
@@ -118,10 +123,7 @@ public:
       _data.WriteByteSeq(guidBytes[1]);
       _data.WriteByteSeq(guidBytes[2]);
       _data.Append<float>(2.5f); // MOVE_WALK
-
-      // Time is expected to be present (FirelandsCore always writes it)
       _data.Append<uint32>(static_cast<uint32>(move.time));
-
       _data.Append<float>(3.14159f); // MOVE_TURN_RATE
       _data.WriteByteSeq(guidBytes[6]);
       _data.Append<float>(7.0f); // MOVE_FLIGHT
@@ -163,6 +165,7 @@ public:
    */
   void Build(WorldPacket &packet) {
     packet.SetOpcode(SMSG_UPDATE_OBJECT);
+    // FirelandsCore (Cataclysm 4.3.4): [2] mapId + [4] blockCount, then blocks.
     packet.Append<uint16>(_mapId);
     packet.Append<uint32>(_count);
     packet.Append(_data.GetBuffer(), _data.Size());

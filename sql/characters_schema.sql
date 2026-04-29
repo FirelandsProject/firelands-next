@@ -1,8 +1,8 @@
 CREATE DATABASE IF NOT EXISTS `firelands_characters`;
 USE `firelands_characters`;
 
-DROP TABLE IF EXISTS `characters`;
-CREATE TABLE `characters` (
+-- Idempotent: never DROP on startup (migrations re-run would wipe data).
+CREATE TABLE IF NOT EXISTS `characters` (
   `guid` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `account` int(10) unsigned NOT NULL DEFAULT '0',
   `name` varchar(12) NOT NULL DEFAULT '',

@@ -18,6 +18,7 @@
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <string>
+#include <vector>
 
 namespace Firelands {
 
@@ -71,6 +72,9 @@ private:
   void HandleCharCreate(WorldPacket &packet);
   void HandleCharDelete(WorldPacket &packet);
   void HandlePlayerLogin(WorldPacket &packet);
+  void HandleNameQuery(WorldPacket &packet);
+  void HandleQueryTime(WorldPacket &packet);
+  void HandlePlayedTime(WorldPacket &packet);
   void HandleMovement(WorldPacket &packet);
   void HandlePing(WorldPacket &packet);
   void HandleTimeSyncResp(WorldPacket &packet);
@@ -89,12 +93,17 @@ private:
   void SendFeatureSystemStatus();
   void SendRealmSplit(uint32 realmId);
   void SendLoginSetTimeSpeed(float speed = 0.01666667f);
-  void SendSetTimeZoneInformation();
   void SendLearnedDanceMoves();
   void SendMotd();
-  void SendInitialRaidGroupError();
   void SendInitialObjectUpdate(uint64 guid);
-  void SendInitialSpells();
+  /// Matches WorldPackets::Spells::SendKnownSpells (FirelandsCore / TCPP 4.3.4).
+  void SendKnownSpells(bool initialLogin, std::vector<uint32> const &spellIds);
+  void SendUnlearnSpellsEmpty();
+  void SendDungeonDifficulty(bool inGroup = false);
+  void SendHotfixNotifyBlobEmpty();
+  void SendContactListEmpty();
+  void SendAllAchievementDataEmpty();
+  void SendEquipmentSetListEmpty();
   void SendInitialActionButtons();
   void SendInitWorldStates(uint32 mapId, uint32 zoneId = 0, uint32 areaId = 0);
   void SendSetupCurrency();
@@ -134,6 +143,9 @@ private:
   // Diagnostics: last SMSG sent (helps correlate client disconnect/crash)
   uint32 _lastSentOpcode = 0;
   uint32 _lastSentPayloadSize = 0;
+
+  /// Monotonic counter for SMSG_TIME_SYNC_REQ (see WorldSession::SendTimeSync in reference).
+  uint32 _timeSyncNextCounter = 0;
 };
 
 } // namespace Firelands

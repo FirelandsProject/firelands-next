@@ -105,23 +105,33 @@ public:
     }
   }
 
-  void WritePackedGuid(uint64 guid) {
-    uint8 mask = 0;
-    uint8 bytes[8];
-    uint8 count = 0;
+  /// Cataclysm packed GUID (same as FirelandsCore ByteBuffer::appendPackGUID).
+  void AppendPackGUID(uint64 guid) {
+    uint8 packGUID[8 + 1] = {};
+    size_t size = 1;
+    for (uint8 i = 0; guid != 0; ++i) {
+      if (guid & 0xFF) {
+        packGUID[0] |= static_cast<uint8>(1 << i);
+        packGUID[size] = static_cast<uint8>(guid & 0xFF);
+        ++size;
+      }
+      guid >>= 8;
+    }
+    Append(packGUID, size);
+  }
 
+  void WritePackedGuid(uint64 guid) { AppendPackGUID(guid); }
+
+  uint64 ReadPackedGuid() {
+    uint8 mask = Read<uint8>();
+    uint64 guid = 0;
     for (int i = 0; i < 8; ++i) {
-      uint8 b = (guid >> (i * 8)) & 0xFF;
-      if (b) {
-        mask |= (1 << i);
-        bytes[count++] = b;
+      if (mask & (1 << i)) {
+        uint64 b = Read<uint8>();
+        guid |= (b << (i * 8));
       }
     }
-
-    Append<uint8>(mask);
-    for (int i = 0; i < count; ++i) {
-      Append<uint8>(bytes[i]);
-    }
+    return guid;
   }
 
   void AppendPackedTime(time_t time) {

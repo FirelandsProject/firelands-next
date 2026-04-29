@@ -1,4 +1,5 @@
 #include <application/services/WorldService.h>
+#include <domain/models/Character.h>
 #include <domain/models/Chat.h>
 #include <domain/world/Player.h>
 #include <infrastructure/network/sessions/WorldSession.h>
@@ -12,8 +13,60 @@
 #include <shared/network/packets/SetProficiencyPacket.h>
 #include <ctime>
 #include <chrono>
+#include <vector>
 
 namespace Firelands {
+
+namespace {
+
+/// Starter spells per class (4.3.4), from firelands-cata-ref `playercreateinfo_spell_custom.sql`
+/// (classmask 1<<class-1). Keeps the client spell book non-empty so InitialLogin does not
+/// leave null pointers (WoW #132 at address 0x4).
+std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
+  switch (classId) {
+  case 1: // Warrior
+    return {2457, 71, 78, 100, 6673, 772, 3127, 34428};
+  case 2: // Paladin
+    return {465, 635, 20154, 20271, 19740, 498, 633, 82242};
+  case 3: // Hunter
+    return {75, 13165, 1978, 3044, 56641, 781, 1130, 2973};
+  case 4: // Rogue
+    return {1784, 2098, 53, 1752, 921, 1766, 1776, 82245};
+  case 5: // Priest
+    return {585, 589, 2061, 17, 139, 2050, 8092, 86475};
+  case 6: // Death Knight
+    return {48263, 45524, 49998, 47528, 48721, 45529, 48792, 86471};
+  case 7: // Shaman
+    return {331, 8042, 8017, 8050, 324, 51730, 5185, 52127};
+  case 8: // Mage
+    return {116, 133, 2136, 1459, 130, 1953, 118, 86473};
+  case 9: // Warlock
+    return {172, 348, 687, 1454, 5782, 980, 603, 86478};
+  case 11: // Druid
+    return {8921, 5185, 774, 768, 1126, 339, 467, 86470};
+  default:
+    return {6673, 78, 2457, 3127};
+  }
+}
+
+// TCPP SharedDefines.h + QueryPackets.cpp (WorldPackets::Query::QueryPlayerNameResponse)
+enum QueryNameResponseCode : uint8 {
+  RESPONSE_SUCCESS = 0, // full PlayerGuidLookupData after result byte
+  RESPONSE_FAILURE = 1, // only packed guid + result (client keeps “unknown” name)
+};
+
+// ByteBuffer& operator<<(ByteBuffer&, PlayerGuidLookupData const&) — same field order.
+static void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
+                                       std::string const &realmName) {
+  dst.WriteString(ch.GetName());
+  dst.WriteString(realmName);
+  dst.Append<uint8>(ch.GetRace());
+  dst.Append<uint8>(ch.GetGender());
+  dst.Append<uint8>(ch.GetClass());
+  dst.Append<uint8>(0); // DeclinedNames.has_value() == false
+}
+
+} // namespace
 
 WorldSession::WorldSession(tcp::socket socket,
                            std::shared_ptr<AuthService> authService,
@@ -342,6 +395,15 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     break;
   case CMSG_MESSAGECHAT:
     HandleMessageChat(packet);
+    break;
+  case CMSG_NAME_QUERY:
+    HandleNameQuery(packet);
+    break;
+  case CMSG_QUERY_TIME:
+    HandleQueryTime(packet);
+    break;
+  case CMSG_PLAYED_TIME:
+    HandlePlayedTime(packet);
     break;
   case CMSG_MOVE_TIME_SKIPPED:
     HandleMoveTimeSkipped(packet);
@@ -734,6 +796,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
 
   LOG_INFO("CMSG_PLAYER_LOGIN for GUID: {}", guid);
   _playerGuid = guid;
+  _timeSyncNextCounter = 0;
 
   auto characterOpt = _charService->GetCharacterByGuid(guid);
   if (!characterOpt) {
@@ -743,30 +806,36 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   }
   const auto &character = *characterOpt;
 
-  // Reference parity (FirelandsCore): keep "before add to map" packets separate
-  // from "after add to map" packets. Some packets (world states, time sync) are
-  // expected only once the player is actually in the map.
+  // Login SMSG order aligned with firelands-cata-ref CharacterHandler::HandlePlayerLogin
+  // and Player::SendInitialPacketsBeforeAddToMap (see Player.cpp ~23604).
+  SendDungeonDifficulty(false);
+
   SendAccountDataTimes(0x15);
   SendLearnedDanceMoves();
+  SendHotfixNotifyBlobEmpty();
 
-  SendMotd();
-  SendFeatureSystemStatus();
-  SendTutorialFlags();
-
-  // Rough equivalent of Player::SendInitialPacketsBeforeAddToMap
+  // Player::SendInitialPacketsBeforeAddToMap (same relative order as reference)
   SendClientControlUpdate(guid);
   SendBindPointUpdate();
   SendWorldServerInfo();
-  SendForcedReactions();
-  SendSetupCurrency();
-  SendLoginSetTimeSpeed();
-  SendSetTimeZoneInformation();
   SendSetProficiency(1, 0xFFFFFFFF);
   SendSetProficiency(2, 0xFFFFFFFF);
+  SendKnownSpells(character.IsFirstLogin(), BuildDefaultKnownSpells(character.GetClass()));
+  SendUnlearnSpellsEmpty();
   SendTalentsInfo();
-  SendInitialSpells();
   SendInitialActionButtons();
   SendInitialFactions();
+  SendContactListEmpty();
+  SendForcedReactions();
+  SendSetupCurrency();
+  SendAllAchievementDataEmpty();
+  SendLoginSetTimeSpeed();
+  SendEquipmentSetListEmpty();
+
+  // Reference sends MOTD and SMSG_FEATURE_SYSTEM_STATUS after BeforeAddToMap.
+  SendMotd();
+  SendFeatureSystemStatus();
+  SendTutorialFlags();
   SendClientCacheVersion(0);
 
   // Create in-memory player and add to map BEFORE sending verify-world + worldstates
@@ -811,14 +880,67 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   update.Build(updatePacket);
   SendPacket(updatePacket);
 
-  // Equivalent of Player::SendInitialPacketsAfterAddToMap
+  // Equivalent of Player::SendInitialPacketsAfterAddToMap: world states, then
+  // ResetTimeSync + SendTimeSync (WorldSession.cpp in reference).
   SendInitWorldStates(character.GetMapId(), character.GetZoneId());
   WorldPacket timeSync(SMSG_TIME_SYNC_REQ);
-  timeSync.Append<uint32>(0);
+  timeSync.Append<uint32>(_timeSyncNextCounter++);
   SendPacket(timeSync);
   SendLoadCUFProfiles();
 
   LOG_INFO("Player {} logged in and spawned at Map {}", guid, _mapId);
+}
+
+void WorldSession::HandleNameQuery(WorldPacket &packet) {
+  // CMSG_NAME_QUERY: TCPP HandleNameQueryOpcode reads ObjectGuid as raw uint64 LE
+  // (recvData >> guid), i.e. 8 bytes. Shorter payloads use packed GUID.
+  uint64 guid = 0;
+  size_t const rem = packet.Size() - packet.GetReadPos();
+  if (rem >= sizeof(uint64)) {
+    guid = packet.Read<uint64>();
+  } else if (rem > 0) {
+    guid = packet.ReadPackedGuid();
+  }
+
+  // SMSG_QUERY_PLAYER_NAME_RESPONSE: packed guid, uint8 result, optional lookup blob.
+  WorldPacket response(SMSG_QUERY_PLAYER_NAME_RESPONSE);
+  response.WritePackedGuid(guid);
+
+  auto chOpt = _charService->GetCharacterByGuid(guid);
+  if (!chOpt) {
+    response.Append<uint8>(RESPONSE_FAILURE);
+    SendPacket(response);
+    return;
+  }
+
+  response.Append<uint8>(RESPONSE_SUCCESS);
+  std::string const realmName =
+      Config::Instance().GetNested<std::string>({"World", "RealmName"}, "");
+  AppendPlayerGuidLookupData(response, *chOpt, realmName);
+  SendPacket(response);
+}
+
+void WorldSession::HandleQueryTime(WorldPacket & /*packet*/) {
+  // CMSG_QUERY_TIME: client asks server time for day/night and reset timers.
+  WorldPacket response(SMSG_QUERY_TIME_RESPONSE);
+  response.Append<uint32>(static_cast<uint32>(std::time(nullptr)));
+  response.Append<uint32>(0); // next daily reset (unknown/not implemented)
+  SendPacket(response);
+}
+
+void WorldSession::HandlePlayedTime(WorldPacket &packet) {
+  // CMSG_PLAYED_TIME: client requests /played info.
+  // Payload is usually 1 byte (trigger event); our log shows size=1.
+  uint8 trigger = 0;
+  if (packet.Size() - packet.GetReadPos() >= 1)
+    trigger = packet.Read<uint8>();
+
+  WorldPacket response(SMSG_PLAYED_TIME);
+  // TCPP WorldPackets::Character::PlayedTime::Write() uses int32 for both times.
+  response.Append<int32>(0); // total played seconds (not persisted yet)
+  response.Append<int32>(0); // level played seconds (not persisted yet)
+  response.Append<uint8>(trigger ? 1 : 0);
+  SendPacket(response);
 }
 
 void WorldSession::HandlePing(WorldPacket &packet) {
@@ -943,7 +1065,8 @@ void WorldSession::SendAccountDataTimes(uint32 mask) {
 
 void WorldSession::SendFeatureSystemStatus() {
   WorldPacket features(SMSG_FEATURE_SYSTEM_STATUS);
-  features.Append<uint8>(0);
+  // SystemPackets.cpp: int8 ComplaintStatus (reference login uses 2)
+  features.Append<int8>(2);
   features.Append<uint32>(0);
   features.Append<uint32>(0);
   features.Append<uint32>(0);
@@ -974,22 +1097,10 @@ void WorldSession::SendLoginSetTimeSpeed(float speed) {
   SendPacket(data);
 }
 
-void WorldSession::SendSetTimeZoneInformation() {
-  WorldPacket data(SMSG_SET_TIME_ZONE_INFORMATION);
-  BitWriter bw(data);
-  bw.WriteBits(3, 7);
-  bw.WriteBits(3, 7);
-  bw.Flush();
-  data.WriteStringNoNull("UTC");
-  data.WriteStringNoNull("UTC");
-  SendPacket(data);
-}
-
 void WorldSession::SendLearnedDanceMoves() {
+  // CharacterHandler.cpp: WorldPacket data(SMSG_LEARNED_DANCE_MOVES); data << uint64(0);
   WorldPacket data(SMSG_LEARNED_DANCE_MOVES);
-  BitWriter bw(data);
-  bw.WriteBits(0, 23);
-  bw.Flush();
+  data.Append<uint64>(0);
   SendPacket(data);
 }
 
@@ -998,16 +1109,64 @@ void WorldSession::SendMotd() {
   SendPacket(new Firelands::WorldPackets::Misc::Motd(lines));
 }
 
-void WorldSession::SendInitialRaidGroupError() {
-  WorldPacket data(SMSG_INITIAL_RAID_GROUP_ERROR);
+void WorldSession::SendDungeonDifficulty(bool inGroup) {
+  WorldPacket data(MSG_SET_DUNGEON_DIFFICULTY);
+  data.Append<uint32>(0); // Difficulty::REGULAR
+  data.Append<uint32>(1); // mask (matches FirelandsCore Player::SendDungeonDifficulty)
+  data.Append<uint32>(inGroup ? 1u : 0u);
   SendPacket(data);
 }
 
-void WorldSession::SendInitialSpells() {
-  WorldPacket data(SMSG_INITIAL_SPELLS);
-  data.Append<uint8>(1);
-  data.Append<uint16>(0);
-  data.Append<uint16>(0);
+void WorldSession::SendHotfixNotifyBlobEmpty() {
+  WorldPacket data(SMSG_HOTFIX_NOTIFY_BLOB);
+  BitWriter bw(data);
+  bw.WriteBits(0, 22);
+  bw.Flush();
+  SendPacket(data);
+}
+
+void WorldSession::SendKnownSpells(bool initialLogin,
+                                   std::vector<uint32> const &spellIds) {
+  // SpellPackets.cpp SendKnownSpells::Write()
+  WorldPacket data(SMSG_SEND_KNOWN_SPELLS);
+  data.Append<uint8>(initialLogin ? 1u : 0u);
+  data.Append<uint16>(static_cast<uint16>(spellIds.size()));
+  for (uint32 spellId : spellIds) {
+    data.Append<uint32>(spellId);
+    data.Append<int16>(0); // Slot (unused)
+  }
+  data.Append<uint16>(0); // SpellHistoryEntries.size()
+  SendPacket(data);
+}
+
+void WorldSession::SendUnlearnSpellsEmpty() {
+  WorldPacket data(SMSG_SEND_UNLEARN_SPELLS);
+  data.Append<uint32>(0);
+  SendPacket(data);
+}
+
+void WorldSession::SendContactListEmpty() {
+  // SocialMgr.cpp PlayerSocial::SendSocialList — empty list, SOCIAL_FLAG_ALL.
+  constexpr uint32 kSocialFlagAll = 0x01u | 0x02u | 0x04u;
+  WorldPacket data(SMSG_CONTACT_LIST);
+  data.Append<uint32>(kSocialFlagAll);
+  data.Append<uint32>(0);
+  SendPacket(data);
+}
+
+void WorldSession::SendAllAchievementDataEmpty() {
+  // AchievementMgr.cpp SendAllAchievementData — zero criteria, zero achievements.
+  WorldPacket data(SMSG_ALL_ACHIEVEMENT_DATA);
+  BitWriter bw(data);
+  bw.WriteBits(0, 21);
+  bw.WriteBits(0, 23);
+  bw.Flush();
+  SendPacket(data);
+}
+
+void WorldSession::SendEquipmentSetListEmpty() {
+  WorldPacket data(SMSG_EQUIPMENT_SET_LIST);
+  data.Append<uint32>(0);
   SendPacket(data);
 }
 

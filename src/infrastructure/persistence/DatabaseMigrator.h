@@ -4,6 +4,7 @@
 #include <conncpp.hpp>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <shared/Logger.h>
 #include <string>
 #include <vector>
@@ -40,9 +41,34 @@ public:
     std::sort(sqlFiles.begin(), sqlFiles.end());
 
     LOG_INFO("Starting database migrations from directory: {}", dirPath);
-    for (const auto &file : sqlFiles) {
-      Migrate(uri, user, password, file);
+
+    try {
+      sql::Driver *driver = sql::mariadb::get_driver_instance();
+      sql::Properties properties({{"user", user}, {"password", password}});
+      std::shared_ptr<sql::Connection> conn(driver->connect(uri, properties));
+      EnsureSchemaMigrationsTable(conn);
+
+      for (const auto &file : sqlFiles) {
+        const std::string name =
+            std::filesystem::path(file).filename().string();
+        if (IsMigrationApplied(conn, name)) {
+          LOG_INFO("Skipping already-applied migration: {}", name);
+          continue;
+        }
+        const size_t failedStatements = Migrate(uri, user, password, file);
+        if (failedStatements == 0)
+          RecordMigrationApplied(conn, name);
+        else
+          LOG_WARN(
+              "Migration {} had {} failed statement(s); not marking as applied "
+              "(fix SQL or DB, then delete its row from "
+              "firelands_auth.schema_migrations if you need a retry).",
+              name, failedStatements);
+      }
+    } catch (sql::SQLException &e) {
+      LOG_ERROR("Migration bookkeeping error: {}", e.what());
     }
+
     LOG_INFO("All migrations from {} completed.", dirPath);
   }
 
@@ -55,9 +81,10 @@ public:
    * @param password Database password
    * @param sqlFilePath Path to the .sql file to execute
    */
-  static void Migrate(const std::string &uri, const std::string &user,
-                      const std::string &password,
-                      const std::string &sqlFilePath) {
+  /// @return Number of statements that failed to execute (0 = full success).
+  static size_t Migrate(const std::string &uri, const std::string &user,
+                        const std::string &password,
+                        const std::string &sqlFilePath) {
     try {
       sql::Driver *driver = sql::mariadb::get_driver_instance();
 
@@ -71,7 +98,7 @@ public:
       std::ifstream file(sqlFilePath);
       if (!file.is_open()) {
         LOG_ERROR("Could not open SQL schema file: {}", sqlFilePath);
-        return;
+        return 1;
       }
 
       LOG_INFO("Validating database schema: {}", sqlFilePath);
@@ -82,21 +109,69 @@ public:
       // Split the file into individual statements
       std::vector<std::string> statements = SplitStatements(content);
 
+      size_t failures = 0;
       for (const auto &statement : statements) {
-        ExecuteStatement(conn, statement);
+        if (!ExecuteStatement(conn, statement))
+          ++failures;
       }
 
       LOG_INFO("Schema validation completed for: {}", sqlFilePath);
+      return failures;
 
     } catch (sql::SQLException &e) {
       LOG_ERROR("Migration error in {}: {}", sqlFilePath, e.what());
+      return 1;
     } catch (std::exception &e) {
       LOG_ERROR("General error during migration of {}: {}", sqlFilePath,
                 e.what());
+      return 1;
     }
   }
 
 private:
+  /// Ensures `firelands_auth.schema_migrations` exists (tracks applied .sql files).
+  static void EnsureSchemaMigrationsTable(std::shared_ptr<sql::Connection> conn) {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "CREATE DATABASE IF NOT EXISTS `firelands_auth`");
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS `firelands_auth`.`schema_migrations` ("
+        "`migration` VARCHAR(255) NOT NULL,"
+        "`applied_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+        "PRIMARY KEY (`migration`)"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  }
+
+  static bool IsMigrationApplied(std::shared_ptr<sql::Connection> conn,
+                                 const std::string &migrationFilename) {
+    try {
+      std::unique_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
+          "SELECT COUNT(*) FROM `firelands_auth`.`schema_migrations` WHERE "
+          "`migration` = ?"));
+      ps->setString(1, migrationFilename);
+      std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
+      if (rs->next())
+        return rs->getUInt(1) > 0;
+    } catch (sql::SQLException &e) {
+      LOG_ERROR("Could not read schema_migrations: {}", e.what());
+    }
+    return false;
+  }
+
+  static void RecordMigrationApplied(std::shared_ptr<sql::Connection> conn,
+                                     const std::string &migrationFilename) {
+    try {
+      std::unique_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
+          "INSERT INTO `firelands_auth`.`schema_migrations` (`migration`) "
+          "VALUES (?)"));
+      ps->setString(1, migrationFilename);
+      ps->execute();
+    } catch (sql::SQLException &e) {
+      LOG_WARN("Could not record migration {} (may already be recorded): {}",
+               migrationFilename, e.what());
+    }
+  }
+
   /**
    * @brief Splits a string of SQL commands into individual statements.
    * Handles basic string literal escaping to avoid splitting inside strings.
@@ -137,7 +212,8 @@ private:
   /**
    * @brief Executes a single SQL statement.
    */
-  static void ExecuteStatement(std::shared_ptr<sql::Connection> conn,
+  /// @return false if execution failed (caller may count migration failures).
+  static bool ExecuteStatement(std::shared_ptr<sql::Connection> conn,
                                const std::string &statement) {
     std::string trimmed = statement;
 
@@ -148,16 +224,18 @@ private:
     // Skip empty statements or pure comments
     if (trimmed.empty() || trimmed.find("--") == 0 || trimmed.find("#") == 0 ||
         trimmed.find("/*") == 0) {
-      return;
+      return true;
     }
 
     try {
       std::unique_ptr<sql::Statement> stmnt(conn->createStatement());
       stmnt->execute(trimmed);
+      return true;
     } catch (sql::SQLException &e) {
       // Log but don't stop (useful if some parts of the script are expected to
       // fail if already present)
       LOG_DEBUG("SQL Execution note ({}): {}", trimmed.substr(0, 50), e.what());
+      return false;
     }
   }
 };
