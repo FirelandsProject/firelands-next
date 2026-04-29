@@ -410,24 +410,30 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_CHAR_ENUM:
     HandleCharEnum(packet);
     break;
+  case MSG_QUERY_NEXT_MAIL_TIME:
+    HandleQueryNextMailTime(packet);
+    break;
+  case CMSG_CALENDAR_GET_NUM_PENDING:
+    HandleCalendarGetNumPending(packet);
+    break;
+  case CMSG_ZONEUPDATE:
+    HandleZoneUpdate(packet);
+    break;
   case CMSG_SET_ACTIVE_MOVER:
   case CMSG_SET_ACTIONBAR_TOGGLES:
   case CMSG_REQUEST_RAID_INFO:
   case CMSG_GMTICKET_GETTICKET:
   case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
-  case MSG_QUERY_NEXT_MAIL_TIME:
   case CMSG_BATTLEFIELD_STATUS:
   case CMSG_QUERY_BATTLEFIELD_STATE:
   case CMSG_LFG_GET_STATUS:
   case CMSG_LFG_LOCK_INFO_REQUEST:
   case CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY:
-  case CMSG_CALENDAR_GET_NUM_PENDING:
   case CMSG_VOICE_SESSION_ENABLE:
   case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
   case CMSG_REQUEST_CATEGORY_COOLDOWNS:
   case CMSG_DB_QUERY_BULK:
   case CMSG_WORLD_STATE_UI_TIMER_UPDATE:
-  case CMSG_ZONEUPDATE:
   case CMSG_REQUEST_CEMETERY_LIST:
     // Client probes features we haven't implemented yet. For stability we safely
     // ignore these requests (no side effects, no disconnect).
@@ -896,6 +902,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
 
   // Create in-memory player and add to map BEFORE sending verify-world + worldstates
   _mapId = character.GetMapId();
+  _zoneId = character.GetZoneId();
   MovementInfo move;
   static auto startTime = std::chrono::steady_clock::now();
   auto now = std::chrono::steady_clock::now();
@@ -957,6 +964,32 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   if (auto host = WorldService::Instance().GetScriptHost()) {
     host->FireEvent("player_login", guid);
   }
+}
+
+void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
+  // Reference: firelands-cata-ref MailHandler.cpp WorldSession::HandleQueryNextMailTime
+  // Sends MSG_QUERY_NEXT_MAIL_TIME back to client.
+  WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 8);
+  data.Append<float>(0.0f);  // next mail time (0 = none)
+  data.Append<uint32>(0);    // count
+  SendPacket(data);
+}
+
+void WorldSession::HandleCalendarGetNumPending(WorldPacket & /*packet*/) {
+  // Reference: firelands-cata-ref CalendarHandler.cpp HandleCalendarGetNumPending
+  WorldPacket data(SMSG_CALENDAR_SEND_NUM_PENDING, 4);
+  data.Append<uint32>(0);
+  SendPacket(data);
+}
+
+void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
+  // Reference: firelands-cata-ref MiscHandler.cpp HandleZoneUpdateOpcode
+  uint32 newZone = 0;
+  if (packet.Size() - packet.GetReadPos() >= sizeof(uint32))
+    newZone = packet.Read<uint32>();
+
+  if (newZone != 0)
+    _zoneId = newZone;
 }
 
 void WorldSession::HandleNameQuery(WorldPacket &packet) {

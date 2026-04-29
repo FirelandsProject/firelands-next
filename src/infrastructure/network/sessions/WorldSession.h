@@ -85,6 +85,9 @@ private:
   void HandleUpdateAccountData(WorldPacket &packet);
   void HandleGossipHello(WorldPacket &packet);
   void HandleGossipSelectOption(WorldPacket &packet);
+  void HandleQueryNextMailTime(WorldPacket &packet);
+  void HandleCalendarGetNumPending(WorldPacket &packet);
+  void HandleZoneUpdate(WorldPacket &packet);
 
   // Server Packet Senders (SMSG)
   void SendAuthResponse();
@@ -131,6 +134,7 @@ private:
   uint32 _accountId = 0;
   uint64 _playerGuid = 0;
   uint32 _mapId = 0;
+  uint32 _zoneId = 0;
   MovementInfo _position;
   uint8 _readBuffer[2048];
   ByteBuffer _inBuffer;

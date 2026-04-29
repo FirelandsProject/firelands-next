@@ -35,6 +35,8 @@ This document serves as the single source of truth for the step-by-step developm
 - [x] **Character Data Loading:** Implement `GetCharacterByGuid` in `ICharacterRepository` and `MySqlCharacterRepository` to load the player's character data upon `CMSG_PLAYER_LOGIN`.
 - [x] **Object Instantiation (`SMSG_UPDATE_OBJECT`):** Use the loaded character data to dynamically populate the core entity update packet structure. Send the initial character state so the player entity spawns.
 - [x] **Movement Network:** Movement opcodes filtered explicitly; `Map::BroadcastPacketToNearby` relays to other players (see `WorldSession::HandleMovement`).
+- [ ] **Post-login “client probes” (ACK/minimal):** Implement minimal handlers/ACKs for common post-login CMSG so the UI behaves predictably (mail/calendar/guild/battlefield/LFG/zone updates), aligned with `firelands-cata-ref` where possible.
+- [x] **Post-login “client probes” (no-op safety net):** Map + ignore known high-frequency CMSG seen in logs so they don't show up as `Unknown/unhandled opcode` (stability-first).
 
 ## Phase 6: Gameplay Mechanics (IN PROGRESS)
 - [x] **Parity matrix:** Subsystem tracking vs `firelands-cata-ref` in [docs/parity_matrix.md](docs/parity_matrix.md).

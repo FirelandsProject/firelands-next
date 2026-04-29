@@ -25,7 +25,7 @@ Documento vivo para **seguimiento**: enlaza el roadmap de alto nivel con tareas 
 
 | Fase | Objetivo | Estado |
 |------|----------|--------|
-| A | Fase 5–6: cliente estable en mundo vacío, broadcast consistente | Parcial (ver implementation_plan) |
+| A | Fase 5–6: cliente estable en mundo vacío, broadcast consistente + ACKs mínimos para “client probes” post-login | Parcial (ver implementation_plan / CLIENT_STABILITY) |
 | B | Unidades: Creature / GameObject, spawn, grid | En curso (tipos dominio + grid) |
 | C | Combate y hechizos mínimos (GCD, cast, efectos simples) | Pendiente |
 | D | Misiones, loot, gossip | Parcial (Lua gossip) |
@@ -111,7 +111,7 @@ flowchart LR
 
 | Fase | Objetivo | Contraste con ref |
 |------|----------|-------------------|
-| A | Completar fase 5–6: mundo vacío estable, más opcodes, broadcast | `WorldSession`, `Map`, handlers en `game/` del ref |
+| A | Completar fase 5–6: mundo vacío estable, ACKs mínimos para CMSG post-login, más opcodes, broadcast | `WorldSession`, `Player::SendInitialPackets*`, handlers en `game/` del ref |
 | B | Creature / GameObject, spawn, grid | Entities, Grids, Object |
 | C | Combate y hechizos mínimos | `Spells`, `Combat` |
 | D | Misiones, loot, gossip | `Quests`, `Loot` |
