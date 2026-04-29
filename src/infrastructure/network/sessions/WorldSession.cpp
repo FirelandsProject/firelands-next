@@ -410,6 +410,28 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_CHAR_ENUM:
     HandleCharEnum(packet);
     break;
+  case CMSG_SET_ACTIVE_MOVER:
+  case CMSG_SET_ACTIONBAR_TOGGLES:
+  case CMSG_REQUEST_RAID_INFO:
+  case CMSG_GMTICKET_GETTICKET:
+  case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
+  case MSG_QUERY_NEXT_MAIL_TIME:
+  case CMSG_BATTLEFIELD_STATUS:
+  case CMSG_QUERY_BATTLEFIELD_STATE:
+  case CMSG_LFG_GET_STATUS:
+  case CMSG_LFG_LOCK_INFO_REQUEST:
+  case CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY:
+  case CMSG_CALENDAR_GET_NUM_PENDING:
+  case CMSG_VOICE_SESSION_ENABLE:
+  case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
+  case CMSG_REQUEST_CATEGORY_COOLDOWNS:
+  case CMSG_DB_QUERY_BULK:
+  case CMSG_WORLD_STATE_UI_TIMER_UPDATE:
+  case CMSG_ZONEUPDATE:
+  case CMSG_REQUEST_CEMETERY_LIST:
+    // Client probes features we haven't implemented yet. For stability we safely
+    // ignore these requests (no side effects, no disconnect).
+    break;
   case CMSG_LOADING_SCREEN_NOTIFY:
     // Simply acknowledge loading screen progress
     break;
@@ -456,6 +478,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_UPDATE_ACCOUNT_DATA:
     HandleUpdateAccountData(packet);
     break;
+  case CMSG_CANCEL_TRADE:
+    // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.
+    break;
   case CMSG_VIOLENCE_LEVEL:
     // Ignore violence level settings
     break;
@@ -464,6 +489,7 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case MSG_MOVE_START_BACKWARD:
   case MSG_MOVE_STOP:
   case MSG_MOVE_SET_FACING:
+  case MSG_MOVE_FALL_LAND:
     HandleMovement(packet);
     break;
   default:
