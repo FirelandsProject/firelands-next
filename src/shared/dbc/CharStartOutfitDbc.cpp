@@ -1,5 +1,6 @@
 #include <shared/dbc/CharStartOutfitDbc.h>
 #include <shared/dbc/DbcReader.h>
+#include <shared/game/ItemEquipSlots.h>
 #include <shared/Logger.h>
 #include <string_view>
 
@@ -37,7 +38,7 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
   }
 
   m_visuals.clear();
-  m_itemIds.clear();
+  m_itemGrants.clear();
 
   for (uint32_t rec = 0; rec < reader.GetRecordCount(); ++rec) {
     uint8_t race = reader.ReadUInt8(rec, 1, offs);
@@ -47,31 +48,43 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
     OutfitKey const key = MakeKey(race, klass, gender);
 
     std::vector<PlayerCreateVisualItem> visuals;
-    std::vector<uint32_t> itemIds;
+    std::vector<StarterItemGrant> itemGrants;
+    EquipSlotAllocator visualSlotAllocator;
 
     for (int j = 0; j < 24; ++j) {
       int32_t rawItem = reader.ReadInt32(rec, static_cast<uint32_t>(5 + j), offs);
-      if (rawItem > 0)
-        itemIds.push_back(static_cast<uint32_t>(rawItem));
+      int32_t invRaw = reader.ReadInt32(rec, static_cast<uint32_t>(53 + j), offs);
+      uint8_t invType = invRaw > 0 ? static_cast<uint8_t>(invRaw) : 0;
+      if (rawItem > 0) {
+        StarterItemGrant grant;
+        grant.itemId = static_cast<uint32_t>(rawItem);
+        grant.count = 0; // resolved later from DB proto when available
+        grant.invType = invType;
+        itemGrants.push_back(grant);
+      }
 
       int32_t displayRaw =
           reader.ReadInt32(rec, static_cast<uint32_t>(29 + j), offs);
-      int32_t invRaw = reader.ReadInt32(rec, static_cast<uint32_t>(53 + j), offs);
       // DBC uses -1 for "unused". Treat <= 0 as empty.
       if (displayRaw <= 0)
         continue;
+      if (invRaw <= 0)
+        continue;
+
+      auto slot = visualSlotAllocator.TryEquipSlot(invType);
+      if (!slot)
+        continue;
 
       PlayerCreateVisualItem row;
-      row.slot =
-          static_cast<uint8_t>(j < 23 ? j : 22); // CHAR_ENUM carries 23 slots
+      row.slot = *slot;
       row.displayId = static_cast<uint32_t>(displayRaw);
-      row.invType = invRaw > 0 ? static_cast<uint8_t>(invRaw) : 0;
+      row.invType = invType;
       row.displayEnchantId = 0;
       visuals.push_back(row);
     }
 
     m_visuals[key] = std::move(visuals);
-    m_itemIds[key] = std::move(itemIds);
+    m_itemGrants[key] = std::move(itemGrants);
   }
 
   LOG_INFO("Loaded CharStartOutfit.dbc: {} outfit keys.", m_visuals.size());
@@ -87,11 +100,11 @@ CharStartOutfitDbc::GetVisualItems(uint8 race, uint8 klass,
   return {};
 }
 
-std::vector<uint32_t>
-CharStartOutfitDbc::GetStarterItemIds(uint8 race, uint8 klass,
-                                      uint8 gender) const {
-  auto it = m_itemIds.find(MakeKey(race, klass, gender));
-  if (it != m_itemIds.end())
+std::vector<StarterItemGrant>
+CharStartOutfitDbc::GetStarterItemGrants(uint8 race, uint8 klass,
+                                         uint8 gender) const {
+  auto it = m_itemGrants.find(MakeKey(race, klass, gender));
+  if (it != m_itemGrants.end())
     return it->second;
   return {};
 }

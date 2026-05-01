@@ -27,6 +27,46 @@ bool IsMissingTableError(sql::SQLException &e) {
   return e.getErrorCode() == 1146 || e.getSQLState() == "42S02";
 }
 
+bool EnsureStarterInventoryTables(std::shared_ptr<sql::Connection> conn) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS firelands_characters.item_instance ("
+        "guid INT UNSIGNED NOT NULL AUTO_INCREMENT,"
+        "itemEntry INT UNSIGNED NOT NULL DEFAULT 0,"
+        "owner_guid INT UNSIGNED NOT NULL DEFAULT 0,"
+        "creatorGuid INT UNSIGNED NOT NULL DEFAULT 0,"
+        "giftCreatorGuid INT UNSIGNED NOT NULL DEFAULT 0,"
+        "count INT UNSIGNED NOT NULL DEFAULT 1,"
+        "duration INT NOT NULL DEFAULT 0,"
+        "charges TINYTEXT,"
+        "flags INT UNSIGNED NOT NULL DEFAULT 0,"
+        "enchantments TEXT NOT NULL,"
+        "randomPropertyType TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+        "randomPropertyId INT UNSIGNED NOT NULL DEFAULT 0,"
+        "durability SMALLINT UNSIGNED NOT NULL DEFAULT 0,"
+        "creationTime INT UNSIGNED NOT NULL DEFAULT 0,"
+        "text TEXT,"
+        "PRIMARY KEY (guid),"
+        "KEY idx_owner_guid (owner_guid)"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS firelands_characters.character_inventory ("
+        "guid INT UNSIGNED NOT NULL DEFAULT 0,"
+        "bag INT UNSIGNED NOT NULL DEFAULT 0,"
+        "slot TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+        "item INT UNSIGNED NOT NULL DEFAULT 0,"
+        "PRIMARY KEY (item),"
+        "UNIQUE KEY guid (guid, bag, slot),"
+        "KEY idx_guid (guid)"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    return true;
+  } catch (sql::SQLException &e) {
+    LOG_ERROR("EnsureStarterInventoryTables failed: {}", e.what());
+    return false;
+  }
+}
+
 std::optional<ItemProtoRow> FetchItemProto(std::shared_ptr<sql::Connection> conn,
                                             uint32_t itemEntry) {
   try {
@@ -65,6 +105,8 @@ std::optional<ItemProtoRow> FetchItemProto(std::shared_ptr<sql::Connection> conn
 EquippedItemsData LoadEquippedItems(std::shared_ptr<sql::Connection> conn,
                                     uint32_t charGuid) {
   EquippedItemsData out;
+  if (!EnsureStarterInventoryTables(conn))
+    return out;
   try {
     std::shared_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
         "SELECT ci.slot, ci.item, ii.itemEntry FROM character_inventory ci "
@@ -191,6 +233,8 @@ bool MySqlCharacterRepository::GrantStarterItems(
     uint32_t characterGuid, std::vector<StarterItemGrant> const &items) {
   if (items.empty())
     return true;
+  if (!EnsureStarterInventoryTables(_connection))
+    return false;
 
   EquipSlotAllocator equipAllocator;
   std::unordered_set<uint8_t> usedPackSlots;
@@ -203,23 +247,27 @@ bool MySqlCharacterRepository::GrantStarterItems(
         continue;
 
       auto proto = FetchItemProto(_connection, grant.itemId);
-      if (!proto) {
-        LOG_WARN("GrantStarterItems: unknown item template {}, skipping.",
-                 grant.itemId);
-        continue;
-      }
-
+      uint8_t inventoryType = 0;
       uint32_t count = grant.count;
-      if (count == 0)
-        count = proto->buyCount;
+      if (proto) {
+        inventoryType = proto->inventoryType;
+        if (count == 0)
+          count = proto->buyCount;
+      } else {
+        inventoryType = grant.invType;
+        if (count == 0)
+          count = 1;
+        LOG_WARN("GrantStarterItems: item {} missing template/proto, using "
+                 "DBC fallback invType={}.",
+                 grant.itemId, static_cast<unsigned>(inventoryType));
+      }
       count = std::max(1u, count);
 
       uint8_t bag = 0;
       uint8_t slot = 0;
       bool placed = false;
 
-      if (auto equipSlot =
-              equipAllocator.TryEquipSlot(proto->inventoryType)) {
+      if (auto equipSlot = equipAllocator.TryEquipSlot(inventoryType)) {
         slot = *equipSlot;
         placed = true;
       } else {

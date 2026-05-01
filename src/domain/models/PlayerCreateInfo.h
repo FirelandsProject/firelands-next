@@ -1,7 +1,6 @@
 #pragma once
 
 #include <shared/Common.h>
-#include <vector>
 
 namespace Firelands {
 
@@ -18,6 +17,7 @@ struct PlayerCreateInfo {
 struct StarterItemGrant {
   uint32 itemId = 0;
   uint32 count = 1;
+  uint8 invType = 0;
 };
 
 struct PlayerCreateVisualItem {

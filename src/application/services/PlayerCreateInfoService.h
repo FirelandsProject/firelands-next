@@ -50,13 +50,9 @@ public:
                        uint8 /*outfitId*/) {
     std::vector<StarterItemGrant> grants;
     if (m_charStartOutfitDbcLoaded) {
-      for (uint32_t id :
-           m_charStartOutfitDbc.GetStarterItemIds(race, klass, gender)) {
-        StarterItemGrant g;
-        g.itemId = id;
-        g.count = 0; // resolved from item proto (`buy_count`) at grant time
-        grants.push_back(g);
-      }
+      auto dbcGrants =
+          m_charStartOutfitDbc.GetStarterItemGrants(race, klass, gender);
+      grants.insert(grants.end(), dbcGrants.begin(), dbcGrants.end());
     }
     if (m_repository) {
       auto extra = m_repository->GetExtraCreateItems(race, klass);

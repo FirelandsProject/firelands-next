@@ -17,8 +17,8 @@ public:
   GetVisualItems(uint8 race, uint8 klass, uint8 gender) const;
 
   /// Item ids for starter inventory (reference `Player::Create` CharStartOutfit block).
-  std::vector<uint32_t> GetStarterItemIds(uint8 race, uint8 klass,
-                                          uint8 gender) const;
+  std::vector<StarterItemGrant> GetStarterItemGrants(uint8 race, uint8 klass,
+                                                     uint8 gender) const;
 
 private:
   using OutfitKey = uint32;
@@ -29,7 +29,7 @@ private:
   }
 
   std::unordered_map<OutfitKey, std::vector<PlayerCreateVisualItem>> m_visuals;
-  std::unordered_map<OutfitKey, std::vector<uint32_t>> m_itemIds;
+  std::unordered_map<OutfitKey, std::vector<StarterItemGrant>> m_itemGrants;
 };
 
 } // namespace Firelands
