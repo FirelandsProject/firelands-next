@@ -40,9 +40,11 @@ public:
 
     // Cataclysm 4.3.4 (15595) movement update block.
     // We currently build the minimal "self living unit" movement update matching FirelandsCore.
-    uint32 flags = UPDATEFLAG_SELF;
-    if (typeId == TYPEID_PLAYER || typeId == TYPEID_UNIT)
-      flags |= UPDATEFLAG_LIVING;
+    uint32 flags = 0;
+    if (typeId == TYPEID_PLAYER)
+      flags = UPDATEFLAG_SELF | UPDATEFLAG_LIVING;
+    else if (typeId == TYPEID_UNIT)
+      flags = UPDATEFLAG_LIVING;
 
     uint8 guidBytes[8];
     for (int i = 0; i < 8; ++i)
@@ -133,30 +135,15 @@ public:
       _data.Append<float>(4.5f); // MOVE_FLIGHT_BACK
     }
 
-    // Update Fields
-    uint32 maxField = 0;
-    if (!fields.empty()) {
-      maxField = fields.rbegin()->first + 1;
-    }
+    AppendUpdateFieldValues(fields);
+  }
 
-    uint32 maskSize = (maxField + 31) / 32;
-    _data.Append<uint8>(static_cast<uint8>(maskSize));
-
-    if (maskSize > 0) {
-      std::vector<uint32> mask(maskSize, 0);
-      for (auto const &[index, value] : fields) {
-        mask[index / 32] |= (1 << (index % 32));
-      }
-
-      for (uint32 m : mask)
-        _data.Append<uint32>(m);
-
-      for (uint32 i = 0; i < maxField; ++i) {
-        if (mask[i / 32] & (1 << (i % 32))) {
-          _data.Append<uint32>(fields.at(i));
-        }
-      }
-    }
+  /// `UPDATETYPE_VALUES` block (no movement). Used for inventory slot refreshes after swaps.
+  void AddValuesUpdate(uint64 guid, std::map<uint16, uint32> const &fields) {
+    _count++;
+    _data.Append<uint8>(UPDATETYPE_VALUES);
+    _data.WritePackedGuid(guid);
+    AppendUpdateFieldValues(fields);
   }
 
   /**
@@ -174,6 +161,36 @@ public:
   size_t GetBlockCount() const { return _count; }
 
 private:
+  static void AppendUpdateFieldValues(ByteBuffer &buf,
+                                      std::map<uint16, uint32> const &fields) {
+    uint32 maxField = 0;
+    if (!fields.empty())
+      maxField = fields.rbegin()->first + 1;
+
+    uint32 maskSize = (maxField + 31) / 32;
+    buf.Append<uint8>(static_cast<uint8>(maskSize));
+
+    if (maskSize == 0)
+      return;
+
+    std::vector<uint32> mask(maskSize, 0);
+    for (auto const &[index, value] : fields) {
+      mask[index / 32] |= (1u << (index % 32));
+    }
+
+    for (uint32 m : mask)
+      buf.Append<uint32>(m);
+
+    for (uint32 i = 0; i < maxField; ++i) {
+      if (mask[i / 32] & (1u << (i % 32)))
+        buf.Append<uint32>(fields.at(i));
+    }
+  }
+
+  void AppendUpdateFieldValues(std::map<uint16, uint32> const &fields) {
+    AppendUpdateFieldValues(_data, fields);
+  }
+
   uint32 _count;
   uint16 _mapId;
   ByteBuffer _data;

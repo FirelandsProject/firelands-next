@@ -124,6 +124,11 @@ public:
     return m_repository->GetCharacterByGuid(guid);
   }
 
+  bool SwapBag0Slots(uint64_t characterGuid, uint8_t srcSlot, uint8_t dstSlot) {
+    return m_repository->SwapBag0Slots(static_cast<uint32_t>(characterGuid),
+                                       srcSlot, dstSlot);
+  }
+
 private:
   std::shared_ptr<ICharacterRepository> m_repository;
   std::shared_ptr<PlayerCreateInfoService> m_playerCreateInfoService;

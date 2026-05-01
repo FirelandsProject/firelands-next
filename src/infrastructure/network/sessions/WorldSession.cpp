@@ -15,6 +15,7 @@
 #include <shared/network/SpellCastWire.h>
 #include <shared/game/EquipmentCache.h>
 #include <shared/game/InventorySlots.h>
+#include <shared/game/WowGuid.h>
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -178,6 +179,61 @@ static bool IsClientMovementOpcode(WorldOpcode opcode) {
   }
 }
 
+std::map<uint16, uint32> BuildItemCreateFields(uint64 itemObjectGuid,
+                                               uint64 ownerGuid,
+                                               uint32 itemEntry,
+                                               uint32 stackCount) {
+  std::map<uint16, uint32> fields;
+  for (uint16_t i = 0; i < ITEM_END; ++i)
+    fields[i] = 0;
+
+  uint32 igLo = 0;
+  uint32 igHi = 0;
+  uint32 owLo = 0;
+  uint32 owHi = 0;
+  WriteGuidToTwoUint32(itemObjectGuid, igLo, igHi);
+  WriteGuidToTwoUint32(ownerGuid, owLo, owHi);
+
+  fields[OBJECT_FIELD_GUID] = igLo;
+  fields[OBJECT_FIELD_GUID + 1] = igHi;
+  fields[OBJECT_FIELD_DATA] = 0;
+  fields[OBJECT_FIELD_DATA + 1] = 0;
+  fields[OBJECT_FIELD_TYPE] = kTypeMaskItem;
+  fields[OBJECT_FIELD_ENTRY] = itemEntry;
+  fields[OBJECT_FIELD_SCALE_X] = 0x3F800000;
+  fields[OBJECT_FIELD_PADDING] = 0;
+
+  fields[ITEM_FIELD_OWNER] = owLo;
+  fields[ITEM_FIELD_OWNER + 1] = owHi;
+  fields[ITEM_FIELD_CONTAINED] = owLo;
+  fields[ITEM_FIELD_CONTAINED + 1] = owHi;
+  fields[ITEM_FIELD_STACK_COUNT] = stackCount;
+  return fields;
+}
+
+/// Partial player VALUES refresh (equipment slots only) after inventory moves.
+std::map<uint16, uint32> BuildPlayerEquipmentSlotValues(Character const &character) {
+  std::map<uint16, uint32> fields;
+  for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
+    uint32 const entry = character.GetVisibleItemEntry(slot);
+    uint32 const itemGuidLow = character.GetVisibleItemGuidLow(slot);
+    uint16 const base = static_cast<uint16>(
+        PLAYER_VISIBLE_ITEM_1_ENTRYID + static_cast<uint16>(slot * 2));
+    fields[base] = entry;
+    fields[static_cast<uint16>(base + 1)] = 0;
+
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    uint32 ilo = 0;
+    uint32 ihi = 0;
+    WriteGuidToTwoUint32(itemOg, ilo, ihi);
+    uint16 const invBase = static_cast<uint16>(
+        PLAYER_FIELD_INV_SLOT_HEAD + static_cast<uint16>(slot * 2));
+    fields[invBase] = ilo;
+    fields[static_cast<uint16>(invBase + 1)] = ihi;
+  }
+  return fields;
+}
+
 std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
                                                  Character const &character) {
   std::map<uint16, uint32> fields;
@@ -209,10 +265,14 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
     fields[base] = entry;
     fields[static_cast<uint16>(base + 1)] = 0;
 
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    uint32 ilo = 0;
+    uint32 ihi = 0;
+    WriteGuidToTwoUint32(itemOg, ilo, ihi);
     uint16 const invBase = static_cast<uint16>(
         PLAYER_FIELD_INV_SLOT_HEAD + static_cast<uint16>(slot * 2));
-    fields[invBase] = itemGuidLow;
-    fields[static_cast<uint16>(invBase + 1)] = 0;
+    fields[invBase] = ilo;
+    fields[static_cast<uint16>(invBase + 1)] = ihi;
   }
   return fields;
 }
@@ -635,6 +695,12 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     break;
   case CMSG_UPDATE_ACCOUNT_DATA:
     HandleUpdateAccountData(packet);
+    break;
+  case CMSG_SWAP_INV_ITEM:
+    HandleSwapInvItem(packet);
+    break;
+  case CMSG_SWAP_ITEM:
+    HandleSwapItem(packet);
     break;
   case CMSG_CANCEL_TRADE:
     // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.
@@ -1112,6 +1178,17 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   update.AddCreateObject(guid, TYPEID_PLAYER, move,
                          BuildPlayerUpdateFields(guid, character));
 
+  MovementInfo itemMove{};
+  for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
+    uint32 const itemGuidLow = character.GetVisibleItemGuidLow(slot);
+    uint32 const entry = character.GetVisibleItemEntry(slot);
+    if (itemGuidLow == 0 || entry == 0)
+      continue;
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    update.AddCreateObject(itemOg, TYPEID_ITEM, itemMove,
+                         BuildItemCreateFields(itemOg, guid, entry, 1));
+  }
+
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
   update.Build(updatePacket);
   SendPacket(updatePacket);
@@ -1372,6 +1449,76 @@ void WorldSession::HandlePing(WorldPacket &packet) {
   WorldPacket pong(SMSG_PONG);
   pong.Append<uint32>(serial);
   SendPacket(pong);
+}
+
+void WorldSession::HandleSwapInvItem(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+  if (packet.Size() - packet.GetReadPos() < 2)
+    return;
+
+  uint8 dstslot = packet.Read<uint8>();
+  uint8 srcslot = packet.Read<uint8>();
+  if (srcslot == dstslot)
+    return;
+
+  auto validBag0Slot = [](uint8_t s) -> bool {
+    return (s < EQUIPMENT_SLOT_END) ||
+           (s >= INVENTORY_SLOT_ITEM_START && s < INVENTORY_SLOT_ITEM_END);
+  };
+  if (!validBag0Slot(srcslot) || !validBag0Slot(dstslot))
+    return;
+
+  if (!_charService->SwapBag0Slots(_playerGuid, srcslot, dstslot))
+    return;
+
+  auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
+  if (!refreshed)
+    return;
+
+  UpdateData update(_mapId);
+  update.AddValuesUpdate(_playerGuid, BuildPlayerEquipmentSlotValues(*refreshed));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  SendPacket(pkt);
+}
+
+void WorldSession::HandleSwapItem(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+  if (packet.Size() - packet.GetReadPos() < 4)
+    return;
+
+  uint8 dstbag = packet.Read<uint8>();
+  uint8 dstslot = packet.Read<uint8>();
+  uint8 srcbag = packet.Read<uint8>();
+  uint8 srcslot = packet.Read<uint8>();
+
+  if (srcbag != 0 || dstbag != 0)
+    return;
+
+  auto validBag0Slot = [](uint8_t s) -> bool {
+    return (s < EQUIPMENT_SLOT_END) ||
+           (s >= INVENTORY_SLOT_ITEM_START && s < INVENTORY_SLOT_ITEM_END);
+  };
+  if (!validBag0Slot(srcslot) || !validBag0Slot(dstslot))
+    return;
+
+  if (srcslot == dstslot)
+    return;
+
+  if (!_charService->SwapBag0Slots(_playerGuid, srcslot, dstslot))
+    return;
+
+  auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
+  if (!refreshed)
+    return;
+
+  UpdateData update(_mapId);
+  update.AddValuesUpdate(_playerGuid, BuildPlayerEquipmentSlotValues(*refreshed));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  SendPacket(pkt);
 }
 
 void WorldSession::HandleTimeSyncResp(WorldPacket &packet) {

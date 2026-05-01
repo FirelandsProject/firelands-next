@@ -131,6 +131,9 @@ enum WorldOpcode : uint32 {
   SMSG_UPDATE_ACCOUNT_DATA_COMPLETE = 0x2015,
   CMSG_LOG_DISCONNECT = 0x446D,
   CMSG_CANCEL_TRADE = 0x731E,
+  /// Reference: Trinity TCPP `Opcodes.h` (swap within bag 0 — equipment / backpack grid).
+  CMSG_SWAP_INV_ITEM = 0x2614,
+  CMSG_SWAP_ITEM = 0x6326,
   CMSG_TIME_SYNC_RESP = 0x3B0C,
   CMSG_MOVE_TIME_SKIPPED = 0x7A0A,
   CMSG_LOADING_SCREEN_NOTIFY = 0x2422,

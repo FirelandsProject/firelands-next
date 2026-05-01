@@ -1,23 +1,57 @@
 #ifndef FIRELANDS_SHARED_BANNER_H
 #define FIRELANDS_SHARED_BANNER_H
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
+
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <cstdio>
+#include <io.h>
+#endif
 
 namespace Firelands {
 
 enum class BannerType { Auth, World, Tools };
 
 /**
+ * Sticky header layout (DECSTBM scrolling region): keeps the banner on screen
+ * while new logs scroll underneath. Terminal mouse-wheel scrolling typically
+ * moves scrollback, not that inner region, so reviewing older logs becomes
+ * awkward and lines that leave the region may feel “lost”.
+ *
+ * Default servers use flow layout (sticky off). Enable sticky only when you
+ * want a fixed banner in a dedicated terminal:
+ *   FIRELANDS_CONSOLE_STICKY_BANNER=1 ./world
+ */
+inline bool StickyBannerEnabledFromEnv() {
+  const char *v = std::getenv("FIRELANDS_CONSOLE_STICKY_BANNER");
+  return v != nullptr && v[0] == '1' && v[1] == '\0';
+}
+
+inline bool StdoutIsInteractiveTerminal() {
+#ifndef _WIN32
+  return ::isatty(STDOUT_FILENO) != 0;
+#else
+  return ::_isatty(::_fileno(stdout)) != 0;
+#endif
+}
+
+/**
  * @brief Prints a cool ASCII art banner for the Firelands project.
  * Uses ANSI escape codes for coloring if supported.
  *
  * @param type The type of banner to print.
- * @param fixed If true, clears the screen and sets a scrolling region below the
- * banner.
+ * @param fixed If true (and stdout is a TTY), clears the screen and sets a
+ * scrolling region below the banner. Prefer false for normal scrollback /
+ * mouse-wheel behaviour.
  */
 inline void PrintBanner(BannerType type = BannerType::Auth,
                         bool fixed = false) {
+  const bool useStickyLayout = fixed && StdoutIsInteractiveTerminal();
+
   // ANSI Colors - Intense Orange Palette
   const std::string ORANGE_VIBRANT = "\033[38;5;202m";
   const std::string ORANGE_BRIGHT = "\033[38;5;208m";
@@ -28,14 +62,13 @@ inline void PrintBanner(BannerType type = BannerType::Auth,
   const std::string RESET = "\033[0m";
   const std::string BOLD = "\033[1m";
   const std::string CLEAR_SCREEN = "\033[2J";
-  const std::string CLEAR_SCROLLBACK = "\033[3J";
   const std::string CURSOR_HOME = "\033[H";
   const std::string GRAY = "\033[90m";
 
-  if (fixed) {
-    // Reset scrolling region to full screen first, then clear
-    std::cout << "\033[r" << CLEAR_SCREEN << CLEAR_SCROLLBACK << CURSOR_HOME
-              << std::flush;
+  if (useStickyLayout) {
+    // Full-screen reset, clear visible screen only (do not wipe scrollback —
+    // \033[3J breaks wheel-based history). Then draw banner from home.
+    std::cout << "\033[r" << CLEAR_SCREEN << CURSOR_HOME << std::flush;
   }
 
   std::string mainColor = ORANGE_BRIGHT;
@@ -69,9 +102,9 @@ inline void PrintBanner(BannerType type = BannerType::Auth,
 
   std::cout << GRAY << "    " << std::string(72, '-') << RESET << std::endl;
 
-  if (fixed) {
-    // Set scrolling region: from line 11 to the end of the screen
-    std::cout << "\033[11;r" << "\033[11;1H" << std::flush;
+  if (useStickyLayout) {
+    // DECSTBM: scroll region from first log line to bottom (999 clamps to height).
+    std::cout << "\033[11;999r" << "\033[11;1H" << std::flush;
   }
 }
 

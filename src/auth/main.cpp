@@ -23,7 +23,7 @@
 using namespace Firelands;
 
 int main(int argc, char **argv) {
-  PrintBanner(BannerType::Auth, true);
+  PrintBanner(BannerType::Auth, StickyBannerEnabledFromEnv());
 
   // Initialize logging before config load
   Logger::Init(LoggerBuilder()

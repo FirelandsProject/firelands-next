@@ -100,6 +100,8 @@ private:
   void HandleLfgLockInfoRequest(WorldPacket &packet);
   void HandleRequestCemeteryList(WorldPacket &packet);
   void HandleCastSpell(WorldPacket &packet);
+  void HandleSwapInvItem(WorldPacket &packet);
+  void HandleSwapItem(WorldPacket &packet);
 
   // Server Packet Senders (SMSG)
   void SendAuthResponse();

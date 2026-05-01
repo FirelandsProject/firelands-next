@@ -435,4 +435,27 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
   }
 }
 
+bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t srcSlot,
+                                               uint8_t dstSlot) {
+  if (srcSlot == dstSlot)
+    return true;
+  try {
+    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
+        "UPDATE character_inventory SET slot = CASE WHEN slot = ? THEN ? WHEN "
+        "slot = ? THEN ? END WHERE guid = ? AND bag = 0 AND slot IN (?, ?)"));
+    ps->setUInt(1, srcSlot);
+    ps->setUInt(2, dstSlot);
+    ps->setUInt(3, dstSlot);
+    ps->setUInt(4, srcSlot);
+    ps->setUInt(5, characterGuid);
+    ps->setUInt(6, srcSlot);
+    ps->setUInt(7, dstSlot);
+    ps->executeUpdate();
+    return true;
+  } catch (sql::SQLException &e) {
+    LOG_ERROR("SwapBag0Slots failed: {}", e.what());
+    return false;
+  }
+}
+
 } // namespace Firelands
