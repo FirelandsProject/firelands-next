@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <application/services/CharacterService.h>
+#include <domain/models/PlayerCreateInfo.h>
 #include <domain/repositories/ICharacterRepository.h>
 
 using namespace Firelands;
@@ -9,7 +10,8 @@ using namespace testing;
 class MockCharacterRepository : public ICharacterRepository {
 public:
     MOCK_METHOD(std::vector<std::shared_ptr<Character>>, GetCharactersByAccount, (uint32_t), (override));
-    MOCK_METHOD(bool, CreateCharacter, (const Character&), (override));
+    MOCK_METHOD(std::optional<uint32_t>, CreateCharacter, (const Character&), (override));
+    MOCK_METHOD(bool, GrantStarterItems, (uint32_t, std::vector<StarterItemGrant> const&), (override));
     MOCK_METHOD(bool, DeleteCharacter, (uint32_t, uint32_t), (override));
     MOCK_METHOD(bool, IsNameAvailable, (const std::string&), (override));
     MOCK_METHOD(std::optional<Character>, GetCharacterByGuid, (uint64_t), (override));

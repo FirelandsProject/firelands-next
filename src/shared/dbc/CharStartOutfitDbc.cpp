@@ -1,0 +1,99 @@
+#include <shared/dbc/CharStartOutfitDbc.h>
+#include <shared/dbc/DbcReader.h>
+#include <shared/Logger.h>
+#include <string_view>
+
+namespace Firelands {
+
+namespace {
+// Must match `firelands-cata-ref/src/server/game/DataStores/DBCfmt.h`
+constexpr char kCharStartOutfitFmt[] =
+    "dbbbXiiiiiiiiiiiiiiiiiiiiiiiixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxii";
+}
+
+bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
+  DbcReader reader;
+  if (!reader.Load(dbcPath))
+    return false;
+
+  const std::string_view fmt(kCharStartOutfitFmt,
+                             sizeof(kCharStartOutfitFmt) - 1);
+  if (!reader.VerifyFormat(fmt)) {
+    LOG_WARN("CharStartOutfit.dbc field count mismatch (fmt {} vs header {}).",
+             fmt.size(), reader.GetFieldCount());
+    return false;
+  }
+
+  std::vector<uint32_t> const offs = DbcBuildFieldByteOffsets(fmt);
+  const uint32_t lastField = static_cast<uint32_t>(fmt.size() - 1);
+  const uint32_t expectedRecordSize =
+      offs[lastField] +
+      (((fmt[lastField] == 'b') || (fmt[lastField] == 'X')) ? 1u : 4u);
+  if (expectedRecordSize != reader.GetRecordSize()) {
+    LOG_WARN(
+        "CharStartOutfit.dbc record size mismatch (computed {} vs header {}).",
+        expectedRecordSize, reader.GetRecordSize());
+    return false;
+  }
+
+  m_visuals.clear();
+  m_itemIds.clear();
+
+  for (uint32_t rec = 0; rec < reader.GetRecordCount(); ++rec) {
+    uint8_t race = reader.ReadUInt8(rec, 1, offs);
+    uint8_t klass = reader.ReadUInt8(rec, 2, offs);
+    uint8_t gender = reader.ReadUInt8(rec, 3, offs);
+
+    OutfitKey const key = MakeKey(race, klass, gender);
+
+    std::vector<PlayerCreateVisualItem> visuals;
+    std::vector<uint32_t> itemIds;
+
+    for (int j = 0; j < 24; ++j) {
+      int32_t rawItem = reader.ReadInt32(rec, static_cast<uint32_t>(5 + j), offs);
+      if (rawItem > 0)
+        itemIds.push_back(static_cast<uint32_t>(rawItem));
+
+      int32_t displayRaw =
+          reader.ReadInt32(rec, static_cast<uint32_t>(29 + j), offs);
+      int32_t invRaw = reader.ReadInt32(rec, static_cast<uint32_t>(53 + j), offs);
+      // DBC uses -1 for "unused". Treat <= 0 as empty.
+      if (displayRaw <= 0)
+        continue;
+
+      PlayerCreateVisualItem row;
+      row.slot =
+          static_cast<uint8_t>(j < 23 ? j : 22); // CHAR_ENUM carries 23 slots
+      row.displayId = static_cast<uint32_t>(displayRaw);
+      row.invType = invRaw > 0 ? static_cast<uint8_t>(invRaw) : 0;
+      row.displayEnchantId = 0;
+      visuals.push_back(row);
+    }
+
+    m_visuals[key] = std::move(visuals);
+    m_itemIds[key] = std::move(itemIds);
+  }
+
+  LOG_INFO("Loaded CharStartOutfit.dbc: {} outfit keys.", m_visuals.size());
+  return true;
+}
+
+std::vector<PlayerCreateVisualItem>
+CharStartOutfitDbc::GetVisualItems(uint8 race, uint8 klass,
+                                   uint8 gender) const {
+  auto it = m_visuals.find(MakeKey(race, klass, gender));
+  if (it != m_visuals.end())
+    return it->second;
+  return {};
+}
+
+std::vector<uint32_t>
+CharStartOutfitDbc::GetStarterItemIds(uint8 race, uint8 klass,
+                                      uint8 gender) const {
+  auto it = m_itemIds.find(MakeKey(race, klass, gender));
+  if (it != m_itemIds.end())
+    return it->second;
+  return {};
+}
+
+} // namespace Firelands

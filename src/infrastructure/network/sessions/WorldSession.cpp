@@ -13,6 +13,8 @@
 #include <shared/network/packets/VerifyWorldPacket.h>
 #include <shared/network/packets/SetProficiencyPacket.h>
 #include <shared/network/SpellCastWire.h>
+#include <shared/game/EquipmentCache.h>
+#include <shared/game/InventorySlots.h>
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -198,6 +200,20 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
   fields[UNIT_FIELD_DISPLAYID] = character.GetDisplayId();
   fields[UNIT_FIELD_NATIVEDISPLAYID] = character.GetDisplayId();
   fields[UNIT_FIELD_BYTES_2] = 0;
+
+  for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
+    uint32 const entry = character.GetVisibleItemEntry(slot);
+    uint32 const itemGuidLow = character.GetVisibleItemGuidLow(slot);
+    uint16 const base = static_cast<uint16>(
+        PLAYER_VISIBLE_ITEM_1_ENTRYID + static_cast<uint16>(slot * 2));
+    fields[base] = entry;
+    fields[static_cast<uint16>(base + 1)] = 0;
+
+    uint16 const invBase = static_cast<uint16>(
+        PLAYER_FIELD_INV_SLOT_HEAD + static_cast<uint16>(slot * 2));
+    fields[invBase] = itemGuidLow;
+    fields[static_cast<uint16>(invBase + 1)] = 0;
+  }
   return fields;
 }
 
@@ -914,11 +930,13 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
     // Exact byte order for 15595 Character Enum
     response.Append<uint8>(ch->GetClass());
 
+    const auto visualItems = EquipmentCache::Parse(ch->GetEquipmentCache());
     // Equipment (VisualItems) - 23 slots in Cata
     for (int slot = 0; slot < 23; ++slot) {
-      response.Append<uint8>(0);  // InvType
-      response.Append<uint32>(0); // DisplayID
-      response.Append<uint32>(0); // DisplayEnchantID
+      auto const &visualSlot = visualItems[slot];
+      response.Append<uint8>(visualSlot.invType);
+      response.Append<uint32>(visualSlot.displayId);
+      response.Append<uint32>(visualSlot.displayEnchantId);
     }
 
     response.Append<uint32>(0); // PetCreatureFamilyID
@@ -979,7 +997,8 @@ void WorldSession::HandleCharCreate(WorldPacket &packet) {
 
   bool success =
       _charService->CreateCharacter(_accountId, name, race, klass, gender, skin,
-                                    face, hairStyle, hairColor, facialHair);
+                                    face, hairStyle, hairColor, facialHair,
+                                    outfitId);
 
   WorldPacket response(SMSG_CHAR_CREATE);
   response.Append<uint8>(success ? 0x2F : 0x30);

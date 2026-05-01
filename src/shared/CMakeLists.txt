@@ -1,5 +1,9 @@
 add_library(FirelandsShared STATIC 
     Config.cpp
+    dbc/DbcReader.cpp
+    dbc/CharStartOutfitDbc.cpp
+    game/EquipmentCache.cpp
+    game/ItemEquipSlots.cpp
     network/SpellCastWire.cpp
 )
 

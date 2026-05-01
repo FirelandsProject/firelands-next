@@ -1,7 +1,10 @@
 #pragma once
 
 #include <shared/Common.h>
+#include <shared/game/InventorySlots.h>
+#include <array>
 #include <string>
+#include <utility>
 
 namespace Firelands {
 
@@ -11,7 +14,10 @@ public:
             uint8 klass, uint8 gender, uint8 skin, uint8 face, uint8 hairStyle,
             uint8 hairColor, uint8 facialHair, uint8 level, uint16 zoneId,
             uint16 mapId, float x, float y, float z, float o, uint32 guildId,
-            uint32 characterFlags, uint32 customizationFlags, bool firstLogin)
+            uint32 characterFlags, uint32 customizationFlags, bool firstLogin,
+            uint8 outfitId = 0, std::string equipmentCache = "",
+            std::array<uint32_t, kEquipmentSlotCount> visibleItems = {},
+            std::array<uint32_t, kEquipmentSlotCount> visibleItemGuids = {})
       : m_guid(guid), m_account(account), m_name(std::move(name)), m_race(race),
         m_klass(klass), m_gender(gender), m_skin(skin), m_face(face),
         m_hairStyle(hairStyle), m_hairColor(hairColor),
@@ -19,8 +25,10 @@ public:
         m_mapId(mapId), m_x(x), m_y(y), m_z(z), m_o(o), m_guildId(guildId),
         m_characterFlags(characterFlags),
         m_customizationFlags(customizationFlags), m_firstLogin(firstLogin),
-        m_health(100), m_maxHealth(100), m_factionTemplate(1),
-        m_displayId(GetDefaultDisplayId(race, gender)) {}
+        m_outfitId(outfitId), m_equipmentCache(std::move(equipmentCache)),
+        m_visibleItems(visibleItems), m_visibleItemGuids(visibleItemGuids),
+        m_health(100), m_maxHealth(100),
+        m_factionTemplate(1), m_displayId(GetDefaultDisplayId(race, gender)) {}
 
   static uint32 GetDefaultDisplayId(uint8 race, uint8 gender) {
     switch (race) {
@@ -75,6 +83,22 @@ public:
   uint32 GetCharacterFlags() const { return m_characterFlags; }
   uint32 GetCustomizationFlags() const { return m_customizationFlags; }
   bool IsFirstLogin() const { return m_firstLogin; }
+  uint8 GetOutfitId() const { return m_outfitId; }
+  std::string const &GetEquipmentCache() const { return m_equipmentCache; }
+
+  /// Template entry (`item_instance.itemEntry`) equipped in bag 0 slots 0..18.
+  uint32 GetVisibleItemEntry(size_t equipSlot) const {
+    if (equipSlot >= kEquipmentSlotCount)
+      return 0;
+    return m_visibleItems[equipSlot];
+  }
+
+  /// Low GUID (`character_inventory.item`) for each equipped slot (bag 0, 0..18).
+  uint32 GetVisibleItemGuidLow(size_t equipSlot) const {
+    if (equipSlot >= kEquipmentSlotCount)
+      return 0;
+    return m_visibleItemGuids[equipSlot];
+  }
 
   uint32 GetHealth() const { return m_health; }
   uint32 GetMaxHealth() const { return m_maxHealth; }
@@ -104,6 +128,10 @@ private:
   uint32 m_characterFlags;
   uint32 m_customizationFlags;
   bool m_firstLogin;
+  uint8 m_outfitId;
+  std::string m_equipmentCache;
+  std::array<uint32_t, kEquipmentSlotCount> m_visibleItems{};
+  std::array<uint32_t, kEquipmentSlotCount> m_visibleItemGuids{};
 
   uint32 m_health;
   uint32 m_maxHealth;

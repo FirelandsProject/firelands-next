@@ -2,6 +2,7 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlAccountRepository.cpp
     persistence/MySqlRealmRepository.cpp
     persistence/MySqlCharacterRepository.cpp
+    persistence/MySqlPlayerCreateInfoRepository.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
     network/asio/AsyncNetworkServer.cpp

@@ -1,5 +1,6 @@
 #include <application/services/CharacterService.h>
 #include <application/services/CommandService.h>
+#include <application/services/PlayerCreateInfoService.h>
 #include <application/services/WorldService.h>
 #include <chrono>
 #include <conncpp.hpp>
@@ -9,6 +10,7 @@
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
+#include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <infrastructure/scripting/LuaGameScriptHost.h>
 #include <infrastructure/world/MapCollisionQueriesStub.h>
 #include <atomic>
@@ -107,12 +109,28 @@ int main(int argc, char **argv) {
     std::shared_ptr<sql::Connection> charConn(
         driver->connect(charUrl, properties));
 
-    // 4. Initialize Repositories and Services
+    // 4. Establish World Database Connection
+    std::string worldUrl = config.GetNested<std::string>(
+        {"Database", "World", "URI"},
+        "jdbc:mariadb://localhost:3306/firelands_world");
+    std::shared_ptr<sql::Connection> worldConn(
+        driver->connect(worldUrl, properties));
+
+    // 5. Initialize Repositories and Services
     auto accountRepo = std::make_shared<MySqlAccountRepository>(authConn);
     auto authService = std::make_shared<AuthService>(accountRepo);
 
     auto charRepo = std::make_shared<MySqlCharacterRepository>(charConn);
-    auto charService = std::make_shared<CharacterService>(charRepo);
+    auto playerCreateInfoRepo =
+        std::make_shared<MySqlPlayerCreateInfoRepository>(worldConn);
+    const std::string charStartOutfitDbcPath =
+        config.GetNested<std::string>({"Data", "DbcPath"}, "data/dbc") +
+        "/CharStartOutfit.dbc";
+    auto playerCreateInfoService =
+        std::make_shared<PlayerCreateInfoService>(playerCreateInfoRepo,
+                                                  charStartOutfitDbcPath);
+    auto charService =
+        std::make_shared<CharacterService>(charRepo, playerCreateInfoService);
     auto commandService = std::make_shared<CommandService>();
 
     auto sessionFactory = [authService, charService, commandService](

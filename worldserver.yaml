@@ -40,28 +40,6 @@ Motd:
   - "Welcome to Firelands WoW!"
   - "Enjoy your stay in the lands of Fire and Ice."
 
-Defaults:
-  Chat:
-    ConfigCache:
-      - "SET chatStyle \"classic\""
-      - "SET chatClassColorOverride \"0\""
-      - "SET chatMouseScroll \"1\""
-      - "SET chatBubbles \"1\""
-      - "SET chatBubblesParty \"1\""
-      - "SET profanityFilter \"0\""
-      - "SET showLootSpam \"1\""
-  Keybindings:
-    Movement:
-      - "bind W MOVEFORWARD"
-      - "bind S MOVEBACKWARD"
-      - "bind A TURNLEFT"
-      - "bind D TURNRIGHT"
-      - "bind Q STRAFELEFT"
-      - "bind E STRAFERIGHT"
-      - "bind SPACE JUMP"
-      - "bind BUTTON2 TURNORACTION"
-      - "bind BUTTON1 MOVEANDSTEER"
-
 # Client DBC folder (4.3.4): copy/extract from game data (MPQ/patch).
 # Used for Faction.dbc (reputation indices), CharStartOutfit.dbc (starter gear),
 # and any future DBC-driven features. Paths are relative to the process cwd.

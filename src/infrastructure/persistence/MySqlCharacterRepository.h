@@ -2,6 +2,7 @@
 #define FIRELANDS_INFRASTRUCTURE_PERSISTENCE_MYSQL_CHARACTER_REPOSITORY_H
 
 #include <domain/repositories/ICharacterRepository.h>
+#include <domain/models/PlayerCreateInfo.h>
 #include <shared/Common.h>
 #include <conncpp.hpp>
 #include <memory>
@@ -13,7 +14,8 @@ namespace Firelands {
         explicit MySqlCharacterRepository(std::shared_ptr<sql::Connection> connection);
 
         std::vector<std::shared_ptr<Character>> GetCharactersByAccount(uint32_t accountId) override;
-        bool CreateCharacter(const Character& character) override;
+        std::optional<uint32_t> CreateCharacter(const Character& character) override;
+        bool GrantStarterItems(uint32_t characterGuid, std::vector<StarterItemGrant> const& items) override;
         bool DeleteCharacter(uint32_t guid, uint32_t accountId) override;
         bool IsNameAvailable(const std::string& name) override;
         std::optional<Character> GetCharacterByGuid(uint64_t guid) override;
