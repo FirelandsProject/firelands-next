@@ -3,10 +3,12 @@
 #include <shared/game/InventorySlots.h>
 #include <shared/game/ItemEquipSlots.h>
 #include <shared/Logger.h>
+#include <cmath>
 #include <algorithm>
 #include <array>
 #include <memory>
 #include <optional>
+#include <string>
 #include <unordered_set>
 
 namespace Firelands {
@@ -27,8 +29,42 @@ struct Bag0InventoryData {
   std::array<uint32_t, kPackSlotCount> packStacks{};
 };
 
+float FiniteOrZero(float v) { return std::isfinite(v) ? v : 0.f; }
+
+/// `ResultSet::getFloat` can throw on some REAL values MariaDB returns in scientific
+/// notation (e.g. subnormals). `getDouble` accepts those wire forms.
+float ResultSetWorldFloat(sql::ResultSet &rs, char const *column) {
+  try {
+    double const d = rs.getDouble(column);
+    float const f = static_cast<float>(d);
+    return std::isfinite(f) ? f : 0.f;
+  } catch (sql::SQLException &) {
+    return 0.f;
+  }
+}
+
 bool IsMissingTableError(sql::SQLException &e) {
   return e.getErrorCode() == 1146 || e.getSQLState() == "42S02";
+}
+
+bool EnsureCharactersOrientationColumn(std::shared_ptr<sql::Connection> conn) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "ALTER TABLE `firelands_characters`.`characters` "
+        "ADD COLUMN `orientation` float NOT NULL DEFAULT 0 AFTER `z`");
+    LOG_INFO(
+        "Added missing column `firelands_characters.characters.orientation`.");
+    return true;
+  } catch (sql::SQLException &e) {
+    if (e.getErrorCode() == 1060)
+      return true; // ER_DUP_FIELDNAME — already present
+    std::string const msg{e.what()};
+    if (msg.find("Duplicate column") != std::string::npos)
+      return true;
+    LOG_WARN("EnsureCharactersOrientationColumn failed: {}", e.what());
+    return false;
+  }
 }
 
 bool EnsureStarterInventoryTables(std::shared_ptr<sql::Connection> conn) {
@@ -150,7 +186,9 @@ Bag0InventoryData LoadBag0Inventory(std::shared_ptr<sql::Connection> conn,
 
 MySqlCharacterRepository::MySqlCharacterRepository(
     std::shared_ptr<sql::Connection> connection)
-    : _connection(std::move(connection)) {}
+    : _connection(std::move(connection)) {
+  EnsureCharactersOrientationColumn(_connection);
+}
 
 std::vector<std::shared_ptr<Character>>
 MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
@@ -159,7 +197,7 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
     std::shared_ptr<sql::PreparedStatement> stmnt(_connection->prepareStatement(
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
-        "level, zoneId, mapId, x, y, z, guildId, characterFlags, "
+        "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
         "customizationFlags, firstLogin "
         "FROM characters WHERE account = ?"));
     stmnt->setUInt(1, accountId);
@@ -180,9 +218,9 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
           static_cast<uint8>(res->getUInt("facialHair")),
           static_cast<uint8>(res->getUInt("level")),
           static_cast<uint16>(res->getUInt("zoneId")),
-          static_cast<uint16>(res->getUInt("mapId")), res->getFloat("x"),
-          res->getFloat("y"), res->getFloat("z"),
-          0.0f, // orientation (pending DB update)
+          static_cast<uint16>(res->getUInt("mapId")),
+          ResultSetWorldFloat(*res, "x"), ResultSetWorldFloat(*res, "y"),
+          ResultSetWorldFloat(*res, "z"), ResultSetWorldFloat(*res, "orientation"),
           res->getUInt("guildId"), res->getUInt("characterFlags"),
           res->getUInt("customizationFlags"), res->getBoolean("firstLogin"),
           static_cast<uint8>(res->getUInt("outfitId")),
@@ -201,9 +239,9 @@ MySqlCharacterRepository::CreateCharacter(const Character &character) {
     std::shared_ptr<sql::PreparedStatement> stmnt(_connection->prepareStatement(
         "INSERT INTO characters (account, name, race, class, gender, skin, "
         "face, hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
-        "level, zoneId, mapId, x, y, z, guildId, characterFlags, "
+        "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
         "customizationFlags, firstLogin) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
     stmnt->setUInt(1, character.GetAccount());
     stmnt->setString(2, character.GetName());
@@ -223,10 +261,11 @@ MySqlCharacterRepository::CreateCharacter(const Character &character) {
     stmnt->setDouble(16, static_cast<double>(character.GetX()));
     stmnt->setDouble(17, static_cast<double>(character.GetY()));
     stmnt->setDouble(18, static_cast<double>(character.GetZ()));
-    stmnt->setUInt(19, character.GetGuildId());
-    stmnt->setUInt(20, character.GetCharacterFlags());
-    stmnt->setUInt(21, character.GetCustomizationFlags());
-    stmnt->setBoolean(22, character.IsFirstLogin());
+    stmnt->setDouble(19, static_cast<double>(character.GetOrientation()));
+    stmnt->setUInt(20, character.GetGuildId());
+    stmnt->setUInt(21, character.GetCharacterFlags());
+    stmnt->setUInt(22, character.GetCustomizationFlags());
+    stmnt->setBoolean(23, character.IsFirstLogin());
 
     stmnt->executeUpdate();
 
@@ -410,7 +449,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
     std::shared_ptr<sql::PreparedStatement> stmnt(_connection->prepareStatement(
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
-        "level, zoneId, mapId, x, y, z, guildId, characterFlags, "
+        "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
         "customizationFlags, firstLogin "
         "FROM characters WHERE guid = ?"));
     stmnt->setUInt64(1, guid);
@@ -433,9 +472,9 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
           static_cast<uint8>(res->getUInt("facialHair")),
           static_cast<uint8>(res->getUInt("level")),
           static_cast<uint16>(res->getUInt("zoneId")),
-          static_cast<uint16>(res->getUInt("mapId")), res->getFloat("x"),
-          res->getFloat("y"), res->getFloat("z"),
-          0.0f, // orientation (pending DB update)
+          static_cast<uint16>(res->getUInt("mapId")),
+          ResultSetWorldFloat(*res, "x"), ResultSetWorldFloat(*res, "y"),
+          ResultSetWorldFloat(*res, "z"), ResultSetWorldFloat(*res, "orientation"),
           res->getUInt("guildId"), res->getUInt("characterFlags"),
           res->getUInt("customizationFlags"), res->getBoolean("firstLogin"),
           static_cast<uint8>(res->getUInt("outfitId")),
@@ -448,6 +487,28 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
   } catch (sql::SQLException &e) {
     LOG_ERROR("SQLException in GetCharacterByGuid: {}", e.what());
     return std::nullopt;
+  }
+}
+
+bool MySqlCharacterRepository::SaveCharacterOnLogout(
+    uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
+    float x, float y, float z, float orientation) {
+  try {
+    std::shared_ptr<sql::PreparedStatement> stmnt(_connection->prepareStatement(
+        "UPDATE characters SET mapId = ?, zoneId = ?, x = ?, y = ?, z = ?, "
+        "orientation = ?, firstLogin = 0 WHERE guid = ? AND account = ?"));
+    stmnt->setUInt(1, mapId);
+    stmnt->setUInt(2, zoneId);
+    stmnt->setDouble(3, static_cast<double>(FiniteOrZero(x)));
+    stmnt->setDouble(4, static_cast<double>(FiniteOrZero(y)));
+    stmnt->setDouble(5, static_cast<double>(FiniteOrZero(z)));
+    stmnt->setDouble(6, static_cast<double>(FiniteOrZero(orientation)));
+    stmnt->setUInt(7, characterGuid);
+    stmnt->setUInt(8, accountId);
+    return stmnt->executeUpdate() > 0;
+  } catch (sql::SQLException &e) {
+    LOG_ERROR("SaveCharacterOnLogout failed: {}", e.what());
+    return false;
   }
 }
 

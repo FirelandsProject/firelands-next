@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `characters` (
   `x` float NOT NULL DEFAULT '0',
   `y` float NOT NULL DEFAULT '0',
   `z` float NOT NULL DEFAULT '0',
+  `orientation` float NOT NULL DEFAULT '0',
   `guildId` int(10) unsigned NOT NULL DEFAULT '0',
   `characterFlags` int(10) unsigned NOT NULL DEFAULT '0',
   `customizationFlags` int(10) unsigned NOT NULL DEFAULT '0',

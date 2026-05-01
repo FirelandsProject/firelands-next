@@ -21,6 +21,9 @@ namespace Firelands {
         std::optional<Character> GetCharacterByGuid(uint64_t guid) override;
         bool SwapBag0Slots(uint32_t characterGuid, uint8_t srcSlot,
                            uint8_t dstSlot) override;
+        bool SaveCharacterOnLogout(uint32_t accountId, uint32_t characterGuid,
+                                   uint16_t mapId, uint16_t zoneId, float x,
+                                   float y, float z, float orientation) override;
     private:
         std::shared_ptr<sql::Connection> _connection;
     };

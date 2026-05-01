@@ -29,6 +29,7 @@ if(ENABLE_UNITY_BUILD)
 endif()
 
 # 3. Precompiled Headers Definition
+# spdlog must enter via <shared/Logger.h> so SPDLOG_LEVEL_NAMES (emoji levels) applies.
 set(PROJECT_PCH_HEADERS
     <vector>
     <string>
@@ -44,7 +45,6 @@ set(PROJECT_PCH_HEADERS
     <chrono>
     <thread>
     <mutex>
-    <spdlog/spdlog.h>
     <nlohmann/json.hpp>
     <shared/Common.h>
     <shared/Logger.h>

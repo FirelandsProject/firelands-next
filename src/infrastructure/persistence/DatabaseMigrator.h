@@ -192,6 +192,21 @@ private:
           inString = true;
           stringChar = c;
         } else if (stringChar == c) {
+          // SQL string escapes: '' and "" inside quoted literals must not end the
+          // string (otherwise migrations like DEFAULT ''0'' split incorrectly).
+          if (c == '\'' && i + 1 < sql.length() && sql[i + 1] == '\'') {
+            ++i;
+            continue;
+          }
+          if (c == '"' && i + 1 < sql.length() && sql[i + 1] == '"') {
+            ++i;
+            continue;
+          }
+          // Backtick-delimited identifiers: `` → one `
+          if (c == '`' && i + 1 < sql.length() && sql[i + 1] == '`') {
+            ++i;
+            continue;
+          }
           inString = false;
         }
       }

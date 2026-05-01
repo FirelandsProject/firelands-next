@@ -129,6 +129,13 @@ public:
                                        srcSlot, dstSlot);
   }
 
+  bool SaveCharacterOnLogout(uint32_t accountId, uint32_t characterGuid,
+                             uint16_t mapId, uint16_t zoneId, float x, float y,
+                             float z, float orientation) {
+    return m_repository->SaveCharacterOnLogout(accountId, characterGuid, mapId,
+                                               zoneId, x, y, z, orientation);
+  }
+
 private:
   std::shared_ptr<ICharacterRepository> m_repository;
   std::shared_ptr<PlayerCreateInfoService> m_playerCreateInfoService;

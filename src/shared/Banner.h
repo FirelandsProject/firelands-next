@@ -59,13 +59,17 @@ inline void PrintBanner(BannerType type = BannerType::Auth,
                         bool fixed = false) {
   const bool useStickyLayout = fixed && StdoutIsInteractiveTerminal();
 
-  // ANSI Colors - Intense Orange Palette
-  const std::string ORANGE_VIBRANT = "\033[38;5;202m";
-  const std::string ORANGE_BRIGHT = "\033[38;5;208m";
-  const std::string ORANGE_WARM = "\033[38;5;214m";
-  const std::string BLUE_HIGHLIGHT =
-      "\033[38;5;39m"; // Complementary Deep Sky Blue
-  const std::string WHITE = "\033[37m";
+  // ANSI 256-color reds (dark → hot) for strong contrast on dark terminals
+  const std::string RED[] = {
+      "\033[38;5;52m",  // deep crimson
+      "\033[38;5;88m",  // blood red
+      "\033[38;5;124m", // strong red
+      "\033[38;5;160m", // scarlet
+      "\033[38;5;196m", // vivid red
+      "\033[38;5;203m"  // hot pink-red
+  };
+  const std::string CYAN_ACCENT = "\033[1;38;5;87m"; // pops against red
+  const std::string WHITE = "\033[97m";
   const std::string RESET = "\033[0m";
   const std::string BOLD = "\033[1m";
   const std::string CLEAR_SCREEN = "\033[2J";
@@ -78,33 +82,47 @@ inline void PrintBanner(BannerType type = BannerType::Auth,
     std::cout << "\033[r" << CLEAR_SCREEN << CURSOR_HOME << std::flush;
   }
 
-  std::string mainColor = ORANGE_BRIGHT;
+  int redShift = 0;
   std::string label = " PROJECT INTERNALS ";
 
   switch (type) {
   case BannerType::Auth:
-    mainColor = ORANGE_VIBRANT;
+    redShift = 0;
     label = " AUTH SERVER ";
     break;
   case BannerType::World:
-    mainColor = ORANGE_BRIGHT;
+    redShift = 1;
     label = " WORLD SERVER ";
     break;
   case BannerType::Tools:
-    mainColor = ORANGE_WARM;
+    redShift = 2;
     label = " DEVELOPER TOOLS ";
     break;
   }
 
-  std::cout << mainColor << BOLD << R"(
-    ███████╗██╗██████╗ ███████╗██╗      █████╗ ███╗   ██╗██████╗ ███████╗
-    ██╔════╝██║██╔══██╗██╔════╝██║     ██╔══██╗████╗  ██║██╔══██╗██╔════╝
-    █████╗  ██║██████╔╝█████╗  ██║     ███████║██╔██╗ ██║██║  ██║███████╗
-    ██╔══╝  ██║██╔══██╗██╔══╝  ██║     ██╔══██║██║╚██╗██║██║  ██║╚════██║
-    ██║     ██║██║  ██║███████╗███████╗██║  ██║██║ ╚████║██████╔╝███████║
-    ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝
-        )" << WHITE
-            << "           Cataclysm WoW Emulator | " << BOLD << BLUE_HIGHLIGHT
+  auto redLine = [&](int row) -> std::string {
+    return RED[(redShift + row) % 6] + BOLD;
+  };
+
+  // FIGlet-style block letters (reads clearly in any UTF-8 terminal)
+  static const char *const kBlockLogo[] = {
+      "    ███████╗██╗██████╗ ███████╗██╗      █████╗ ███╗   ██╗██████╗ ███████╗",
+      "    ██╔════╝██║██╔══██╗██╔════╝██║     ██╔══██╗████╗  ██║██╔══██╗██╔════╝",
+      "    █████╗  ██║██████╔╝█████╗  ██║     ███████║██╔██╗ ██║██║  ██║███████╗",
+      "    ██╔══╝  ██║██╔══██╗██╔══╝  ██║     ██╔══██║██║╚██╗██║██║  ██║╚════██║",
+      "    ██║     ██║██║  ██║███████╗███████╗██║  ██║██║ ╚████║██████╔╝███████║",
+      "    ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝",
+  };
+  for (int i = 0; i < 6; ++i) {
+    std::cout << redLine(static_cast<int>(i)) << kBlockLogo[i] << RESET << "\n";
+  }
+
+  // Plain caption centered under the 73-column block logo (fallback if glyphs look off)
+  constexpr std::size_t kLogoCols = 73;
+  constexpr std::size_t kCaptionLen = 10; // "FIRELANDS"
+  constexpr std::size_t kCaptionPad = (kLogoCols > kCaptionLen) ? (kLogoCols - kCaptionLen) / 2 : 0;
+  std::cout << WHITE << std::string(kCaptionPad, ' ') << RESET << "\n"
+            << WHITE << "           Cataclysm WoW Emulator | " << CYAN_ACCENT
             << label << RESET << WHITE << " | Build 15595" << RESET << "\n";
 
   std::cout << GRAY << "    " << std::string(72, '-') << RESET << std::endl;

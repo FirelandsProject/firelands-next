@@ -62,6 +62,7 @@ private:
   // Core Network Logic
   void DoRead();
   void DoWrite();
+  void QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer);
   void HandlePacket(ByteBuffer &buffer);
   void ProcessPacket(WorldPacket &packet);
 
@@ -79,6 +80,8 @@ private:
   void HandleCharCreate(WorldPacket &packet);
   void HandleCharDelete(WorldPacket &packet);
   void HandlePlayerLogin(WorldPacket &packet);
+  void HandleLogoutRequest(WorldPacket &packet);
+  void HandleLogoutCancel(WorldPacket &packet);
   void HandleNameQuery(WorldPacket &packet);
   void HandleQueryTime(WorldPacket &packet);
   void HandlePlayedTime(WorldPacket &packet);
@@ -137,7 +140,10 @@ private:
   void SendLoginVerifyWorld(uint32 mapId, float x, float y, float z, float o);
 
   // Helpers
-  void ReadMovementInfo(WorldPacket &packet, MovementInfo &move);
+  /// Trinity schedules the next time-sync ~5s after SendTimeSync; never chains on
+  /// every CMSG_TIME_SYNC_RESP (that floods the client and breaks map loading).
+  void SchedulePeriodicTimeSync();
+  void CancelPeriodicTimeSync();
 
   tcp::socket _socket;
   std::shared_ptr<AuthService> _authService;
@@ -166,6 +172,8 @@ private:
 
   /// Monotonic counter for SMSG_TIME_SYNC_REQ (see WorldSession::SendTimeSync in reference).
   uint32 _timeSyncNextCounter = 0;
+
+  boost::asio::steady_timer _timeSyncPeriodicTimer;
 
   /// Filled while handling CMSG_AUTH_SESSION; consumed by SendAddonInfo (SMSG_ADDON_INFO).
   std::vector<AuthSecureAddonEntry> _authSecureAddons;

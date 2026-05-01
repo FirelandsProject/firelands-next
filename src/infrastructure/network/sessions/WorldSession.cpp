@@ -12,12 +12,14 @@
 #include <shared/network/packets/MotdPacket.h>
 #include <shared/network/packets/VerifyWorldPacket.h>
 #include <shared/network/packets/SetProficiencyPacket.h>
+#include <shared/network/MovementWire.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/game/EquipmentCache.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <ctime>
 #include <map>
@@ -171,12 +173,60 @@ static bool IsClientMovementOpcode(WorldOpcode opcode) {
   case MSG_MOVE_HEARTBEAT:
   case MSG_MOVE_START_FORWARD:
   case MSG_MOVE_START_BACKWARD:
+  case MSG_MOVE_START_STRAFE_LEFT:
+  case MSG_MOVE_START_STRAFE_RIGHT:
   case MSG_MOVE_STOP:
+  case MSG_MOVE_STOP_STRAFE:
+  case MSG_MOVE_START_ASCEND:
+  case MSG_MOVE_START_DESCEND:
+  case MSG_MOVE_STOP_ASCEND:
+  case MSG_MOVE_START_TURN_LEFT:
+  case MSG_MOVE_START_TURN_RIGHT:
+  case MSG_MOVE_STOP_TURN:
+  case MSG_MOVE_START_PITCH_UP:
+  case MSG_MOVE_START_PITCH_DOWN:
+  case MSG_MOVE_STOP_PITCH:
+  case MSG_MOVE_SET_RUN_MODE:
+  case MSG_MOVE_SET_WALK_MODE:
+  case MSG_MOVE_START_SWIM:
+  case MSG_MOVE_STOP_SWIM:
+  case MSG_MOVE_JUMP:
   case MSG_MOVE_SET_FACING:
+  case MSG_MOVE_FALL_LAND:
     return true;
   default:
     return false;
   }
+}
+
+// FirelandsCore GridDefines.h: MAP_SIZE = SIZE_OF_GRIDS * MAX_NUMBER_OF_GRIDS,
+// MAP_HALFSIZE = MAP_SIZE / 2; Firelands::IsValidMapCoord uses these bounds.
+static constexpr float kMapCoordLimit =
+    (533.3333f * 64.0f) * 0.5f - 0.5f;
+
+/// Match reference `Firelands::IsValidMapCoord`:
+///   - x,y,z finite and within map half-size bounds
+///   - orientation finite AND in WoW's normalised range [-pi, 2*pi].
+///     The reference only checks isfinite(o), but our packed-420 parser may
+///     produce a finite-but-enormous orientation (e.g. -2.67e38) when it
+///     mis-reads a different opcode layout.  Clamping to +-7 catches that
+///     while accepting any real WoW orientation (which is in [0, 2*pi]).
+static constexpr float kMaxOrientation = 7.0f; // slightly above 2*pi (~6.283)
+
+static bool IsSaneWorldPosition(MovementInfo const &m) {
+  if (!std::isfinite(m.x) || !std::isfinite(m.y) || !std::isfinite(m.z) ||
+      !std::isfinite(m.orientation))
+    return false;
+  if (std::fabs(m.orientation) > kMaxOrientation)
+    return false;
+  return std::fabs(m.x) <= kMapCoordLimit && std::fabs(m.y) <= kMapCoordLimit &&
+         std::fabs(m.z) <= kMapCoordLimit;
+}
+
+/// Only heartbeat uses `TryReadMovementHeartbeat433`. Other MSG_MOVE_* share a
+/// different bit layout; our packed-420 parser can mis-read Z and corrupt DB on logout.
+static bool IsTrustedPositionOpcode(WorldOpcode opcode) {
+  return opcode == MSG_MOVE_HEARTBEAT;
 }
 
 std::map<uint16, uint32> BuildItemCreateFields(uint64 itemObjectGuid,
@@ -322,7 +372,7 @@ WorldSession::WorldSession(tcp::socket socket,
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
       _commandService(std::move(commandService)), _serverSeed(0),
-      _accountId(0) {}
+      _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()) {}
 
 void WorldSession::Start() {
   LOG_INFO("WorldSession started for {}", GetIpAddress());
@@ -367,11 +417,12 @@ void WorldSession::SendPacket(WorldPacket &packet) {
     buffer.Append(packet.GetBuffer(), packet.Size());
   }
 
-  LOG_DEBUG("[SMSG] opcode=0x{:04X} payload={} total_on_wire={}",
-            static_cast<uint32>(packet.GetOpcode()), packet.Size(),
-            static_cast<uint32>(buffer.Size()));
+  LOG_INFO("[SMSG] {} payload={} wire={}",
+           packet.GetOpcodeName(), packet.Size(), buffer.Size());
 
-  SendPacket(buffer);
+  auto shared_buffer = std::make_shared<std::vector<uint8>>(
+      buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
+  QueueOutgoing(shared_buffer);
 }
 
 void WorldSession::SendPacket(ServerPacket *packet) {
@@ -381,28 +432,18 @@ void WorldSession::SendPacket(ServerPacket *packet) {
   }
 }
 
-void WorldSession::SendPacket(ByteBuffer &buffer) {
-  auto shared_buffer = std::make_shared<std::vector<uint8>>(
-      buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
-
-  // Log hex of every outgoing packet for diagnostics
-  {
-    std::string hexDump;
-    for (size_t i = 0; i < shared_buffer->size() && i < 64; ++i) {
-      char hex[4];
-      std::snprintf(hex, sizeof(hex), "%02X ", (*shared_buffer)[i]);
-      hexDump += hex;
-    }
-    if (shared_buffer->size() > 64)
-      hexDump += "...";
-    LOG_INFO("[SEND] {} bytes: {}", shared_buffer->size(), hexDump);
-  }
-
-  // Queue the buffer and start writing if not already in progress
-  _writeQueue.push_back(shared_buffer);
+void WorldSession::QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer) {
+  _writeQueue.push_back(std::move(buffer));
   if (!_writing) {
     DoWrite();
   }
+}
+
+void WorldSession::SendPacket(ByteBuffer &buffer) {
+  auto shared_buffer = std::make_shared<std::vector<uint8>>(
+      buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
+  LOG_INFO("[SEND] raw {} bytes (handshake / non-opcode)", shared_buffer->size());
+  QueueOutgoing(shared_buffer);
 }
 
 void WorldSession::DoWrite() {
@@ -459,13 +500,33 @@ void WorldSession::SendAuthChallenge() {
   data.Append<uint8>(1);
 
   SendPacket(data);
-  LOG_INFO("SMSG_AUTH_CHALLENGE sent (ServerSeed: 0x{:08X})", _serverSeed);
 }
 void WorldSession::Close() {
+  CancelPeriodicTimeSync();
   if (_socket.is_open()) {
     LOG_INFO("Closing WorldSession for {}", GetIpAddress());
     _socket.close();
   }
+}
+
+void WorldSession::CancelPeriodicTimeSync() {
+  _timeSyncPeriodicTimer.cancel();
+}
+
+void WorldSession::SchedulePeriodicTimeSync() {
+  auto self(shared_from_this());
+  _timeSyncPeriodicTimer.expires_after(std::chrono::milliseconds(5000));
+  _timeSyncPeriodicTimer.async_wait(
+      [this, self](boost::system::error_code ec) {
+        if (ec == boost::asio::error::operation_aborted)
+          return;
+        if (_playerGuid == 0)
+          return;
+        WorldPacket next(SMSG_TIME_SYNC_REQ);
+        next.Append<uint32>(_timeSyncNextCounter++);
+        SendPacket(next);
+        SchedulePeriodicTimeSync();
+      });
 }
 
 std::string WorldSession::GetIpAddress() const {
@@ -531,9 +592,6 @@ void WorldSession::DoRead() {
             uint32 opcode = _decHeader[2] | (_decHeader[3] << 8) |
                             (_decHeader[4] << 16) | (_decHeader[5] << 24);
 
-            LOG_INFO("[DEBUG] Decrypted Header: Size {}, Opcode 0x{:08X}",
-                     pktSize, opcode);
-
             // Total on wire: 2 (size field) + pktSize
             if (_inBuffer.Size() < static_cast<size_t>(pktSize + 2)) {
               if (_inBuffer.Size() >= 6) {
@@ -544,9 +602,6 @@ void WorldSession::DoRead() {
             }
 
             _headerDecrypted = false;
-
-            LOG_INFO("[PKT] Received: 0x{:04X} (Decrypted: {}), Size: {}",
-                     opcode, _crypt.IsInitialized(), pktSize);
 
             uint32 payloadSize = (pktSize >= 4) ? (pktSize - 4) : 0;
 
@@ -617,8 +672,8 @@ void WorldSession::HandlePacket(ByteBuffer &buffer) {
 
 void WorldSession::ProcessPacket(WorldPacket &packet) {
   uint32 opcode = packet.GetOpcode();
-  LOG_INFO("WorldSession received packet: {}, size: {}", packet.GetOpcodeName(),
-           packet.Size());
+  LOG_INFO("[CMSG] {} payload={} crypt={}", packet.GetOpcodeName(),
+           packet.Size(), _crypt.IsInitialized());
 
   switch (opcode) {
   case CMSG_AUTH_SESSION:
@@ -673,7 +728,6 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     // Simply acknowledge loading screen progress
     break;
   case CMSG_LOG_DISCONNECT:
-    LOG_INFO("Client disconnected (CMSG_LOG_DISCONNECT)");
     Close();
     break;
   case CMSG_MESSAGECHAT:
@@ -700,11 +754,23 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_MOVE_TIME_SKIPPED:
     HandleMoveTimeSkipped(packet);
     break;
+  case CMSG_SET_SELECTION:
+  case CMSG_AREA_TRIGGER:
+  case CMSG_STAND_STATE_CHANGE:
+  case CMSG_SET_SHEATHED:
+    // Target selection updates are client-side/UI-only for now.
+    break;
   case CMSG_PING:
     HandlePing(packet);
     break;
   case CMSG_PLAYER_LOGIN:
     HandlePlayerLogin(packet);
+    break;
+  case CMSG_LOGOUT_REQUEST:
+    HandleLogoutRequest(packet);
+    break;
+  case CMSG_LOGOUT_CANCEL:
+    HandleLogoutCancel(packet);
     break;
   case CMSG_READY_FOR_ACCOUNT_DATA_TIMES:
     HandleReadyForAccountDataTimes(packet);
@@ -733,7 +799,24 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case MSG_MOVE_HEARTBEAT:
   case MSG_MOVE_START_FORWARD:
   case MSG_MOVE_START_BACKWARD:
+  case MSG_MOVE_START_STRAFE_LEFT:
+  case MSG_MOVE_START_STRAFE_RIGHT:
   case MSG_MOVE_STOP:
+  case MSG_MOVE_STOP_STRAFE:
+  case MSG_MOVE_START_ASCEND:
+  case MSG_MOVE_START_DESCEND:
+  case MSG_MOVE_STOP_ASCEND:
+  case MSG_MOVE_START_TURN_LEFT:
+  case MSG_MOVE_START_TURN_RIGHT:
+  case MSG_MOVE_STOP_TURN:
+  case MSG_MOVE_START_PITCH_UP:
+  case MSG_MOVE_START_PITCH_DOWN:
+  case MSG_MOVE_STOP_PITCH:
+  case MSG_MOVE_SET_RUN_MODE:
+  case MSG_MOVE_SET_WALK_MODE:
+  case MSG_MOVE_START_SWIM:
+  case MSG_MOVE_STOP_SWIM:
+  case MSG_MOVE_JUMP:
   case MSG_MOVE_SET_FACING:
   case MSG_MOVE_FALL_LAND:
     HandleMovement(packet);
@@ -784,10 +867,10 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
   uint32 accountNameLength = br.ReadBits(12);
   std::string account = br.ReadString(accountNameLength);
 
-  LOG_INFO("CMSG_AUTH_SESSION: Account: '{}', Build: {}, RealmID: {}, "
-           "ClientSeed: {}, Packet Size: {}",
-           account, build, realmId,
-           Crypto::ToHexString(localChallenge.data(), 4), packet.Size());
+  LOG_DEBUG("CMSG_AUTH_SESSION: Account: '{}', Build: {}, RealmID: {}, "
+            "ClientSeed: {}, Packet Size: {}",
+            account, build, realmId,
+            Crypto::ToHexString(localChallenge.data(), 4), packet.Size());
 
   auto accountOpt = _authService->FindAccount(account);
   if (!accountOpt) {
@@ -805,7 +888,7 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
 
   // Initialize WorldCrypt IMMEDIATELY after getting K (Cataclysm requirement)
   _crypt.Init(K);
-  LOG_INFO("[AUTH] WorldCrypt initialized with 40 bytes of K");
+  LOG_DEBUG("[AUTH] WorldCrypt initialized with 40 bytes of K");
 
   // 4. Perform Digest validation
   // SHA1(Account, t(0), ClientChallenge, ServerSeed, SessionKey)
@@ -824,15 +907,15 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
   if (std::memcmp(calculatedDigest.data(), digest, 20) != 0) {
     LOG_ERROR("CMSG_AUTH_SESSION: Digest validation failed for account '{}'!",
               account);
-    LOG_INFO("Calculated: {}", Crypto::ToHexString(calculatedDigest));
-    LOG_INFO("Received:   {}", Crypto::ToHexString(digest, 20));
+    LOG_DEBUG("Calculated: {}", Crypto::ToHexString(calculatedDigest));
+    LOG_DEBUG("Received:   {}", Crypto::ToHexString(digest, 20));
     Close();
     return;
   }
 
   _accountId = accountOpt->id;
-  LOG_INFO("CMSG_AUTH_SESSION: Digest validated successfully for account '{}'.",
-           account);
+  LOG_DEBUG("CMSG_AUTH_SESSION: Digest validated successfully for account '{}'.",
+            account);
 
   SendAuthResponse();
   SendAddonInfo();
@@ -920,7 +1003,6 @@ void WorldSession::SendAuthResponse() {
   response.Append<uint8>(12); // Result (AUTH_OK = 12)
 
   SendPacket(response);
-  LOG_INFO("[AUTH] SMSG_AUTH_RESPONSE (AUTH_OK) sent.");
 }
 
 void WorldSession::SendAddonInfo() {
@@ -948,16 +1030,14 @@ void WorldSession::SendAddonInfo() {
   data.Append<uint32>(0); // bannedAddonCount
 
   SendPacket(data);
-  LOG_INFO("[AUTH] SMSG_ADDON_INFO: {} secure addon row(s), banned list empty.",
-           _authSecureAddons.size());
 }
 
 void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
   auto characters = _charService->GetCharactersForAccount(_accountId);
   uint32 count = static_cast<uint32>(characters.size());
 
-  LOG_INFO("CMSG_CHAR_ENUM: Found {} characters for account {}", count,
-           _accountId);
+  LOG_DEBUG("CMSG_CHAR_ENUM: Found {} characters for account {}", count,
+            _accountId);
 
   WorldPacket response(SMSG_CHAR_ENUM);
   BitWriter bw(response);
@@ -1066,7 +1146,6 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
   }
 
   SendPacket(response);
-  LOG_INFO("SMSG_CHAR_ENUM sent.");
 }
 
 void WorldSession::HandleCharCreate(WorldPacket &packet) {
@@ -1081,7 +1160,7 @@ void WorldSession::HandleCharCreate(WorldPacket &packet) {
   uint8 facialHair = packet.Read<uint8>();
   uint8 outfitId = packet.Read<uint8>();
 
-  LOG_INFO("CMSG_CHAR_CREATE: Name='{}', Race={}, Class={}", name, race, klass);
+  LOG_DEBUG("CMSG_CHAR_CREATE: Name='{}', Race={}, Class={}", name, race, klass);
 
   bool success =
       _charService->CreateCharacter(_accountId, name, race, klass, gender, skin,
@@ -1095,7 +1174,7 @@ void WorldSession::HandleCharCreate(WorldPacket &packet) {
 
 void WorldSession::HandleCharDelete(WorldPacket &packet) {
   uint64 guid = packet.Read<uint64>();
-  LOG_INFO("CMSG_CHAR_DELETE for GUID: {}", guid);
+  LOG_DEBUG("CMSG_CHAR_DELETE for GUID: {}", guid);
 
   bool success =
       _charService->DeleteCharacter(static_cast<uint32>(guid), _accountId);
@@ -1130,7 +1209,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   uint64 guid = 0;
   std::memcpy(&guid, guid_bytes, 8);
 
-  LOG_INFO("CMSG_PLAYER_LOGIN for GUID: {}", guid);
+  LOG_DEBUG("CMSG_PLAYER_LOGIN for GUID: {}", guid);
   _playerGuid = guid;
   _timeSyncNextCounter = 0;
 
@@ -1187,16 +1266,39 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   move.y = character.GetY();
   move.z = character.GetZ();
   move.orientation = character.GetOrientation();
+  if (!IsSaneWorldPosition(move)) {
+    // Recover from previously persisted corrupt movement values by snapping to
+    // race starter position. This avoids endless loading screens on relog.
+    if (auto fallback = FallbackStartPosition(character.GetRace())) {
+      _mapId = fallback->mapId;
+      _zoneId = static_cast<uint16>(std::min<uint32_t>(fallback->zoneId, 0xFFFFu));
+      move.x = fallback->x;
+      move.y = fallback->y;
+      move.z = fallback->z;
+      move.orientation = fallback->orientation;
+      LOG_WARN("Invalid saved position for guid {} (x={} y={} z={} o={}), "
+               "using race fallback map={} zone={} x={} y={} z={} o={}",
+               guid, character.GetX(), character.GetY(), character.GetZ(),
+               character.GetOrientation(), _mapId, _zoneId, move.x, move.y,
+               move.z, move.orientation);
+    } else {
+      LOG_WARN("Invalid saved position for guid {} and no race fallback; "
+               "keeping DB values.", guid);
+    }
+  }
+  // Seed session position immediately on login. If the user logs out before the
+  // first movement heartbeat arrives, logout persistence must still save a valid
+  // location instead of default zeros.
+  _position = move;
 
   auto player = std::make_shared<Player>(guid, shared_from_this());
   player->SetPosition(move);
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
-  SendLoginVerifyWorld(character.GetMapId(), character.GetX(), character.GetY(),
-                       character.GetZ(), character.GetOrientation());
+  SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
 
   // Now that the player is on the map, send create/update data and "after add" packets
-  UpdateData update(character.GetMapId());
+  UpdateData update(_mapId);
   update.AddCreateObject(guid, TYPEID_PLAYER, move,
                          BuildPlayerUpdateFields(guid, character));
 
@@ -1246,10 +1348,12 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
 
   // Equivalent of Player::SendInitialPacketsAfterAddToMap: world states, then
   // ResetTimeSync + SendTimeSync (WorldSession.cpp in reference).
-  SendInitWorldStates(character.GetMapId(), character.GetZoneId());
+  SendInitWorldStates(_mapId, _zoneId);
   WorldPacket timeSync(SMSG_TIME_SYNC_REQ);
   timeSync.Append<uint32>(_timeSyncNextCounter++);
   SendPacket(timeSync);
+  // Match Trinity: next time-sync is ~5s later via timer, not on each RESP.
+  SchedulePeriodicTimeSync();
   SendLoadCUFProfiles();
 
   LOG_INFO("Player {} logged in and spawned at Map {}", guid, _mapId);
@@ -1257,6 +1361,81 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   if (auto host = WorldService::Instance().GetScriptHost()) {
     host->FireEvent("player_login", guid);
   }
+}
+
+void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
+  if (_playerGuid == 0) {
+    LOG_WARN("CMSG_LOGOUT_REQUEST ignored (not in world)");
+    return;
+  }
+
+  CancelPeriodicTimeSync();
+
+  uint64 const guid = _playerGuid;
+  uint32 const mapId = _mapId;
+
+  // Trinity TCPP order: uint32 reason (0 = OK), uint8 instantLogout.
+  // We always allow instant logout (no combat/rest model yet); client returns to
+  // character selection after SMSG_LOGOUT_COMPLETE.
+  WorldPacket response(SMSG_LOGOUT_RESPONSE, 5);
+  response.Append<uint32>(0); // reason
+  response.Append<uint8>(1);  // instant logout
+  SendPacket(response);
+
+  uint32 const charGuidLow = static_cast<uint32>(guid);
+  uint16 const mapIdDb =
+      static_cast<uint16>(std::min<uint32_t>(_mapId, 0xFFFFu));
+  uint16 const zoneIdDb =
+      static_cast<uint16>(std::min<uint32_t>(_zoneId, 0xFFFFu));
+  MovementInfo persistPos = _position;
+  if (!IsSaneWorldPosition(persistPos)) {
+    if (auto ch = _charService->GetCharacterByGuid(guid)) {
+      persistPos.x = ch->GetX();
+      persistPos.y = ch->GetY();
+      persistPos.z = ch->GetZ();
+      persistPos.orientation = ch->GetOrientation();
+    } else {
+      persistPos = MovementInfo{};
+    }
+  }
+  if (!_charService->SaveCharacterOnLogout(_accountId, charGuidLow, mapIdDb,
+                                           zoneIdDb, persistPos.x, persistPos.y,
+                                           persistPos.z, persistPos.orientation)) {
+    LOG_ERROR("SaveCharacterOnLogout failed for guid {}, account {}",
+              charGuidLow, _accountId);
+  } else {
+    LOG_INFO("Saved logout position guid {}: map {} zone {} x={} y={} z={} o={}",
+             charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,
+             persistPos.z, persistPos.orientation);
+  }
+
+  if (auto host = WorldService::Instance().GetScriptHost()) {
+    host->FireEvent("player_logout", guid);
+  }
+
+  WorldService::Instance().RemovePlayerFromMap(mapId, guid);
+
+  _playerGuid = 0;
+  _knownSpells.clear();
+  _gcdReady = {};
+  _mapId = 0;
+  _zoneId = 0;
+  _timeSyncNextCounter = 0;
+  _position = MovementInfo{};
+
+  WorldPacket complete(SMSG_LOGOUT_COMPLETE, 0);
+  SendPacket(complete);
+  LOG_INFO("Logout complete for GUID {}, account {} (character select)",
+           guid, _accountId);
+}
+
+void WorldSession::HandleLogoutCancel(WorldPacket & /*packet*/) {
+  // Only meaningful during a timed logout; instant logout never reaches this.
+  if (_playerGuid == 0)
+    return;
+
+  WorldPacket ack(SMSG_LOGOUT_CANCEL_ACK, 0);
+  SendPacket(ack);
 }
 
 void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
@@ -1557,25 +1736,17 @@ void WorldSession::HandleSwapItem(WorldPacket &packet) {
 }
 
 void WorldSession::HandleTimeSyncResp(WorldPacket &packet) {
-  uint32 counter = packet.Read<uint32>();
-  uint32 clientTime = packet.Read<uint32>();
-  LOG_DEBUG("CMSG_TIME_SYNC_RESP: Counter: {}, ClientTime: {}", counter,
-            clientTime);
-
-  // Keep issuing time sync samples while in world (client expects ongoing
-  // SMSG_TIME_SYNC_REQ after login; see ref WorldSession::ReadMovementInfo flow).
-  if (_playerGuid != 0) {
-    WorldPacket next(SMSG_TIME_SYNC_REQ);
-    next.Append<uint32>(_timeSyncNextCounter++);
-    SendPacket(next);
-  }
+  packet.Read<uint32>(); // counter
+  packet.Read<uint32>(); // clientTime
+  // Trinity (MovementHandler.cpp): RESP updates clock skew only; the following
+  // SMSG_TIME_SYNC_REQ is sent from SendTimeSync() on a ~5s timer — not here.
 }
 
 void WorldSession::HandleMoveTimeSkipped(WorldPacket &packet) {
   uint32 time = packet.Read<uint32>();
   BitReader br(packet);
   for (int i = 0; i < 8; ++i) { if (br.ReadBit()) packet.Read<uint8>(); }
-  LOG_INFO("CMSG_MOVE_TIME_SKIPPED: Time: {}", time);
+  LOG_DEBUG("CMSG_MOVE_TIME_SKIPPED: Time: {}", time);
 }
 
 void WorldSession::HandleMessageChat(WorldPacket &packet) {
@@ -1588,6 +1759,9 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
     _commandService->ExecuteCommand(shared_from_this(), message);
     return;
   }
+
+  if (_playerGuid == 0)
+    return;
 
   WorldPacket response(SMSG_MESSAGECHAT);
   response.Append<uint8>(static_cast<uint8>(type));
@@ -1665,14 +1839,29 @@ void WorldSession::HandleUpdateAccountData(WorldPacket &packet) {
 }
 
 void WorldSession::HandleMovement(WorldPacket &packet) {
-  MovementInfo move;
-  ReadMovementInfo(packet, move);
-  _position = move;
+  WorldOpcode const op = static_cast<WorldOpcode>(packet.GetOpcode());
+  MovementInfo move{};
+  bool const parsed = TryReadClientMovement(packet, op, move);
 
-  if (IsClientMovementOpcode(static_cast<WorldOpcode>(packet.GetOpcode()))) {
+  // After logout the client may still send movement while transitioning to character
+  // select. Echoing those packets breaks that transition (stuck loading).
+  if (_playerGuid == 0)
+    return;
+
+  bool const canPersistPosition =
+      parsed && IsTrustedPositionOpcode(op) && IsSaneWorldPosition(move);
+
+  if (canPersistPosition)
+    _position = move;
+
+  // Cataclysm expects the server to echo MSG_MOVE_* payloads for these opcodes.
+  // If parsing fails (wrong layout for a given opcode), still echo the raw bytes so
+  // the client state machine does not stall; only apply map/DB position when parsed.
+  if (IsClientMovementOpcode(op)) {
     auto map = WorldService::Instance().GetMap(_mapId);
     if (map) {
-      map->UpdateObjectPosition(_playerGuid, move);
+      if (canPersistPosition)
+        map->UpdateObjectPosition(_playerGuid, move);
       WorldPacket broadcast(packet.GetOpcode(), packet.Size());
       broadcast.Append(packet.GetBuffer(), packet.Size());
       map->BroadcastPacketToNearby(_playerGuid, broadcast);
@@ -1917,18 +2106,6 @@ void WorldSession::SendLoginVerifyWorld(uint32 mapId, float x, float y, float z,
 }
 
 // --- Helpers ---
-
-void WorldSession::ReadMovementInfo(WorldPacket &packet, MovementInfo &move) {
-  if (packet.Size() >= 26) {
-    move.flags = packet.Read<uint32>();
-    move.flags2 = packet.Read<uint16>();
-    move.time = packet.Read<uint32>();
-    move.x = packet.Read<float>();
-    move.y = packet.Read<float>();
-    move.z = packet.Read<float>();
-    move.orientation = packet.Read<float>();
-  }
-}
 
 void WorldSession::SendNotification(const std::string &message) {
   WorldPacket response(SMSG_MESSAGECHAT);

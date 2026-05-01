@@ -1,6 +1,29 @@
 #ifndef FIRELANDS_SHARED_LOGGER_H
 #define FIRELANDS_SHARED_LOGGER_H
 
+// Emoji labels for spdlog `%l` / `%L` (via level::to_string_view). Must precede any
+// spdlog header so SPDLOG_LEVEL_NAMES is picked up by spdlog/common-inl.h.
+#ifndef SPDLOG_LEVEL_NAMES
+#define SPDLOG_LEVEL_NAMES                                                             \
+  {                                                                                    \
+    spdlog::string_view_t("\xf0\x9f\x94\x8d", 4),   /* trace 🔍 */                     \
+    spdlog::string_view_t("\xf0\x9f\x90\x9b", 4),   /* debug 🐛 */                     \
+    spdlog::string_view_t("\xf0\x9f\x92\xac", 4),   /* info 💬 */                      \
+    spdlog::string_view_t("\xe2\x9a\xa0\xef\xb8\x8f", 6), /* warning ⚠️ */             \
+    spdlog::string_view_t("\xe2\x9d\x8c", 3),       /* error ❌ */                     \
+    spdlog::string_view_t("\xf0\x9f\x9a\xa8", 4),   /* critical 🚨 */                  \
+    spdlog::string_view_t("-", 1)                   /* off */                          \
+  }
+#endif
+
+#ifndef SPDLOG_SHORT_LEVEL_NAMES
+#define SPDLOG_SHORT_LEVEL_NAMES                                                       \
+  {                                                                                    \
+    "\xf0\x9f\x94\x8d", "\xf0\x9f\x90\x9b", "\xf0\x9f\x92\xac", "\xe2\x9a\xa0\xef\xb8\x8f", \
+    "\xe2\x9d\x8c", "\xf0\x9f\x9a\xa8", "-"                                            \
+  }
+#endif
+
 #include <spdlog/async.h>
 #include <spdlog/async_logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -39,8 +62,8 @@ enum class LogLevel {
  *   %e         — milliseconds
  *   %Y-%m-%d   — date
  *   %n         — logger name
- *   %l         — level text  (e.g. "info", "warning")
- *   %L         — short level (e.g. "I", "W", "E")
+ *   %l         — level text  (emoji tags: trace→🔍 debug→🐛 info→💬 warn→⚠️ err→❌ crit→🚨)
+ *   %L         — short level (same emoji set via SPDLOG_SHORT_LEVEL_NAMES)
  *   %^  %$     — color range start / end (console only)
  *   %t         — thread id
  *   %v         — the actual log message
@@ -56,14 +79,14 @@ struct LoggerConfig {
   LogLevel consoleLevel = LogLevel::Info;
   LogLevel fileLevel = LogLevel::Debug;
 
-  // Console: compact + colored level tag, time only (no date noise)
-  // Example: [23:18:34] [INFO    ]  Starting Authentication Server...
-  std::string consolePattern = "%^[%H:%M:%S] [%-8l]%$  %v";
+  // Console: compact + colored level emoji, time only (no date noise)
+  // Example: [23:18:34] [💬]  Starting Authentication Server...
+  std::string consolePattern = "%^[%H:%M:%S] [%l]%$  %v";
 
   // File: full timestamp with ms, thread id, no ANSI codes (stays
-  // grep-friendly) Example: [2026-04-11 23:18:34.042] [INFO    ] [tid:1234]
+  // grep-friendly) Example: [2026-04-11 23:18:34.042] [💬] [tid:1234]
   // Starting Authentication Server...
-  std::string filePattern = "[%Y-%m-%d %H:%M:%S.%e] [%-8l] [tid:%t]  %v";
+  std::string filePattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] [tid:%t]  %v";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

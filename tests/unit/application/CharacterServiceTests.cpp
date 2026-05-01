@@ -16,6 +16,10 @@ public:
     MOCK_METHOD(bool, IsNameAvailable, (const std::string&), (override));
     MOCK_METHOD(std::optional<Character>, GetCharacterByGuid, (uint64_t), (override));
     MOCK_METHOD(bool, SwapBag0Slots, (uint32_t, uint8_t, uint8_t), (override));
+    MOCK_METHOD(bool, SaveCharacterOnLogout,
+                (uint32_t, uint32_t, uint16_t, uint16_t, float, float, float,
+                 float),
+                (override));
 };
 
 TEST(CharacterServiceTests, GetCharacters_ReturnsCharactersFromRepository) {

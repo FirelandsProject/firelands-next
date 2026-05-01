@@ -4,6 +4,8 @@
 #include <shared/Common.h>
 #include <shared/network/ByteBuffer.h>
 
+#include <cstring>
+
 namespace Firelands {
 
 class BitReader {
@@ -27,6 +29,37 @@ public:
     }
     return res;
   }
+
+  /// Discard bits until the next byte boundary (WoW bit-packed sections → byte payload).
+  void AlignToByteBoundary() {
+    while (_bitPos != 8)
+      (void)ReadBit();
+  }
+
+  /// Little-endian uint32 read from the **current bit stream** (MSB-first within each byte).
+  uint32 ReadUInt32LE() {
+    uint32 b0 = ReadBits(8);
+    uint32 b1 = ReadBits(8);
+    uint32 b2 = ReadBits(8);
+    uint32 b3 = ReadBits(8);
+    return b0 | (b1 << 8u) | (b2 << 16u) | (b3 << 24u);
+  }
+
+  int32 ReadInt32LE() {
+    uint32 u = ReadUInt32LE();
+    int32 i;
+    std::memcpy(&i, &u, sizeof(i));
+    return i;
+  }
+
+  float ReadFloatLE() {
+    uint32 u = ReadUInt32LE();
+    float f;
+    std::memcpy(&f, &u, sizeof(f));
+    return f;
+  }
+
+  uint8 ReadUInt8Bits() { return static_cast<uint8>(ReadBits(8)); }
 
   std::string ReadString(uint32 length) {
     std::string res;
