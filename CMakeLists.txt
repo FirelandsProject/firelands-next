@@ -66,6 +66,16 @@ include(FetchContent)
 # 1. OpenSSL (Required by MariaDB)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(BZip2 REQUIRED)
+
+# StormLib (MPQ) — pinned release; see STORM_LIB_ROADMAP.md
+set(STORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(STORM_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  stormlib
+  URL https://github.com/ladislav-zezula/StormLib/archive/refs/tags/v9.26.zip
+)
+FetchContent_MakeAvailable(stormlib)
 
 # 1.1 Boost (Required for Networking)
 find_package(Boost REQUIRED COMPONENTS thread)
@@ -161,6 +171,7 @@ add_subdirectory(src/shared)
 add_subdirectory(src/domain)
 add_subdirectory(src/application)
 add_subdirectory(src/infrastructure)
+add_subdirectory(tools/extractors)
 add_subdirectory(tests)
 
 # Main Executables

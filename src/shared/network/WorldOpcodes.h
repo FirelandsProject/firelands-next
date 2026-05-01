@@ -115,6 +115,12 @@ enum WorldOpcode : uint32 {
   CMSG_MESSAGECHAT = 0x1154,
   SMSG_MESSAGECHAT = 0x2026,
 
+  /// Reference: WowPacketParser V4_3_4_15595 Opcodes.cs
+  CMSG_CAST_SPELL = 0x4C07,
+  SMSG_SPELL_START = 0x6415,
+  SMSG_SPELL_GO = 0x6E16,
+  SMSG_SPELL_FAILURE = 0x4535,
+
   /// Reference: Opcodes.h (NPC gossip)
   CMSG_GOSSIP_HELLO = 0x4525,
   CMSG_GOSSIP_SELECT_OPTION = 0x0216,

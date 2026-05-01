@@ -1,5 +1,6 @@
 add_library(FirelandsShared STATIC 
     Config.cpp
+    network/SpellCastWire.cpp
 )
 
 target_include_directories(FirelandsShared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

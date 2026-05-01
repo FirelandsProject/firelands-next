@@ -17,6 +17,7 @@
 #include <shared/network/WorldCrypt.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -98,6 +99,7 @@ private:
   void HandleLfgGetStatus(WorldPacket &packet);
   void HandleLfgLockInfoRequest(WorldPacket &packet);
   void HandleRequestCemeteryList(WorldPacket &packet);
+  void HandleCastSpell(WorldPacket &packet);
 
   // Server Packet Senders (SMSG)
   void SendAuthResponse();
@@ -165,6 +167,10 @@ private:
 
   /// Filled while handling CMSG_AUTH_SESSION; consumed by SendAddonInfo (SMSG_ADDON_INFO).
   std::vector<AuthSecureAddonEntry> _authSecureAddons;
+
+  /// Known spells for the logged-in character (mirrors `SMSG_SEND_KNOWN_SPELLS` payload).
+  std::vector<uint32> _knownSpells;
+  std::chrono::steady_clock::time_point _gcdReady{};
 };
 
 } // namespace Firelands

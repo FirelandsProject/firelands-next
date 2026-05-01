@@ -48,7 +48,7 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 - [x] Matriz de paridad (inline en este documento)
 - [x] Lua scripting host (MVP) + tests
 - [x] WorldService wiring + hooks Lua (login/gossip/movement/chat/spawn)
-- [ ] Spells & auras (GCD + cast mínimo)
+- [x] Spells — cast mínimo (GCD + `SMSG_SPELL_START`/`GO` + `SMSG_SPELL_FAILURE` vía lista conocida); auras/DBC pendientes
 - [ ] Quests/loot/menus (SMSG gossip/quest, aún pendiente)
 - [ ] Instancias + fases (Lua)
 
@@ -84,6 +84,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | 2026-04-29 | Fix crash #132 (talents/specs + nativeDisplayId + bytes2) |
 | 2026-04-29 | Mapeo/ignore de “client probes” post-login + primeros ACKs mínimos (mail/calendar/zoneupdate) |
 | 2026-04-30 | CreateObject cruzado al login (`Map::ForEachPlayer`); checklist battlefield = no-op documentado |
+| 2026-04-30 | CMSG_CAST_SPELL mínimo: wire 4.3.4 (`SpellCastWire`) + broadcast START/GO + GCD 1.5s |
 
 ---
 
@@ -96,7 +97,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | parity-matrix | Matriz de paridad (subsistema × ref × next × criterio) | Hecho (inline en este documento) |
 | lua-foundation | Lua 5.4 + `IGameScriptHost` + `LuaGameScriptHost` + tests | Hecho (MVP) |
 | world-core-gap | Cerrar gaps fase 5–6 (opcodes/mundo vacío/broadcast) | En curso |
-| entities-combat | Creature/GO + combate/hechizos mínimos + hooks Lua | Parcial (dominio + spawn hooks; combate pendiente) |
+| entities-combat | Creature/GO + combate/hechizos mínimos + hooks Lua | Parcial (dominio + spawn hooks; cast START/GO + GCD) |
 | maps-collision | mmap/vmap + colisión alineada a ref | Stub listo; integración real pendiente |
 | quests-instances | Quests/loot/gossip + instancias con Lua | Parcial (gossip CMSG→Lua; SMSG pendiente) |
 
@@ -118,7 +119,7 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 | Chat | `ChatHandler` | `HandleMessageChat` | Partial | Guild/party/whisper parity |
 | Scripting / hooks | `ScriptMgr`, AI scripts | `IGameScriptHost`, `LuaGameScriptHost`, Lua `OnScriptEvent` | Partial | Expand C++→Lua surface + sandbox |
 | Creatures / GOs | `Creature`, `GameObject`, spawns | `Creature`, `GameObject` domain types | Started | Spawn pipeline + `SMSG_UPDATE_OBJECT` for units |
-| Combat / spells | `Spell`, `Unit`, `Aura` | — | Not started | One cast + GCD + aura stub |
+| Combat / spells | `Spell`, `Unit`, `Aura` | `SpellCastWire`, `WorldSession::HandleCastSpell` | Started | Aura aplicada + coste/recovery desde datos |
 | Quests / gossip | `QuestHandler`, `NPCHandler` | `CMSG_GOSSIP_*` → Lua `gossip_*` events | Started | `SMSG_GOSSIP_MESSAGE` + menu state |
 | Loot | `LootMgr`, `Loot` | — | Not started | Basic take-item flow |
 | Collision / path | `VMap`, `MMap`, `MapInstanced` | `IMapCollisionQueries` + stub | Started | Wire `Collision.DataRoot` to real queries |
@@ -135,5 +136,5 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 
 1. ~~Completar **ACKs mínimos**~~ (incl. battlefield = no-op intencional sin cola).
 2. ~~Dos clientes en el mismo mapa~~: CreateObject al login + movement/chat nearby.
-3. Empezar **spells mínimos** (GCD + cast simple) para avanzar gameplay real.
+3. ~~Empezar **spells mínimos**~~ (GCD + `SMSG_SPELL_START`/`GO` + fallos básicos); siguiente: **auras / efectos** o datos mínimos de hechizo (DBC/SQL).
 

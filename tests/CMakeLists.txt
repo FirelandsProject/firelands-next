@@ -9,6 +9,7 @@ add_executable(FirelandsUnitTests
     unit/shared/AuthPacketsTests.cpp
     unit/shared/LoggerTests.cpp
     unit/shared/ConfigTests.cpp
+    unit/shared/SpellCastWireTests.cpp
     unit/application/SRPServiceTests.cpp
     unit/application/RealmListServiceTests.cpp
     unit/application/AuthServiceTests.cpp
@@ -17,12 +18,14 @@ add_executable(FirelandsUnitTests
     unit/domain/MapTests.cpp
     unit/infrastructure/LuaGameScriptHostTests.cpp
     unit/infrastructure/MapCollisionQueriesStubTests.cpp
+    unit/tools/WowDataMpqListTests.cpp
 )
 
 target_link_libraries(FirelandsUnitTests
     GTest::gtest_main
     GTest::gmock
     FirelandsInfrastructure
+    FirelandsExtractCommon
 )
 target_compile_definitions(FirelandsUnitTests PRIVATE
     FIRELANDS_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}")
