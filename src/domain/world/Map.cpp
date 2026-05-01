@@ -64,6 +64,16 @@ void Map::UpdateObjectPosition(uint64 guid, const MovementInfo &pos) {
   }
 }
 
+void Map::ForEachPlayer(
+    std::function<void(std::shared_ptr<Player> const &)> const &fn) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  for (auto const &[id, obj] : m_objects) {
+    (void)id;
+    if (auto pl = std::dynamic_pointer_cast<Player>(obj))
+      fn(pl);
+  }
+}
+
 void Map::BroadcastPacket(uint64 senderGuid, WorldPacket &packet,
                           bool includeSelf) {
   std::lock_guard<std::mutex> lock(m_mapMutex);

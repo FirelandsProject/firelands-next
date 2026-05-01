@@ -5,6 +5,14 @@ Network:
   Port: 3724
   RestPort: 8081
 
+# Internal TCP from worldserver: marks realm online in memory immediately.
+# Set Token to a long random string; world must use the same Token and RealmId.
+RealmLink:
+  Enabled: true
+  BindAddress: "127.0.0.1"
+  Port: 3725
+  Token: "7f60c01601f61a28210fbfd729313d98074443838bda1fe9ca18d4a7198e4330"
+
 Database:
   User: "firelands"
   Password: "firelands"

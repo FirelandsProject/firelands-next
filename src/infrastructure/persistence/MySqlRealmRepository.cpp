@@ -62,7 +62,7 @@ std::vector<Realm> MySqlRealmRepository::GetRealms() {
       float population = static_cast<float>(res->getDouble("population"));
 
       realms.emplace_back(id, name, address, port, icon, timezone, secLevel,
-                          population);
+                          population, 0);
     }
   } catch (sql::SQLException &e) {
     // Implement proper logging using the existing Logger if necessary

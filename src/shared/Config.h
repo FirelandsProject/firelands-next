@@ -5,7 +5,6 @@
 #include <yaml-cpp/yaml.h>
 #include <optional>
 #include <shared/Logger.h>
-#include <algorithm>
 #include <cctype>
 #include <vector>
 
@@ -55,10 +54,7 @@ namespace Firelands {
 
     class Config {
     public:
-        static Config& Instance() {
-            static Config instance;
-            return instance;
-        }
+        static Config &Instance();
 
         bool Load(const std::string& filename) {
             try {
@@ -69,12 +65,26 @@ namespace Firelands {
                 }
                 return true;
             } catch (const std::exception& e) {
+                _filename.clear();
                 if (Logger::IsInitialized()) {
                     LOG_ERROR("Failed to load config {}: {}", filename, e.what());
                 }
                 return false;
             }
         }
+
+        /// Tries `basename` in cwd, then next to `argv0` and parent dirs, then
+        /// `getenv(envVarName)` (env last so stale FIRELANDS_* does not shadow the
+        /// project yaml).
+        static bool LoadFromSearchPaths(const std::string &basename,
+                                        const char *argv0,
+                                        const char *envVarName);
+
+        /// Path passed to the last successful `Load`, or empty.
+        const std::string &GetLoadedConfigPath() const { return _filename; }
+
+        /// True if every key segment exists (final node may be null).
+        bool HasNestedKey(const std::vector<std::string> &keys) const;
 
         template<typename T>
         T Get(const std::string& key, T defaultValue) const {
@@ -100,12 +110,25 @@ namespace Firelands {
         template<typename T>
         T GetNested(const std::vector<std::string>& keys, T defaultValue) const {
             try {
-                YAML::Node current = _config;
-                for (const auto& key : keys) {
-                    if (!current[key]) return defaultValue;
-                    current = current[key];
-                }
-                return current.as<T>();
+                YAML::Node const located = resolveNestedRead(_config, keys, 0);
+                if (!located) return defaultValue;
+                return located.as<T>();
+            } catch (...) {
+                return defaultValue;
+            }
+        }
+
+        /// Scalar string at nested path using YAML’s raw scalar text (avoids
+        /// `as<std::string>()` failing on ambiguous or very long hex-like tokens).
+        std::string GetNestedScalarString(const std::vector<std::string>& keys,
+                                          const std::string& defaultValue) const {
+            try {
+                YAML::Node const located = resolveNestedRead(_config, keys, 0);
+                if (!located.IsDefined())
+                    return defaultValue;
+                if (located.IsScalar())
+                    return located.Scalar();
+                return located.as<std::string>();
             } catch (...) {
                 return defaultValue;
             }
@@ -113,6 +136,12 @@ namespace Firelands {
 
     private:
         Config() = default;
+        /// Read-only nested lookup (always uses const YAML::Node indexing so the
+        /// document is never mutated; non-const `operator[]` on a copied Node can
+        /// insert keys and hide real map entries in yaml-cpp).
+        static YAML::Node resolveNestedRead(const YAML::Node &n,
+                                          const std::vector<std::string> &keys,
+                                          std::size_t i);
         YAML::Node _config;
         std::string _filename;
     };

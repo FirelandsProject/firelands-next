@@ -3,6 +3,7 @@ add_executable(FirelandsUnitTests
     unit/domain/RealmTests.cpp
     unit/infrastructure/MySqlAccountRepositoryTests.cpp
     unit/infrastructure/MySqlRealmRepositoryTests.cpp
+    unit/infrastructure/RealmLiveRegistryTests.cpp
     unit/shared/ByteBufferTests.cpp
     unit/shared/UpdateDataTests.cpp
     unit/shared/AuthPacketsTests.cpp
@@ -23,6 +24,8 @@ target_link_libraries(FirelandsUnitTests
     GTest::gmock
     FirelandsInfrastructure
 )
+target_compile_definitions(FirelandsUnitTests PRIVATE
+    FIRELANDS_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}")
 target_precompile_headers(FirelandsUnitTests PRIVATE ${TEST_PCH_HEADERS})
 
 include(GoogleTest)

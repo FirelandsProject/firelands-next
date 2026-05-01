@@ -3,6 +3,8 @@
 #include <infrastructure/network/sessions/AuthSession.h>
 #include <shared/Logger.h>
 
+#include <mutex>
+
 namespace Firelands {
 
 AuthSession::AuthSession(tcp::socket socket,
@@ -183,7 +185,7 @@ void AuthSession::HandleLogonProof(AuthPacket &packet) {
 }
 
 void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
-  LOG_INFO("Realm list requested by user: {}", _username);
+  static std::once_flag realmLinkConfigHint;
 
   AuthRealmList_S response;
   response.opcode = AUTH_REALM_LIST;
@@ -193,16 +195,33 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
     realms = _realmService->GetRealmList();
   }
 
+  bool const liveMerge =
+      _realmService && _realmService->UsesLiveRealmState();
+  LOG_INFO("Realm list for {}: {} realm(s), realmLinkMerge={}", _username,
+           realms.size(), liveMerge ? "on" : "off");
+  if (!liveMerge) {
+    std::call_once(realmLinkConfigHint, [] {
+      LOG_WARN(
+          "Realm-link merge is OFF (empty RealmLink.Token or Port in "
+          "authserver.yaml). The list comes only from the DB — killing the "
+          "world will not change realm status until you configure RealmLink "
+          "and set RealmLink.Enabled on the world.");
+    });
+  }
+
   ByteBuffer payloadBuffer;
 
   payloadBuffer.Append<uint32>(0); // unknown
   payloadBuffer.Append<uint16>(static_cast<uint16>(realms.size()));
 
   for (const auto &realm : realms) {
+    // Trinity order: Type, Lock (0/1), RealmFlags, name, address, pop, ...
     payloadBuffer.Append<uint8>(realm.GetIcon());
-    payloadBuffer.Append<uint8>(
-        realm.GetAllowedSecurityLevel()); // Lock flags usually
-    payloadBuffer.Append<uint8>(0);       // flags
+    uint8_t const lock =
+        realm.GetAllowedSecurityLevel() > 0 ? static_cast<uint8_t>(1)
+                                            : static_cast<uint8_t>(0);
+    payloadBuffer.Append<uint8>(lock);
+    payloadBuffer.Append<uint8>(realm.GetRealmListFlags());
     // Name (ByteBuffer::Append(std::string) adds null terminator)
     payloadBuffer.Append(realm.GetName());
 

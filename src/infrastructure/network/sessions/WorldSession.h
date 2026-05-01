@@ -24,6 +24,12 @@ namespace Firelands {
 
 using boost::asio::ip::tcp;
 
+/// One row from the zlib-compressed secure-addon block in CMSG_AUTH_SESSION (4.3.4).
+struct AuthSecureAddonEntry {
+  std::string name;
+  bool hasKey = false;
+};
+
 class WorldSession : public IAuthSession,
                      public IMapNotifier,
                      public std::enable_shared_from_this<WorldSession> {
@@ -156,6 +162,9 @@ private:
 
   /// Monotonic counter for SMSG_TIME_SYNC_REQ (see WorldSession::SendTimeSync in reference).
   uint32 _timeSyncNextCounter = 0;
+
+  /// Filled while handling CMSG_AUTH_SESSION; consumed by SendAddonInfo (SMSG_ADDON_INFO).
+  std::vector<AuthSecureAddonEntry> _authSecureAddons;
 };
 
 } // namespace Firelands

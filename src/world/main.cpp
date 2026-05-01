@@ -4,12 +4,14 @@
 #include <chrono>
 #include <conncpp.hpp>
 #include <infrastructure/network/asio/AsyncNetworkServer.h>
+#include <infrastructure/network/realm_link/RealmLinkOutbound.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/scripting/LuaGameScriptHost.h>
 #include <infrastructure/world/MapCollisionQueriesStub.h>
+#include <atomic>
 #include <memory>
 #include <shared/Banner.h>
 #include <shared/Config.h>
@@ -18,7 +20,7 @@
 
 using namespace Firelands;
 
-int main() {
+int main(int argc, char **argv) {
   PrintBanner(BannerType::World, true);
 
   // Initial logging setup before config load
@@ -28,12 +30,15 @@ int main() {
                    .WithConsoleLevel(LogLevel::Info)
                    .Build());
 
-  if (!Config::Instance().Load("worldserver.yaml")) {
-    LOG_ERROR("Could not load worldserver.yaml, using defaults or exiting...");
+  if (!Config::LoadFromSearchPaths(
+          "worldserver.yaml", (argc > 0) ? argv[0] : nullptr,
+          "FIRELANDS_WORLD_CONFIG")) {
+    LOG_ERROR("Could not find/load worldserver.yaml (cwd, exe parents, or "
+              "FIRELANDS_WORLD_CONFIG); exiting.");
     return 1;
   }
 
-  auto config = Config::Instance();
+  Config& config = Config::Instance();
 
   // Re-initialize logger with config values
   Logger::Shutdown();
@@ -49,6 +54,14 @@ int main() {
                    .Build());
 
   LOG_INFO("Starting World Server...");
+
+  std::atomic<bool> stopRealmLink{false};
+  std::unique_ptr<std::thread> realmLinkThread;
+  if (config.GetNested<bool>({"RealmLink", "Enabled"}, false)) {
+    realmLinkThread = std::make_unique<std::thread>([&config, &stopRealmLink] {
+      RunRealmLinkOutbound(config, stopRealmLink);
+    });
+  }
 
   try {
     std::string scriptsRoot = config.GetNested<std::string>(

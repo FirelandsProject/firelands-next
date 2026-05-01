@@ -65,6 +65,7 @@ include(FetchContent)
 
 # 1. OpenSSL (Required by MariaDB)
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
 
 # 1.1 Boost (Required for Networking)
 find_package(Boost REQUIRED COMPONENTS thread)

@@ -41,7 +41,8 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 - [x] Movement relay + chat base
 - [x] Fix crash #132 en fin de loading (talents/specs + nativeDisplayId + bytes2)
 - [x] Post-login probes: **no-op safety net** (mapeo y ignore de opcodes vistos en logs)
-- [ ] Post-login probes: **ACK/minimal responses** donde el cliente espera reply (ver checklist abajo)
+- [x] Post-login probes: **ACK/minimal responses** donde el cliente espera reply (ver checklist abajo)
+- [x] Dos clientes mismo mapa: **CreateObject cruzado** al login (movimiento/chat nearby ya existían)
 
 ### Phase 6 — Gameplay mechanics (IN PROGRESS)
 - [x] Matriz de paridad (inline en este documento)
@@ -71,7 +72,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 - [x] **Calendar pending**: `CMSG_CALENDAR_GET_NUM_PENDING` → `SMSG_CALENDAR_SEND_NUM_PENDING` (0)
 - [x] **Zone update**: `CMSG_ZONEUPDATE` guarda `zoneId` en sesión (futuro: estado Player + hook Lua)
 - [x] **Guild bank withdraw query**: `CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY` → `SMSG_GUILD_BANK_MONEY_WITHDRAWN` (0)
-- [ ] **Battlefield status/state**: `CMSG_BATTLEFIELD_STATUS`, `CMSG_QUERY_BATTLEFIELD_STATE` → (ref: sin respuesta si no hay queue/BG)
+- [x] **Battlefield status/state**: `CMSG_BATTLEFIELD_STATUS`, `CMSG_QUERY_BATTLEFIELD_STATE` — **sin SMSG** si no hay cola/BG (misma ref.); se mantienen como no-op seguro
 - [x] **LFG**: `CMSG_LFG_GET_STATUS` → `SMSG_LFG_UPDATE_STATUS_NONE`; `CMSG_LFG_LOCK_INFO_REQUEST` → `SMSG_LFG_PLAYER_INFO`/`SMSG_LFG_PARTY_INFO` vacíos
 - [x] **Cemetery list**: `CMSG_REQUEST_CEMETERY_LIST` → `SMSG_REQUEST_CEMETERY_LIST_RESPONSE` (lista vacía)
 
@@ -82,6 +83,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | 2026-04-28 | TimeSync chain + unknown opcodes a debug |
 | 2026-04-29 | Fix crash #132 (talents/specs + nativeDisplayId + bytes2) |
 | 2026-04-29 | Mapeo/ignore de “client probes” post-login + primeros ACKs mínimos (mail/calendar/zoneupdate) |
+| 2026-04-30 | CreateObject cruzado al login (`Map::ForEachPlayer`); checklist battlefield = no-op documentado |
 
 ---
 
@@ -131,7 +133,7 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 
 ## Próximos pasos (orden sugerido)
 
-1. Completar **ACKs mínimos** (guild bank, battlefield, LFG, cemetery list) para UI estable.
-2. Dos clientes en el mismo mapa: visibilidad/movement/chat consistente.
+1. ~~Completar **ACKs mínimos**~~ (incl. battlefield = no-op intencional sin cola).
+2. ~~Dos clientes en el mismo mapa~~: CreateObject al login + movement/chat nearby.
 3. Empezar **spells mínimos** (GCD + cast simple) para avanzar gameplay real.
 

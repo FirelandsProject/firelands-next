@@ -87,6 +87,23 @@ TEST_F(MapTests, AddCreature_DoesNotBreakBroadcastToPlayers) {
   map->BroadcastPacket(1, packet, false);
 }
 
+TEST_F(MapTests, ForEachPlayer_VisitsOnlyPlayers) {
+  auto map = std::make_shared<Map>(1);
+  auto notifier1 = std::make_shared<MockNotifier>();
+  auto player1 = std::make_shared<Player>(1, notifier1);
+  auto notifier2 = std::make_shared<MockNotifier>();
+  auto player2 = std::make_shared<Player>(2, notifier2);
+  map->AddObject(player1);
+  map->AddObject(player2);
+
+  int count = 0;
+  map->ForEachPlayer([&](std::shared_ptr<Player> const &p) {
+    ++count;
+    EXPECT_TRUE(p->GetGuid() == 1 || p->GetGuid() == 2);
+  });
+  EXPECT_EQ(count, 2);
+}
+
 TEST_F(MapTests, BroadcastPacketToNearby_DoesNotSendToFarPlayers) {
     auto map = std::make_shared<Map>(1);
     

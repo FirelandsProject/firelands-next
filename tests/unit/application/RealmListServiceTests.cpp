@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <application/ports/IRealmLiveState.h>
 #include <application/services/RealmListService.h>
 #include <domain/repositories/IRealmRepository.h>
 #include <domain/models/Realm.h>
@@ -6,6 +7,13 @@
 #include <vector>
 
 using namespace Firelands;
+
+class MockLiveRealm1Only : public IRealmLiveState {
+public:
+  bool IsWorldConnected(uint32_t realmId) const override {
+    return realmId == 1;
+  }
+};
 
 class MockRealmRepository : public IRealmRepository {
 public:
@@ -29,4 +37,17 @@ TEST(RealmListService, FetchRealms) {
     ASSERT_EQ(realms.size(), 2);
     EXPECT_EQ(realms[0].GetName(), "Test Realm 1");
     EXPECT_EQ(realms[1].GetName(), "Test Realm 2");
+}
+
+TEST(RealmListService, LiveStateMarksDisconnectedRealmOffline) {
+    auto repo = std::make_shared<MockRealmRepository>();
+    auto live = std::make_shared<MockLiveRealm1Only>();
+    RealmListService service(repo, live);
+
+    auto realms = service.GetRealmList();
+    ASSERT_EQ(realms.size(), 2);
+    EXPECT_FLOAT_EQ(realms[0].GetPopulation(), 1.0f);
+    EXPECT_EQ(realms[0].GetRealmListFlags(), 0u);
+    EXPECT_FLOAT_EQ(realms[1].GetPopulation(), 0.0f);
+    EXPECT_EQ(realms[1].GetRealmListFlags(), 2u);
 }

@@ -5,6 +5,9 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
     network/asio/AsyncNetworkServer.cpp
+    network/realm_link/RealmLiveRegistry.cpp
+    network/realm_link/RealmLinkSession.cpp
+    network/realm_link/RealmLinkOutbound.cpp
     network/rest/RestAuthServer.cpp
     scripting/LuaGameScriptHost.cpp
     world/MapCollisionQueriesStub.cpp
@@ -19,6 +22,7 @@ target_link_libraries(FirelandsInfrastructure
     PUBLIC Boost::thread
     PUBLIC nlohmann_json::nlohmann_json
     PUBLIC Lua::Library
+    PRIVATE ZLIB::ZLIB
 )
 target_precompile_headers(FirelandsInfrastructure PRIVATE ${PROJECT_PCH_HEADERS})
 

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <shared/Config.h>
+#include <string>
 
 using namespace Firelands;
 
@@ -32,4 +33,14 @@ TEST(ConfigTest, NestedAccess) {
     // Test basic yaml-cpp access
     EXPECT_EQ(root["Logging"]["Console"].as<LogLevel>(), LogLevel::Debug);
     EXPECT_EQ(root["Logging"]["File"].as<LogLevel>(), LogLevel::Error);
+}
+
+TEST(ConfigTest, ReadsRealmLinkFromProjectAuthYaml) {
+  Config &c = Config::Instance();
+  std::string const path =
+      std::string(FIRELANDS_TEST_DATA_DIR) + "/authserver.yaml";
+  ASSERT_TRUE(c.Load(path));
+  ASSERT_TRUE(c.HasNestedKey({"RealmLink", "Token"}));
+  EXPECT_FALSE(c.GetNestedScalarString({"RealmLink", "Token"}, "").empty());
+  EXPECT_EQ(c.GetNested<int>({"RealmLink", "Port"}, 0), 3725);
 }

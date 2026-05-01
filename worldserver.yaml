@@ -4,6 +4,16 @@ Network:
   BindAddress: "0.0.0.0"
   Port: 8085
 
+# Persistent outbound TCP to auth (realm online / instant offline on crash).
+# Must match authserver.yaml RealmLink.Token and realmlist id.
+RealmLink:
+  # Must match authserver.yaml RealmLink (Token + Port) and realmlist id.
+  Enabled: true
+  AuthHost: "127.0.0.1"
+  AuthPort: 3725
+  RealmId: 1
+  Token: "7f60c01601f61a28210fbfd729313d98074443838bda1fe9ca18d4a7198e4330"
+
 # Used in SMSG_QUERY_PLAYER_NAME_RESPONSE (realm string); optional, default "".
 World:
   RealmName: "Firelands"

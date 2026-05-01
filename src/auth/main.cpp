@@ -1,5 +1,7 @@
 #include <application/services/WebSessionService.h>
 #include <infrastructure/network/asio/AsyncNetworkServer.h>
+#include <infrastructure/network/realm_link/RealmLiveRegistry.h>
+#include <infrastructure/network/realm_link/RealmLinkSession.h>
 #include <infrastructure/network/rest/RestAuthServer.h>
 #include <infrastructure/network/sessions/AuthSession.h>
 #include <infrastructure/persistence/MemoryWebSessionRepository.h>
@@ -14,11 +16,13 @@
 #include <conncpp.hpp>
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <shared/Config.h>
+#include <cstdlib>
+#include <memory>
 #include <thread>
 
 using namespace Firelands;
 
-int main() {
+int main(int argc, char **argv) {
   PrintBanner(BannerType::Auth, true);
 
   // Initialize logging before config load
@@ -28,10 +32,14 @@ int main() {
                    .WithConsoleLevel(LogLevel::Info)
                    .Build());
 
-  auto config = Config::Instance();
+  Config& config = Config::Instance();
 
-  if (!config.Load("authserver.yaml")) {
-    LOG_WARN("Could not load authserver.yaml, using defaults...");
+  if (!Config::LoadFromSearchPaths(
+          "authserver.yaml", (argc > 0) ? argv[0] : nullptr,
+          "FIRELANDS_AUTH_CONFIG")) {
+    LOG_WARN(
+        "Could not find/load authserver.yaml (cwd, exe parents, or "
+        "FIRELANDS_AUTH_CONFIG); using defaults...");
   }
 
   // Update logging with config values if needed
@@ -77,7 +85,41 @@ int main() {
 
     // 3. Initialize Services
     auto authService = std::make_shared<AuthService>(accountRepo);
-    auto realmService = std::make_shared<RealmListService>(realmRepo);
+
+    // Prefer Scalar() so long hex tokens and odd YAML scalar types still read;
+    // GetNested<string> uses as<string>() and can return "" on conversion throw.
+    std::string realmLinkToken =
+        config.GetNestedScalarString({"RealmLink", "Token"}, "");
+    if (realmLinkToken.empty())
+      realmLinkToken =
+          config.GetNestedScalarString({"RealmLink", "token"}, "");
+    int const realmLinkPort = config.GetNested<int>({"RealmLink", "Port"}, 3725);
+    std::string const realmLinkBind =
+        config.GetNestedScalarString({"RealmLink", "BindAddress"}, "127.0.0.1");
+
+    std::shared_ptr<RealmLiveRegistry> realmLive;
+    if (!realmLinkToken.empty() && realmLinkPort > 0) {
+      realmLive = std::make_shared<RealmLiveRegistry>();
+      LOG_INFO("Realm-link: listener will bind {}:{} (realm list uses live "
+               "state)",
+               realmLinkBind, realmLinkPort);
+    } else {
+      bool const hasRl = config.HasNestedKey({"RealmLink"});
+      bool const hasTok = config.HasNestedKey({"RealmLink", "Token"});
+      char const *envCfg = std::getenv("FIRELANDS_AUTH_CONFIG");
+      LOG_WARN(
+          "Realm-link disabled: need non-empty RealmLink.Token and Port>0 "
+          "(token_len={}, port={}). Loaded config: \"{}\" "
+          "has_RealmLink={} has_RealmLink.Token={} FIRELANDS_AUTH_CONFIG={}",
+          realmLinkToken.size(), realmLinkPort, config.GetLoadedConfigPath(),
+          hasRl, hasTok, envCfg ? envCfg : "(unset)");
+      if (envCfg && envCfg[0] != '\0') {
+        LOG_WARN("FIRELANDS_AUTH_CONFIG is set; that file must include "
+                 "RealmLink.Token or unset the variable.");
+      }
+    }
+
+    auto realmService = std::make_shared<RealmListService>(realmRepo, realmLive);
 
     // Initialize Web Session Service for REST API
     auto webSessionRepo = std::make_shared<MemoryWebSessionRepository>();
@@ -93,12 +135,34 @@ int main() {
     };
     AsyncNetworkServer authServer(sessionFactory);
 
+    std::unique_ptr<AsyncNetworkServer> realmLinkServer;
+    if (realmLive) {
+      realmLinkServer = std::make_unique<AsyncNetworkServer>(
+          [realmLive, realmLinkToken](tcp::socket socket) {
+            std::make_shared<RealmLinkSession>(std::move(socket), realmLive,
+                                               realmLinkToken)
+                ->Start();
+          });
+    }
+
     std::string bindIp = config.GetNested<std::string>({"Network", "BindAddress"}, "0.0.0.0");
     int netPort = config.GetNested<int>({"Network", "Port"}, 3724);
 
     if (authServer.Start(bindIp, netPort)) {
 
       LOG_INFO("Authentication Server listening on {}:{}", bindIp, netPort);
+
+      if (realmLinkServer) {
+        if (!realmLinkServer->Start(realmLinkBind,
+                                    static_cast<uint16_t>(realmLinkPort))) {
+          LOG_CRITICAL("Failed to start realm-link server on {}:{}.",
+                       realmLinkBind, realmLinkPort);
+          Logger::Shutdown();
+          return 1;
+        }
+        LOG_INFO("Realm-link server listening on {}:{}", realmLinkBind,
+                 realmLinkPort);
+      }
       // 5. Initialize REST API
       std::string restBindIp = config.GetNested<std::string>({"Network", "BindAddress"}, "0.0.0.0");
       int restPort = config.GetNested<int>({"Network", "RestPort"}, 8081);
@@ -114,6 +178,8 @@ int main() {
       // Server Loop
       while (true) {
         authServer.Update();
+        if (realmLinkServer)
+          realmLinkServer->Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     } else {

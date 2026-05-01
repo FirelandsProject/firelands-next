@@ -14,6 +14,7 @@ TEST(RealmDomain, ConstructorInitialization) {
     EXPECT_EQ(realm.GetTimezone(), 1);
     EXPECT_EQ(realm.GetAllowedSecurityLevel(), 0);
     EXPECT_FLOAT_EQ(realm.GetPopulation(), 100.0f);
+    EXPECT_EQ(realm.GetRealmListFlags(), 0u);
 }
 
 TEST(RealmDomain, HandlesNegativePopulation) {

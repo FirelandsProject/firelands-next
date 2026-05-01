@@ -1,6 +1,8 @@
 #pragma once
 
+#include <domain/world/Player.h>
 #include <domain/world/WorldObject.h>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <shared/Common.h>
@@ -27,6 +29,9 @@ public:
                                bool includeSelf = false);
   void BroadcastPacketToNearby(uint64 senderGuid, class WorldPacket &packet,
                                bool includeSelf = false);
+
+  void ForEachPlayer(
+      std::function<void(std::shared_ptr<Player> const &)> const &fn);
 
 private:
   struct GridCoord {
