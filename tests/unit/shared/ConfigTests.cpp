@@ -44,3 +44,12 @@ TEST(ConfigTest, ReadsRealmLinkFromProjectAuthYaml) {
   EXPECT_FALSE(c.GetNestedScalarString({"RealmLink", "Token"}, "").empty());
   EXPECT_EQ(c.GetNested<int>({"RealmLink", "Port"}, 0), 3725);
 }
+
+TEST(ConfigTest, GetNestedBoolScalarsAndYamlBool) {
+  Config &c = Config::Instance();
+  ASSERT_TRUE(c.Load(std::string(FIRELANDS_TEST_DATA_DIR) +
+                     "/tests/data/sticky_banner_config.yaml"));
+  EXPECT_TRUE(c.GetNestedBool({"Log", "StickyBanner"}, false));
+  EXPECT_TRUE(c.GetNestedBool({"Alt", "FromYes"}, false));
+  EXPECT_FALSE(c.GetNestedBool({"Alt", "FromOff"}, true));
+}

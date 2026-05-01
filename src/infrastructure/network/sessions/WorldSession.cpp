@@ -211,8 +211,8 @@ std::map<uint16, uint32> BuildItemCreateFields(uint64 itemObjectGuid,
   return fields;
 }
 
-/// Partial player VALUES refresh (equipment slots only) after inventory moves.
-std::map<uint16, uint32> BuildPlayerEquipmentSlotValues(Character const &character) {
+/// Partial player VALUES refresh (bag 0 equip + main backpack grid) after moves.
+std::map<uint16, uint32> BuildPlayerBag0InventoryValues(Character const &character) {
   std::map<uint16, uint32> fields;
   for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
     uint32 const entry = character.GetVisibleItemEntry(slot);
@@ -230,6 +230,17 @@ std::map<uint16, uint32> BuildPlayerEquipmentSlotValues(Character const &charact
         PLAYER_FIELD_INV_SLOT_HEAD + static_cast<uint16>(slot * 2));
     fields[invBase] = ilo;
     fields[static_cast<uint16>(invBase + 1)] = ihi;
+  }
+  for (size_t packIndex = 0; packIndex < kPackSlotCount; ++packIndex) {
+    uint32 const itemGuidLow = character.GetPackItemGuidLow(packIndex);
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    uint32 ilo = 0;
+    uint32 ihi = 0;
+    WriteGuidToTwoUint32(itemOg, ilo, ihi);
+    uint16 const packBase = static_cast<uint16>(
+        PLAYER_FIELD_PACK_SLOT_1 + static_cast<uint16>(packIndex * 2));
+    fields[packBase] = ilo;
+    fields[static_cast<uint16>(packBase + 1)] = ihi;
   }
   return fields;
 }
@@ -273,6 +284,17 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
         PLAYER_FIELD_INV_SLOT_HEAD + static_cast<uint16>(slot * 2));
     fields[invBase] = ilo;
     fields[static_cast<uint16>(invBase + 1)] = ihi;
+  }
+  for (size_t packIndex = 0; packIndex < kPackSlotCount; ++packIndex) {
+    uint32 const itemGuidLow = character.GetPackItemGuidLow(packIndex);
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    uint32 ilo = 0;
+    uint32 ihi = 0;
+    WriteGuidToTwoUint32(itemOg, ilo, ihi);
+    uint16 const packBase = static_cast<uint16>(
+        PLAYER_FIELD_PACK_SLOT_1 + static_cast<uint16>(packIndex * 2));
+    fields[packBase] = ilo;
+    fields[static_cast<uint16>(packBase + 1)] = ihi;
   }
   return fields;
 }
@@ -1185,8 +1207,21 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
     if (itemGuidLow == 0 || entry == 0)
       continue;
     uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
-    update.AddCreateObject(itemOg, TYPEID_ITEM, itemMove,
-                         BuildItemCreateFields(itemOg, guid, entry, 1));
+    update.AddCreateObject(
+        itemOg, TYPEID_ITEM, itemMove,
+        BuildItemCreateFields(itemOg, guid, entry,
+                              character.GetVisibleItemStackCount(slot)));
+  }
+  for (size_t pi = 0; pi < kPackSlotCount; ++pi) {
+    uint32 const itemGuidLow = character.GetPackItemGuidLow(pi);
+    uint32 const entry = character.GetPackItemEntry(pi);
+    if (itemGuidLow == 0 || entry == 0)
+      continue;
+    uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
+    update.AddCreateObject(
+        itemOg, TYPEID_ITEM, itemMove,
+        BuildItemCreateFields(itemOg, guid, entry,
+                              character.GetPackItemStackCount(pi)));
   }
 
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
@@ -1477,7 +1512,7 @@ void WorldSession::HandleSwapInvItem(WorldPacket &packet) {
     return;
 
   UpdateData update(_mapId);
-  update.AddValuesUpdate(_playerGuid, BuildPlayerEquipmentSlotValues(*refreshed));
+  update.AddValuesUpdate(_playerGuid, BuildPlayerBag0InventoryValues(*refreshed));
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
@@ -1515,7 +1550,7 @@ void WorldSession::HandleSwapItem(WorldPacket &packet) {
     return;
 
   UpdateData update(_mapId);
-  update.AddValuesUpdate(_playerGuid, BuildPlayerEquipmentSlotValues(*refreshed));
+  update.AddValuesUpdate(_playerGuid, BuildPlayerBag0InventoryValues(*refreshed));
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);

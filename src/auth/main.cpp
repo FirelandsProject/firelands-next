@@ -23,8 +23,6 @@
 using namespace Firelands;
 
 int main(int argc, char **argv) {
-  PrintBanner(BannerType::Auth, StickyBannerEnabledFromEnv());
-
   // Initialize logging before config load
   Logger::Init(LoggerBuilder()
                    .WithName("firelands-auth")
@@ -41,6 +39,16 @@ int main(int argc, char **argv) {
         "Could not find/load authserver.yaml (cwd, exe parents, or "
         "FIRELANDS_AUTH_CONFIG); using defaults...");
   }
+
+  const bool stickyYaml =
+      config.GetNestedBool({"Log", "StickyBanner"}, false);
+  const bool stickyWant = ResolveStickyBanner(stickyYaml);
+  if (stickyWant && !StdoutIsInteractiveTerminal()) {
+    LOG_WARN(
+        "Log.StickyBanner is enabled but stdout is not a TTY (pipe/redirect); "
+        "using normal console layout.");
+  }
+  PrintBanner(BannerType::Auth, stickyWant);
 
   // Update logging with config values if needed
   LogLevel consoleLevel = config.GetNested<LogLevel>({"Log", "Level"}, LogLevel::Info);

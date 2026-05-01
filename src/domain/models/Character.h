@@ -17,7 +17,11 @@ public:
             uint32 characterFlags, uint32 customizationFlags, bool firstLogin,
             uint8 outfitId = 0, std::string equipmentCache = "",
             std::array<uint32_t, kEquipmentSlotCount> visibleItems = {},
-            std::array<uint32_t, kEquipmentSlotCount> visibleItemGuids = {})
+            std::array<uint32_t, kEquipmentSlotCount> visibleItemGuids = {},
+            std::array<uint32_t, kEquipmentSlotCount> visibleItemStacks = {},
+            std::array<uint32_t, kPackSlotCount> packItemEntries = {},
+            std::array<uint32_t, kPackSlotCount> packItemGuids = {},
+            std::array<uint32_t, kPackSlotCount> packItemStacks = {})
       : m_guid(guid), m_account(account), m_name(std::move(name)), m_race(race),
         m_klass(klass), m_gender(gender), m_skin(skin), m_face(face),
         m_hairStyle(hairStyle), m_hairColor(hairColor),
@@ -27,6 +31,8 @@ public:
         m_customizationFlags(customizationFlags), m_firstLogin(firstLogin),
         m_outfitId(outfitId), m_equipmentCache(std::move(equipmentCache)),
         m_visibleItems(visibleItems), m_visibleItemGuids(visibleItemGuids),
+        m_visibleItemStacks(visibleItemStacks), m_packItemEntries(packItemEntries),
+        m_packItemGuids(packItemGuids), m_packItemStacks(packItemStacks),
         m_health(100), m_maxHealth(100),
         m_factionTemplate(1), m_displayId(GetDefaultDisplayId(race, gender)) {}
 
@@ -100,6 +106,32 @@ public:
     return m_visibleItemGuids[equipSlot];
   }
 
+  uint32 GetVisibleItemStackCount(size_t equipSlot) const {
+    if (equipSlot >= kEquipmentSlotCount)
+      return 0;
+    uint32 c = m_visibleItemStacks[equipSlot];
+    return c == 0 ? 1u : c;
+  }
+
+  uint32 GetPackItemEntry(size_t packIndex) const {
+    if (packIndex >= kPackSlotCount)
+      return 0;
+    return m_packItemEntries[packIndex];
+  }
+
+  uint32 GetPackItemGuidLow(size_t packIndex) const {
+    if (packIndex >= kPackSlotCount)
+      return 0;
+    return m_packItemGuids[packIndex];
+  }
+
+  uint32 GetPackItemStackCount(size_t packIndex) const {
+    if (packIndex >= kPackSlotCount)
+      return 0;
+    uint32 c = m_packItemStacks[packIndex];
+    return c == 0 ? 1u : c;
+  }
+
   uint32 GetHealth() const { return m_health; }
   uint32 GetMaxHealth() const { return m_maxHealth; }
   uint32 GetFactionTemplate() const { return m_factionTemplate; }
@@ -132,6 +164,10 @@ private:
   std::string m_equipmentCache;
   std::array<uint32_t, kEquipmentSlotCount> m_visibleItems{};
   std::array<uint32_t, kEquipmentSlotCount> m_visibleItemGuids{};
+  std::array<uint32_t, kEquipmentSlotCount> m_visibleItemStacks{};
+  std::array<uint32_t, kPackSlotCount> m_packItemEntries{};
+  std::array<uint32_t, kPackSlotCount> m_packItemGuids{};
+  std::array<uint32_t, kPackSlotCount> m_packItemStacks{};
 
   uint32 m_health;
   uint32 m_maxHealth;

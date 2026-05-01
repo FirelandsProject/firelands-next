@@ -18,9 +18,13 @@ struct ItemProtoRow {
   uint32 buyCount = 1;
 };
 
-struct EquippedItemsData {
-  std::array<uint32_t, kEquipmentSlotCount> entries{};
-  std::array<uint32_t, kEquipmentSlotCount> guids{};
+struct Bag0InventoryData {
+  std::array<uint32_t, kEquipmentSlotCount> equipEntries{};
+  std::array<uint32_t, kEquipmentSlotCount> equipGuids{};
+  std::array<uint32_t, kEquipmentSlotCount> equipStacks{};
+  std::array<uint32_t, kPackSlotCount> packEntries{};
+  std::array<uint32_t, kPackSlotCount> packGuids{};
+  std::array<uint32_t, kPackSlotCount> packStacks{};
 };
 
 bool IsMissingTableError(sql::SQLException &e) {
@@ -102,29 +106,42 @@ std::optional<ItemProtoRow> FetchItemProto(std::shared_ptr<sql::Connection> conn
   return std::nullopt;
 }
 
-EquippedItemsData LoadEquippedItems(std::shared_ptr<sql::Connection> conn,
-                                    uint32_t charGuid) {
-  EquippedItemsData out;
+Bag0InventoryData LoadBag0Inventory(std::shared_ptr<sql::Connection> conn,
+                                     uint32_t charGuid) {
+  Bag0InventoryData out;
   if (!EnsureStarterInventoryTables(conn))
     return out;
   try {
     std::shared_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
-        "SELECT ci.slot, ci.item, ii.itemEntry FROM character_inventory ci "
+        "SELECT ci.slot, ci.item, ii.itemEntry, ii.count FROM character_inventory ci "
         "INNER JOIN item_instance ii ON ii.guid = ci.item "
-        "WHERE ci.guid = ? AND ci.bag = 0 AND ci.slot < ?"));
+        "WHERE ci.guid = ? AND ci.bag = 0 AND (ci.slot < ? OR (ci.slot >= ? AND ci.slot < ?))"));
     ps->setUInt(1, charGuid);
     ps->setUInt(2, static_cast<unsigned>(EQUIPMENT_SLOT_END));
+    ps->setUInt(3, static_cast<unsigned>(INVENTORY_SLOT_ITEM_START));
+    ps->setUInt(4, static_cast<unsigned>(INVENTORY_SLOT_ITEM_END));
     std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
     while (rs->next()) {
       unsigned slot = rs->getUInt("slot");
-      if (slot >= kEquipmentSlotCount)
-        continue;
-      out.entries[slot] = rs->getUInt("itemEntry");
-      out.guids[slot] = rs->getUInt("item");
+      uint32_t entry = rs->getUInt("itemEntry");
+      uint32_t ig = rs->getUInt("item");
+      uint32_t count =
+          std::max(1u, static_cast<uint32_t>(rs->getUInt("count")));
+      if (slot < kEquipmentSlotCount) {
+        out.equipEntries[slot] = entry;
+        out.equipGuids[slot] = ig;
+        out.equipStacks[slot] = count;
+      } else if (slot >= INVENTORY_SLOT_ITEM_START &&
+                 slot < INVENTORY_SLOT_ITEM_END) {
+        size_t const pi =
+            static_cast<size_t>(slot - INVENTORY_SLOT_ITEM_START);
+        out.packEntries[pi] = entry;
+        out.packGuids[pi] = ig;
+        out.packStacks[pi] = count;
+      }
     }
   } catch (sql::SQLException const &e) {
-    LOG_WARN("LoadEquippedItems failed for guid {}: {}", charGuid,
-             e.what());
+    LOG_WARN("LoadBag0Inventory failed for guid {}: {}", charGuid, e.what());
   }
   return out;
 }
@@ -170,9 +187,7 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
           res->getUInt("customizationFlags"), res->getBoolean("firstLogin"),
           static_cast<uint8>(res->getUInt("outfitId")),
           res->isNull("equipmentCache") ? ""
-                                        : std::string(res->getString("equipmentCache")),
-          std::array<uint32_t, kEquipmentSlotCount>{},
-          std::array<uint32_t, kEquipmentSlotCount>{}));
+                                        : std::string(res->getString("equipmentCache"))));
     }
   } catch (sql::SQLException &e) {
     LOG_ERROR("Database error in GetCharactersByAccount: {}", e.what());
@@ -404,7 +419,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
 
     if (res->next()) {
       uint32_t lowGuid = res->getUInt("guid");
-      auto equipped = LoadEquippedItems(_connection, lowGuid);
+      auto bag0 = LoadBag0Inventory(_connection, lowGuid);
       return Character(
           lowGuid, res->getUInt("account"),
           std::string(res->getString("name")),
@@ -426,7 +441,8 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
           static_cast<uint8>(res->getUInt("outfitId")),
           res->isNull("equipmentCache") ? ""
                                         : std::string(res->getString("equipmentCache")),
-          equipped.entries, equipped.guids);
+          bag0.equipEntries, bag0.equipGuids, bag0.equipStacks,
+          bag0.packEntries, bag0.packGuids, bag0.packStacks);
     }
     return std::nullopt;
   } catch (sql::SQLException &e) {

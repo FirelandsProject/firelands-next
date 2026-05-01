@@ -19,4 +19,8 @@ enum InventoryPackSlots : uint8 {
 constexpr size_t kEquipmentSlotCount =
     static_cast<size_t>(EQUIPMENT_SLOT_END);
 
+/// Main backpack grid slots (bag 0): 23 .. 38 inclusive.
+constexpr size_t kPackSlotCount = static_cast<size_t>(
+    INVENTORY_SLOT_ITEM_END - INVENTORY_SLOT_ITEM_START);
+
 } // namespace Firelands

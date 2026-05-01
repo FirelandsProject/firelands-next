@@ -22,13 +22,20 @@ enum class BannerType { Auth, World, Tools };
  * moves scrollback, not that inner region, so reviewing older logs becomes
  * awkward and lines that leave the region may feel “lost”.
  *
- * Default servers use flow layout (sticky off). Enable sticky only when you
- * want a fixed banner in a dedicated terminal:
- *   FIRELANDS_CONSOLE_STICKY_BANNER=1 ./world
+ * Default comes from YAML (`Log.StickyBanner` on world/auth). Optional override:
+ *   FIRELANDS_CONSOLE_STICKY_BANNER=1   force sticky on
+ *   FIRELANDS_CONSOLE_STICKY_BANNER=0   force sticky off
+ * Any other non-empty value falls back to the YAML flag.
  */
-inline bool StickyBannerEnabledFromEnv() {
+inline bool ResolveStickyBanner(bool yamlStickyBanner) {
   const char *v = std::getenv("FIRELANDS_CONSOLE_STICKY_BANNER");
-  return v != nullptr && v[0] == '1' && v[1] == '\0';
+  if (v == nullptr || v[0] == '\0')
+    return yamlStickyBanner;
+  if (v[0] == '1' && v[1] == '\0')
+    return true;
+  if (v[0] == '0' && v[1] == '\0')
+    return false;
+  return yamlStickyBanner;
 }
 
 inline bool StdoutIsInteractiveTerminal() {

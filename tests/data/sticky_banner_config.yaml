@@ -1,0 +1,7 @@
+# Minimal fixture for Config.GetNestedBool
+Log:
+  StickyBanner: true
+
+Alt:
+  FromYes: "YES"
+  FromOff: "off"

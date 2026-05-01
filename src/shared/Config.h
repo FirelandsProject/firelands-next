@@ -134,6 +134,10 @@ namespace Firelands {
             }
         }
 
+        /// Reads nested booleans reliably (YAML bool nodes and scalars like yes/on/1).
+        bool GetNestedBool(const std::vector<std::string>& keys,
+                           bool defaultValue) const;
+
     private:
         Config() = default;
         /// Read-only nested lookup (always uses const YAML::Node indexing so the

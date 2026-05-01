@@ -23,8 +23,6 @@
 using namespace Firelands;
 
 int main(int argc, char **argv) {
-  PrintBanner(BannerType::World, StickyBannerEnabledFromEnv());
-
   // Initial logging setup before config load
   Logger::Init(LoggerBuilder()
                    .WithName("firelands-world")
@@ -41,6 +39,16 @@ int main(int argc, char **argv) {
   }
 
   Config& config = Config::Instance();
+
+  const bool stickyYaml =
+      config.GetNestedBool({"Log", "StickyBanner"}, false);
+  const bool stickyWant = ResolveStickyBanner(stickyYaml);
+  if (stickyWant && !StdoutIsInteractiveTerminal()) {
+    LOG_WARN(
+        "Log.StickyBanner is enabled but stdout is not a TTY (pipe/redirect); "
+        "using normal console layout.");
+  }
+  PrintBanner(BannerType::World, stickyWant);
 
   // Re-initialize logger with config values
   Logger::Shutdown();

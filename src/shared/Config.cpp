@@ -1,6 +1,8 @@
 #include "Config.h"
 #include <shared/Logger.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <vector>
@@ -8,6 +10,31 @@
 namespace Firelands {
 
 namespace fs = std::filesystem;
+
+namespace {
+
+void TrimAsciiInPlace(std::string &s) {
+  auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+  s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+}
+
+bool ParseBoolScalar(const std::string &raw, bool defaultValue) {
+  std::string s = raw;
+  TrimAsciiInPlace(s);
+  for (char &c : s) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  if (s.empty())
+    return defaultValue;
+  if (s == "true" || s == "1" || s == "yes" || s == "on")
+    return true;
+  if (s == "false" || s == "0" || s == "no" || s == "off")
+    return false;
+  return defaultValue;
+}
+
+} // namespace
 
 Config &Config::Instance() {
   static Config instance;
@@ -78,6 +105,20 @@ bool Config::HasNestedKey(const std::vector<std::string> &keys) const {
     return tail.IsDefined();
   } catch (...) {
     return false;
+  }
+}
+
+bool Config::GetNestedBool(const std::vector<std::string> &keys,
+                           bool defaultValue) const {
+  try {
+    YAML::Node const located = resolveNestedRead(_config, keys, 0);
+    if (!located || !located.IsDefined())
+      return defaultValue;
+    if (located.IsScalar())
+      return ParseBoolScalar(located.Scalar(), defaultValue);
+    return located.as<bool>();
+  } catch (...) {
+    return defaultValue;
   }
 }
 
