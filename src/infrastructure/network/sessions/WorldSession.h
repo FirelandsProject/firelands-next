@@ -162,6 +162,9 @@ private:
   void HandleCastSpell(WorldPacket &packet);
   void HandleSwapInvItem(WorldPacket &packet);
   void HandleSwapItem(WorldPacket &packet);
+  void HandleDbQueryBulk(WorldPacket &packet);
+  void HandleAutoEquipItem(WorldPacket &packet);
+  void HandleUseItem(WorldPacket &packet);
   void HandleGmTicketCreate(WorldPacket &packet);
   void HandleGmTicketUpdateText(WorldPacket &packet);
   void HandleGmTicketDelete(WorldPacket &packet);

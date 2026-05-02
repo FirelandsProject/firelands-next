@@ -6,9 +6,12 @@
 #include <cstdint>
 #include <memory>
 #include <shared/game/EquipmentCache.h>
+#include <shared/game/AccessLevel.h>
+#include <shared/game/InventorySlots.h>
 #include <shared/Common.h>
 #include <algorithm>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 namespace Firelands {
@@ -47,6 +50,26 @@ inline std::optional<PlayerCreateInfo> FallbackStartPosition(uint8 race) {
                              0.333847f};
   default:
     return std::nullopt;
+  }
+}
+
+inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
+  // Canonical GM outfit + "light" GM sword used by many private-server staffs.
+  static constexpr uint32_t kGmItemIds[] = {
+      12064u, // Gamemaster Hood
+      2586u,  // Gamemaster's Robe
+      11508u, // Gamemaster's Slippers
+      12063u, // Gamemaster Sword (glow / "light" look)
+  };
+  std::unordered_set<uint32_t> existing;
+  existing.reserve(grants.size());
+  for (StarterItemGrant const &g : grants) {
+    if (g.itemId != 0)
+      existing.insert(g.itemId);
+  }
+  for (uint32_t itemId : kGmItemIds) {
+    if (existing.insert(itemId).second)
+      grants.push_back(StarterItemGrant{itemId, 1u, 0u});
   }
 }
 
@@ -117,6 +140,10 @@ public:
     if (m_playerCreateInfoService) {
       auto grants = m_playerCreateInfoService->GetStarterItemGrants(
           race, klass, gender, outfitId);
+      if (HasAtLeast(m_repository->GetAccountAccessLevel(accountId),
+                     AccessLevel::GameMaster)) {
+        AppendGmStarterItems(grants);
+      }
       if (!grants.empty())
         m_repository->GrantStarterItems(*guid, grants);
     }
@@ -185,6 +212,18 @@ public:
   bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
                        uint32_t count) {
     return m_repository->GrantItemToBag0(characterGuid, itemEntry, count);
+  }
+
+  bool AutoEquipFromBag0(uint32_t accountId, uint32_t characterGuid, uint8_t bag,
+                         uint8_t slot) {
+    uint8_t const normalizedBag =
+        (bag == CLIENT_INVENTORY_SLOT_DEFAULT_BACKPACK) ? 0 : bag;
+    if (normalizedBag != 0)
+      return false;
+    auto ch = m_repository->GetCharacterByGuid(characterGuid);
+    if (!ch || ch->GetAccount() != accountId)
+      return false;
+    return m_repository->AutoEquipFromBag0Slot(characterGuid, slot);
   }
 
   /// Client `gtCombatRatings` / `gtChanceTo*Crit*` tables (may be unloaded if DBC path empty).

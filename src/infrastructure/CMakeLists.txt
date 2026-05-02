@@ -17,6 +17,7 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/worldsession/WorldSessionGmState.cpp
     network/sessions/worldsession/WorldSessionGmTicketHandlers.cpp
     network/sessions/worldsession/WorldSessionCharacterHandlers.cpp
+    network/sessions/worldsession/WorldSessionItemHandlers.cpp
     network/asio/AsyncNetworkServer.cpp
     network/realm_link/RealmLiveRegistry.cpp
     network/realm_link/RealmLinkSession.cpp

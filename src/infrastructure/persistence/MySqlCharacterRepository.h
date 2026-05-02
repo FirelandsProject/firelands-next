@@ -33,6 +33,8 @@ namespace Firelands {
         bool AddCharacterSpell(uint32_t characterGuid, uint32_t spellId) override;
         bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
                              uint32_t count) override;
+        AccessLevel GetAccountAccessLevel(uint32_t accountId) override;
+        bool AutoEquipFromBag0Slot(uint32_t characterGuid, uint8_t srcSlot) override;
     private:
         std::shared_ptr<sql::Connection> _connection;
     };

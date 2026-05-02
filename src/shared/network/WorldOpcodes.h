@@ -214,6 +214,12 @@ enum WorldOpcode : uint32 {
   /// Reference: Trinity TCPP `Opcodes.h` (swap within bag 0 — equipment / backpack grid).
   CMSG_SWAP_INV_ITEM = 0x2614,
   CMSG_SWAP_ITEM = 0x6326,
+  /// Right-click equip from inventory (bag + slot).
+  CMSG_AUTO_EQUIP_ITEM = 0x4304,
+  /// Item use / spell-from-item; we only handle equip when `SpellID == 0`.
+  CMSG_USE_ITEM = 0x2C06,
+  /// Hotfix / DB2 row reply (4.3.4 item tooltips use this after `CMSG_DB_QUERY_BULK`).
+  SMSG_DB_REPLY = 0x38A4,
   CMSG_TIME_SYNC_RESP = 0x3B0C,
   CMSG_MOVE_TIME_SKIPPED = 0x7A0A,
   CMSG_SET_SELECTION = 0x0506,

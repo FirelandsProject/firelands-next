@@ -16,6 +16,10 @@ enum InventoryPackSlots : uint8 {
   INVENTORY_SLOT_ITEM_END = 39,
 };
 
+/// Client inventory position for the default backpack (TCPP `INVENTORY_SLOT_BAG_0`;
+/// DB `character_inventory.bag` is `0`).
+constexpr uint8_t CLIENT_INVENTORY_SLOT_DEFAULT_BACKPACK = 255;
+
 constexpr size_t kEquipmentSlotCount =
     static_cast<size_t>(EQUIPMENT_SLOT_END);
 

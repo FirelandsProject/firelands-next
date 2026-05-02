@@ -180,6 +180,54 @@ std::optional<ItemProtoRow> FetchItemProto(std::shared_ptr<sql::Connection> conn
   return std::nullopt;
 }
 
+std::optional<uint8_t> PrimaryEquipSlotForInventoryType(uint8_t inventoryType) {
+  switch (static_cast<ItemInventoryType>(inventoryType)) {
+  case INVTYPE_HEAD:
+    return 0;
+  case INVTYPE_NECK:
+    return 1;
+  case INVTYPE_SHOULDERS:
+    return 2;
+  case INVTYPE_BODY:
+    return 3;
+  case INVTYPE_CHEST:
+  case INVTYPE_ROBE:
+    return 4;
+  case INVTYPE_WAIST:
+    return 5;
+  case INVTYPE_LEGS:
+    return 6;
+  case INVTYPE_FEET:
+    return 7;
+  case INVTYPE_WRISTS:
+    return 8;
+  case INVTYPE_HANDS:
+    return 9;
+  case INVTYPE_FINGER:
+    return 10;
+  case INVTYPE_TRINKET:
+    return 12;
+  case INVTYPE_CLOAK:
+    return 14;
+  case INVTYPE_WEAPON:
+  case INVTYPE_2HWEAPON:
+  case INVTYPE_WEAPONMAINHAND:
+    return 15;
+  case INVTYPE_SHIELD:
+  case INVTYPE_WEAPONOFFHAND:
+  case INVTYPE_HOLDABLE:
+    return 16;
+  case INVTYPE_RANGED:
+  case INVTYPE_THROWN:
+  case INVTYPE_RANGEDRIGHT:
+    return 17;
+  case INVTYPE_TABARD:
+    return 18;
+  default:
+    return std::nullopt;
+  }
+}
+
 Bag0InventoryData LoadBag0Inventory(std::shared_ptr<sql::Connection> conn,
                                      uint32_t charGuid) {
   Bag0InventoryData out;
@@ -719,6 +767,41 @@ bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
   }
 }
 
+bool MySqlCharacterRepository::AutoEquipFromBag0Slot(uint32_t characterGuid,
+                                                     uint8_t srcSlot) {
+  if (srcSlot < INVENTORY_SLOT_ITEM_START || srcSlot >= INVENTORY_SLOT_ITEM_END) {
+    LOG_INFO("AutoEquipFromBag0Slot: guid={} invalid srcSlot={}", characterGuid,
+             srcSlot);
+    return false;
+  }
+  auto bag0 = LoadBag0Inventory(_connection, characterGuid);
+  size_t const pi = static_cast<size_t>(srcSlot - INVENTORY_SLOT_ITEM_START);
+  uint32_t const entry = bag0.packEntries[pi];
+  if (entry == 0) {
+    LOG_INFO("AutoEquipFromBag0Slot: guid={} empty bag slot={}", characterGuid,
+             srcSlot);
+    return false;
+  }
+  auto proto = FetchItemProto(_connection, entry);
+  if (!proto) {
+    LOG_INFO("AutoEquipFromBag0Slot: guid={} entry={} missing item proto",
+             characterGuid, entry);
+    return false;
+  }
+  auto dstOpt = PrimaryEquipSlotForInventoryType(proto->inventoryType);
+  if (!dstOpt) {
+    LOG_INFO(
+        "AutoEquipFromBag0Slot: guid={} entry={} inventoryType={} has no equip slot",
+        characterGuid, entry, static_cast<uint32_t>(proto->inventoryType));
+    return false;
+  }
+  bool const swapped = SwapBag0Slots(characterGuid, srcSlot, *dstOpt);
+  LOG_INFO(
+      "AutoEquipFromBag0Slot: guid={} entry={} src={} dst={} swapped={}",
+      characterGuid, entry, srcSlot, *dstOpt, swapped);
+  return swapped;
+}
+
 bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t srcSlot,
                                                uint8_t dstSlot) {
   if (srcSlot == dstSlot)
@@ -739,6 +822,25 @@ bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t src
   } catch (sql::SQLException &e) {
     LOG_ERROR("SwapBag0Slots failed: {}", e.what());
     return false;
+  }
+}
+
+AccessLevel
+MySqlCharacterRepository::GetAccountAccessLevel(uint32_t accountId) {
+  try {
+    std::shared_ptr<sql::PreparedStatement> st(
+        _connection->prepareStatement(
+            "SELECT access_level FROM firelands_auth.account WHERE id = ? LIMIT 1"));
+    st->setUInt(1, accountId);
+    std::unique_ptr<sql::ResultSet> rs(st->executeQuery());
+    if (!rs->next())
+      return AccessLevel::Player;
+    return AccessLevelFromStored(
+        static_cast<uint8_t>(rs->getUInt("access_level")));
+  } catch (sql::SQLException &e) {
+    LOG_WARN("GetAccountAccessLevel failed for account {}: {}", accountId,
+             e.what());
+    return AccessLevel::Player;
   }
 }
 

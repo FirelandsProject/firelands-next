@@ -2,6 +2,7 @@
 
 #include <domain/models/Character.h>
 #include <domain/models/PlayerCreateInfo.h>
+#include <shared/game/AccessLevel.h>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -40,6 +41,9 @@ public:
   /// Creates `item_instance` + `character_inventory` row in bag 0 (equipment or backpack).
   virtual bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
                                uint32_t count) = 0;
+  virtual AccessLevel GetAccountAccessLevel(uint32_t accountId) = 0;
+  /// Move an item from backpack grid (`INVENTORY_SLOT_ITEM_*`) to its default equipment slot.
+  virtual bool AutoEquipFromBag0Slot(uint32_t characterGuid, uint8_t srcSlot) = 0;
 };
 
 } // namespace Firelands

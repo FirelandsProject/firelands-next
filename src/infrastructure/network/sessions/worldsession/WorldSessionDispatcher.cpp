@@ -63,7 +63,6 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_VOICE_SESSION_ENABLE:
   case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
   case CMSG_REQUEST_CATEGORY_COOLDOWNS:
-  case CMSG_DB_QUERY_BULK:
   case CMSG_WORLD_STATE_UI_TIMER_UPDATE:
     // Client probes features we haven't implemented yet. For stability we safely
     // ignore these requests (no side effects, no disconnect).
@@ -168,6 +167,15 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     break;
   case CMSG_SWAP_ITEM:
     HandleSwapItem(packet);
+    break;
+  case CMSG_DB_QUERY_BULK:
+    HandleDbQueryBulk(packet);
+    break;
+  case CMSG_AUTO_EQUIP_ITEM:
+    HandleAutoEquipItem(packet);
+    break;
+  case CMSG_USE_ITEM:
+    HandleUseItem(packet);
     break;
   case CMSG_CANCEL_TRADE:
     // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.

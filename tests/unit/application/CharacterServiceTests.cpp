@@ -29,6 +29,8 @@ public:
     MOCK_METHOD(bool, AddCharacterSpell, (uint32_t, uint32_t), (override));
     MOCK_METHOD(bool, GrantItemToBag0, (uint32_t, uint32_t, uint32_t),
                 (override));
+    MOCK_METHOD(AccessLevel, GetAccountAccessLevel, (uint32_t), (override));
+    MOCK_METHOD(bool, AutoEquipFromBag0Slot, (uint32_t, uint8_t), (override));
 };
 
 TEST(CharacterServiceTests, GetCharacters_ReturnsCharactersFromRepository) {
