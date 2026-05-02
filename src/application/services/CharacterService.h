@@ -9,6 +9,7 @@
 #include <shared/game/EquipmentCache.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/InventorySlots.h>
+#include <shared/game/ItemEquipSlots.h>
 #include <shared/Common.h>
 #include <algorithm>
 #include <optional>
@@ -56,11 +57,15 @@ inline std::optional<PlayerCreateInfo> FallbackStartPosition(uint8 race) {
 
 inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
   // Canonical GM outfit + "light" GM sword used by many private-server staffs.
-  static constexpr uint32_t kGmItemIds[] = {
-      12064u, // Gamemaster Hood
-      2586u,  // Gamemaster's Robe
-      11508u, // Gamemaster's Slippers
-      12063u, // Gamemaster Sword (glow / "light" look)
+  struct GmStarterItem {
+    uint32_t itemId;
+    uint8_t invType;
+  };
+  static constexpr GmStarterItem kGmItems[] = {
+      {12064u, INVTYPE_HEAD},   // Gamemaster Hood
+      {2586u, INVTYPE_ROBE},    // Gamemaster's Robe (chest slot)
+      {11508u, INVTYPE_FEET},   // Gamemaster's Slippers
+      {12063u, INVTYPE_WEAPON}, // Gamemaster Sword (glow / "light" look)
   };
   std::unordered_set<uint32_t> existing;
   existing.reserve(grants.size());
@@ -68,9 +73,9 @@ inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
     if (g.itemId != 0)
       existing.insert(g.itemId);
   }
-  for (uint32_t itemId : kGmItemIds) {
-    if (existing.insert(itemId).second)
-      grants.push_back(StarterItemGrant{itemId, 1u, 0u});
+  for (GmStarterItem const &item : kGmItems) {
+    if (existing.insert(item.itemId).second)
+      grants.push_back(StarterItemGrant{item.itemId, 1u, item.invType});
   }
 }
 
@@ -228,7 +233,31 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
     auto ch = m_repository->GetCharacterByGuid(characterGuid);
     if (!ch || ch->GetAccount() != accountId)
       return false;
-    return m_repository->AutoEquipFromBag0Slot(characterGuid, slot);
+
+    std::optional<uint8_t> fallbackInventoryType = std::nullopt;
+    if (m_playerCreateInfoService && slot >= INVENTORY_SLOT_ITEM_START &&
+        slot < INVENTORY_SLOT_ITEM_END) {
+      size_t const packIndex =
+          static_cast<size_t>(slot - INVENTORY_SLOT_ITEM_START);
+      uint32_t const entry = ch->GetPackItemEntry(packIndex);
+      if (entry != 0) {
+        auto grants = m_playerCreateInfoService->GetStarterItemGrants(
+            ch->GetRace(), ch->GetClass(), ch->GetGender(), ch->GetOutfitId());
+        if (HasAtLeast(m_repository->GetAccountAccessLevel(accountId),
+                       AccessLevel::GameMaster)) {
+          AppendGmStarterItems(grants);
+        }
+        for (StarterItemGrant const &grant : grants) {
+          if (grant.itemId == entry && grant.invType != 0) {
+            fallbackInventoryType = grant.invType;
+            break;
+          }
+        }
+      }
+    }
+
+    return m_repository->AutoEquipFromBag0Slot(characterGuid, slot,
+                                               fallbackInventoryType);
   }
 
   /// Client `gtCombatRatings` / `gtChanceTo*Crit*` tables (may be unloaded if DBC path empty).

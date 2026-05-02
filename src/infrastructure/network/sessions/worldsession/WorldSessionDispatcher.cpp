@@ -174,6 +174,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_AUTO_EQUIP_ITEM:
     HandleAutoEquipItem(packet);
     break;
+  case CMSG_AUTO_EQUIP_ITEM_SLOT:
+    HandleAutoEquipItemSlot(packet);
+    break;
   case CMSG_USE_ITEM:
     HandleUseItem(packet);
     break;

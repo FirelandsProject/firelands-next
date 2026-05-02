@@ -214,8 +214,12 @@ enum WorldOpcode : uint32 {
   /// Reference: Trinity TCPP `Opcodes.h` (swap within bag 0 — equipment / backpack grid).
   CMSG_SWAP_INV_ITEM = 0x2614,
   CMSG_SWAP_ITEM = 0x6326,
+  /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs` (clears client pending inventory ops).
+  SMSG_INVENTORY_CHANGE_FAILURE = 0x2236,
   /// Right-click equip from inventory (bag + slot).
   CMSG_AUTO_EQUIP_ITEM = 0x4304,
+  /// Drag item to a specific equipment slot (InvUpdate + ItemGUID + dst slot).
+  CMSG_AUTO_EQUIP_ITEM_SLOT = 0x4A17,
   /// Item use / spell-from-item; we only handle equip when `SpellID == 0`.
   CMSG_USE_ITEM = 0x2C06,
   /// Hotfix / DB2 row reply (4.3.4 item tooltips use this after `CMSG_DB_QUERY_BULK`).

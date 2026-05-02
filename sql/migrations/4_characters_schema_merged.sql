@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS `item_instance` (
   `duration` int NOT NULL DEFAULT '0',
   `charges` tinytext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `flags` int unsigned NOT NULL DEFAULT '0',
-  `enchantments` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `enchantments` varchar(4096) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   `randomPropertyType` tinyint unsigned NOT NULL DEFAULT '0',
   `randomPropertyId` int unsigned NOT NULL DEFAULT '0',
   `durability` smallint unsigned NOT NULL DEFAULT '0',

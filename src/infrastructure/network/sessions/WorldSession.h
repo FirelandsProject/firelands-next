@@ -164,6 +164,7 @@ private:
   void HandleSwapItem(WorldPacket &packet);
   void HandleDbQueryBulk(WorldPacket &packet);
   void HandleAutoEquipItem(WorldPacket &packet);
+  void HandleAutoEquipItemSlot(WorldPacket &packet);
   void HandleUseItem(WorldPacket &packet);
   void HandleGmTicketCreate(WorldPacket &packet);
   void HandleGmTicketUpdateText(WorldPacket &packet);

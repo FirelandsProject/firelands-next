@@ -112,12 +112,13 @@ bool EnsureStarterInventoryTables(std::shared_ptr<sql::Connection> conn) {
         "duration INT NOT NULL DEFAULT 0,"
         "charges TINYTEXT,"
         "flags INT UNSIGNED NOT NULL DEFAULT 0,"
-        "enchantments TEXT NOT NULL,"
+        // VARCHAR allows DEFAULT on MariaDB; TEXT/BLOB cannot.
+        "enchantments VARCHAR(4096) NOT NULL DEFAULT '',"
         "randomPropertyType TINYINT UNSIGNED NOT NULL DEFAULT 0,"
         "randomPropertyId INT UNSIGNED NOT NULL DEFAULT 0,"
         "durability SMALLINT UNSIGNED NOT NULL DEFAULT 0,"
         "creationTime INT UNSIGNED NOT NULL DEFAULT 0,"
-        "text TEXT,"
+        "`text` TEXT NULL,"
         "PRIMARY KEY (guid),"
         "KEY idx_owner_guid (owner_guid)"
         ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -169,13 +170,14 @@ bool SaveInventoryToDb(std::shared_ptr<sql::Connection> conn, uint32_t charGuid,
         continue;
 
       std::shared_ptr<sql::PreparedStatement> insItem(conn->prepareStatement(
-          "INSERT INTO item_instance (guid, itemEntry, owner_guid, count) "
-          "VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE itemEntry = VALUES(itemEntry), "
-          "count = VALUES(count)"));
+          "INSERT INTO item_instance (guid, itemEntry, owner_guid, count, "
+          "enchantments) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE "
+          "itemEntry = VALUES(itemEntry), count = VALUES(count)"));
       insItem->setUInt(1, guid);
       insItem->setUInt(2, entry);
       insItem->setUInt(3, charGuid);
       insItem->setUInt(4, count > 0 ? count : 1);
+      insItem->setString(5, "");
       insItem->executeUpdate();
 
       std::shared_ptr<sql::PreparedStatement> insInv(conn->prepareStatement(
@@ -197,13 +199,14 @@ bool SaveInventoryToDb(std::shared_ptr<sql::Connection> conn, uint32_t charGuid,
       uint8_t slot = static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + pi);
 
       std::shared_ptr<sql::PreparedStatement> insItem(conn->prepareStatement(
-          "INSERT INTO item_instance (guid, itemEntry, owner_guid, count) "
-          "VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE itemEntry = VALUES(itemEntry), "
-          "count = VALUES(count)"));
+          "INSERT INTO item_instance (guid, itemEntry, owner_guid, count, "
+          "enchantments) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE "
+          "itemEntry = VALUES(itemEntry), count = VALUES(count)"));
       insItem->setUInt(1, guid);
       insItem->setUInt(2, entry);
       insItem->setUInt(3, charGuid);
       insItem->setUInt(4, count > 0 ? count : 1);
+      insItem->setString(5, "");
       insItem->executeUpdate();
 
       std::shared_ptr<sql::PreparedStatement> insInv(conn->prepareStatement(
@@ -296,6 +299,36 @@ std::optional<uint8_t> PrimaryEquipSlotForInventoryType(uint8_t inventoryType) {
   default:
     return std::nullopt;
   }
+}
+
+/// Prefer a free finger/trinket slot; otherwise swap onto the primary slot for that pair.
+std::optional<uint8_t> PickAutoEquipDestination(Bag0InventoryData const &bag0,
+                                                 uint8_t inventoryType) {
+  std::optional<uint8_t> const primary =
+      PrimaryEquipSlotForInventoryType(inventoryType);
+  if (!primary)
+    return std::nullopt;
+
+  auto slotEmpty = [&](unsigned s) -> bool {
+    return s < kEquipmentSlotCount && bag0.equipEntries[s] == 0;
+  };
+
+  if (inventoryType == INVTYPE_FINGER) {
+    if (slotEmpty(10))
+      return 10;
+    if (slotEmpty(11))
+      return 11;
+    return 10;
+  }
+  if (inventoryType == INVTYPE_TRINKET) {
+    if (slotEmpty(12))
+      return 12;
+    if (slotEmpty(13))
+      return 13;
+    return 12;
+  }
+
+  return primary;
 }
 
 Bag0InventoryData LoadBag0Inventory(std::shared_ptr<sql::Connection> conn,
@@ -837,8 +870,9 @@ bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
   }
 }
 
-bool MySqlCharacterRepository::AutoEquipFromBag0Slot(uint32_t characterGuid,
-                                                     uint8_t srcSlot) {
+bool MySqlCharacterRepository::AutoEquipFromBag0Slot(
+    uint32_t characterGuid, uint8_t srcSlot,
+    std::optional<uint8_t> fallbackInventoryType) {
   if (srcSlot < INVENTORY_SLOT_ITEM_START || srcSlot >= INVENTORY_SLOT_ITEM_END) {
     LOG_INFO("AutoEquipFromBag0Slot: guid={} invalid srcSlot={}", characterGuid,
              srcSlot);
@@ -853,16 +887,25 @@ bool MySqlCharacterRepository::AutoEquipFromBag0Slot(uint32_t characterGuid,
     return false;
   }
   auto proto = FetchItemProto(_connection, entry);
-  if (!proto) {
+  uint8_t inventoryType = 0;
+  if (proto) {
+    inventoryType = proto->inventoryType;
+  } else if (fallbackInventoryType && *fallbackInventoryType != 0) {
+    inventoryType = *fallbackInventoryType;
+    LOG_INFO(
+        "AutoEquipFromBag0Slot: guid={} entry={} using fallback inventoryType={}",
+        characterGuid, entry, static_cast<uint32_t>(inventoryType));
+  } else {
     LOG_INFO("AutoEquipFromBag0Slot: guid={} entry={} missing item proto",
              characterGuid, entry);
     return false;
   }
-  auto dstOpt = PrimaryEquipSlotForInventoryType(proto->inventoryType);
+
+  auto dstOpt = PickAutoEquipDestination(bag0, inventoryType);
   if (!dstOpt) {
     LOG_INFO(
         "AutoEquipFromBag0Slot: guid={} entry={} inventoryType={} has no equip slot",
-        characterGuid, entry, static_cast<uint32_t>(proto->inventoryType));
+        characterGuid, entry, static_cast<uint32_t>(inventoryType));
     return false;
   }
   bool const swapped = SwapBag0Slots(characterGuid, srcSlot, *dstOpt);
@@ -877,19 +920,113 @@ bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t src
   if (srcSlot == dstSlot)
     return true;
   try {
-    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
-        "UPDATE character_inventory SET slot = CASE WHEN slot = ? THEN ? WHEN "
-        "slot = ? THEN ? END WHERE guid = ? AND bag = 0 AND slot IN (?, ?)"));
-    ps->setUInt(1, srcSlot);
-    ps->setUInt(2, dstSlot);
-    ps->setUInt(3, dstSlot);
-    ps->setUInt(4, srcSlot);
-    ps->setUInt(5, characterGuid);
-    ps->setUInt(6, srcSlot);
-    ps->setUInt(7, dstSlot);
-    ps->executeUpdate();
+    _connection->setAutoCommit(false);
+
+    bool hasSrc = false;
+    bool hasDst = false;
+    std::unordered_set<unsigned> usedSlots;
+    {
+      std::shared_ptr<sql::PreparedStatement> q(_connection->prepareStatement(
+          "SELECT slot FROM character_inventory WHERE guid = ? AND bag = 0"));
+      q->setUInt(1, characterGuid);
+      std::unique_ptr<sql::ResultSet> rs(q->executeQuery());
+      while (rs->next()) {
+        unsigned const s = rs->getUInt("slot");
+        usedSlots.insert(s);
+        if (s == srcSlot)
+          hasSrc = true;
+        if (s == dstSlot)
+          hasDst = true;
+      }
+    }
+
+    if (!hasSrc) {
+      LOG_WARN("SwapBag0Slots: source slot missing guid={} src={} dst={}",
+               characterGuid, srcSlot, dstSlot);
+      _connection->rollback();
+      _connection->setAutoCommit(true);
+      return false;
+    }
+
+    if (!hasDst) {
+      std::shared_ptr<sql::PreparedStatement> move(_connection->prepareStatement(
+          "UPDATE character_inventory SET slot = ? WHERE guid = ? AND bag = 0 "
+          "AND slot = ?"));
+      move->setUInt(1, dstSlot);
+      move->setUInt(2, characterGuid);
+      move->setUInt(3, srcSlot);
+      if (move->executeUpdate() != 1) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+      _connection->commit();
+      _connection->setAutoCommit(true);
+      return true;
+    }
+
+    // Avoid UNIQUE(guid, bag, slot) conflicts by using a temporary free slot.
+    unsigned tempSlot = 255u;
+    while (tempSlot > 200u && usedSlots.count(tempSlot))
+      --tempSlot;
+    if (usedSlots.count(tempSlot)) {
+      LOG_ERROR(
+          "SwapBag0Slots: no temporary slot available guid={} src={} dst={}",
+          characterGuid, srcSlot, dstSlot);
+      _connection->rollback();
+      _connection->setAutoCommit(true);
+      return false;
+    }
+
+    {
+      std::shared_ptr<sql::PreparedStatement> step1(_connection->prepareStatement(
+          "UPDATE character_inventory SET slot = ? WHERE guid = ? AND bag = 0 "
+          "AND slot = ?"));
+      step1->setUInt(1, tempSlot);
+      step1->setUInt(2, characterGuid);
+      step1->setUInt(3, srcSlot);
+      if (step1->executeUpdate() != 1) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+    }
+    {
+      std::shared_ptr<sql::PreparedStatement> step2(_connection->prepareStatement(
+          "UPDATE character_inventory SET slot = ? WHERE guid = ? AND bag = 0 "
+          "AND slot = ?"));
+      step2->setUInt(1, srcSlot);
+      step2->setUInt(2, characterGuid);
+      step2->setUInt(3, dstSlot);
+      if (step2->executeUpdate() != 1) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+    }
+    {
+      std::shared_ptr<sql::PreparedStatement> step3(_connection->prepareStatement(
+          "UPDATE character_inventory SET slot = ? WHERE guid = ? AND bag = 0 "
+          "AND slot = ?"));
+      step3->setUInt(1, dstSlot);
+      step3->setUInt(2, characterGuid);
+      step3->setUInt(3, tempSlot);
+      if (step3->executeUpdate() != 1) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+    }
+
+    _connection->commit();
+    _connection->setAutoCommit(true);
     return true;
   } catch (sql::SQLException &e) {
+    try {
+      _connection->rollback();
+      _connection->setAutoCommit(true);
+    } catch (...) {
+    }
     LOG_ERROR("SwapBag0Slots failed: {}", e.what());
     return false;
   }

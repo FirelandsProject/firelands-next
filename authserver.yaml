@@ -21,7 +21,7 @@ RealmLink:
 # When true, AUTH_REALM_LIST sends an empty realm display name so the 4.3.4
 # client does not append "-Realm" in chat (realm row in the list may look blank).
 RealmList:
-  HideRealmSuffixInAuthList: true
+  HideRealmSuffixInAuthList: false
 
 Database:
   User: "firelands"

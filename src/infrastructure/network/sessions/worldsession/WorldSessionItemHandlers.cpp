@@ -6,6 +6,7 @@
 #include <shared/network/UpdateData.h>
 #include <array>
 #include <ctime>
+#include <optional>
 #include <vector>
 
 namespace Firelands {
@@ -41,6 +42,51 @@ uint8_t NormalizeBag0ItemSlot(uint8_t bag, uint8_t slot) {
     return static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + slot);
   }
   return slot;
+}
+
+/// Trinity `WorldPackets::Item::InvUpdate` / `ItemPacketsCommon.cpp` operator>>.
+/// Bit prefix then byte pairs (ContainerSlot, Slot) per item.
+/// @return -1 if truncated, else Inv.Items.size() (0..3).
+int ReadItemInvUpdatePrefix(WorldPacket &packet) {
+  if (packet.Size() - packet.GetReadPos() < 1)
+    return -1;
+  BitReader br(packet);
+  uint32_t const itemCount = br.ReadBits(2);
+  br.AlignToByteBoundary();
+  for (uint32_t i = 0; i < itemCount; ++i) {
+    if (packet.Size() - packet.GetReadPos() < 2)
+      return -1;
+    (void)packet.Read<uint8_t>();
+    (void)packet.Read<uint8_t>();
+  }
+  return static_cast<int>(itemCount);
+}
+
+/// Trinity `WorldPackets::Item::InventoryChangeFailure::Write()` (default branch).
+/// Without this, the 4.3.4 client keeps the item greyed "pending" when equip is rejected.
+void SendInventoryChangeFailure(WorldSession &session, int32_t bagResult) {
+  WorldPacket pkt(SMSG_INVENTORY_CHANGE_FAILURE, 48);
+  pkt.Append<int32_t>(bagResult);
+  pkt.AppendPackGUID(0);
+  pkt.AppendPackGUID(0);
+  pkt.Append<uint8_t>(0); // ContainerBSlot
+  session.SendPacket(pkt);
+}
+
+std::optional<uint8_t> FindBag0SlotByItemLowGuid(Character const &ch,
+                                                  uint32_t itemLowGuid) {
+  if (itemLowGuid == 0)
+    return std::nullopt;
+  for (size_t s = 0; s < kEquipmentSlotCount; ++s) {
+    if (ch.GetVisibleItemGuidLow(s) == itemLowGuid)
+      return static_cast<uint8_t>(s);
+  }
+  for (size_t p = 0; p < kPackSlotCount; ++p) {
+    if (ch.GetPackItemGuidLow(p) == itemLowGuid) {
+      return static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + p);
+    }
+  }
+  return std::nullopt;
 }
 
 } // namespace
@@ -107,27 +153,178 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
 void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
-  if (packet.Size() - packet.GetReadPos() < 2)
-    return;
+  // Trinity `EQUIP_ERR_CANT_EQUIP_OTHER` — generic failure for minimal SMSG.
+  int32_t constexpr kEquipErrCantEquipOther = 15;
 
-  uint8_t const bag = packet.Read<uint8_t>();
-  uint8_t const slot = packet.Read<uint8_t>();
-  uint8_t const normalizedSlot = NormalizeBag0ItemSlot(bag, slot);
+  size_t const payloadStart = packet.GetReadPos();
+  size_t const rem = packet.Size() - payloadStart;
+
+  uint8_t packSlot = 0;
+  uint8_t slot = 0;
+  bool parsed = false;
+  bool usedInvUpdatePrefix = false;
+  int invItems = -1;
+
+  // Some 4.3.4 clients send only two bytes: PackSlot + Slot.
+  if (rem == 2) {
+    packSlot = packet.Read<uint8_t>();
+    slot = packet.Read<uint8_t>();
+    parsed = true;
+  } else {
+    // TCPP format: InvUpdate prefix then PackSlot + Slot.
+    packet.SetReadPos(payloadStart);
+    invItems = ReadItemInvUpdatePrefix(packet);
+    if (invItems >= 0 && (packet.Size() - packet.GetReadPos()) >= 2) {
+      packSlot = packet.Read<uint8_t>();
+      slot = packet.Read<uint8_t>();
+      parsed = true;
+      usedInvUpdatePrefix = true;
+    }
+  }
+
+  if (!parsed) {
+    LOG_WARN("HandleAutoEquipItem: unsupported payload size={} (could not parse)",
+             rem);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  uint8_t const normalizedSlot = NormalizeBag0ItemSlot(packSlot, slot);
 
   LOG_INFO(
-      "HandleAutoEquipItem: account={} guid={} bag={} slot={} normalizedSlot={}",
-      _accountId, _playerGuid, bag, slot, normalizedSlot);
+      "HandleAutoEquipItem: account={} guid={} packSlot={} slot={} normalizedSlot={} "
+      "consumed={} usedInvPrefix={} invItems={}",
+      _accountId, _playerGuid, packSlot, slot, normalizedSlot,
+      packet.GetReadPos() - payloadStart, usedInvUpdatePrefix, invItems);
 
   if (!_charService->AutoEquipFromBag0(_accountId, static_cast<uint32_t>(_playerGuid),
-                                        bag, normalizedSlot)) {
+                                        packSlot, normalizedSlot)) {
     LOG_INFO("HandleAutoEquipItem: equip rejected (account={} guid={})", _accountId,
              _playerGuid);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
   }
 
   auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
-  if (!refreshed)
+  if (!refreshed) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
+  }
+
+  UpdateData update(_mapId);
+  update.AddValuesUpdate(
+      _playerGuid,
+      WorldSessionObjectUpdate::BuildPlayerBag0InventoryValues(*refreshed));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  SendPacket(pkt);
+}
+
+void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+  int32_t constexpr kEquipErrCantEquipOther = 15;
+
+  auto ch = _charService->GetCharacterByGuid(_playerGuid);
+  if (!ch) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  struct ParsedAutoEquipItemSlotPayload {
+    bool ok = false;
+    bool usedInvPrefix = false;
+    int invItems = -1;
+    uint64_t itemGuid = 0;
+    uint8_t dstSlot = 0;
+    size_t consumed = 0;
+  };
+
+  auto tryParse = [&](size_t startPos, bool withInvPrefix) {
+    ParsedAutoEquipItemSlotPayload out;
+    packet.SetReadPos(startPos);
+    if (withInvPrefix) {
+      out.invItems = ReadItemInvUpdatePrefix(packet);
+      if (out.invItems < 0)
+        return out;
+      out.usedInvPrefix = true;
+    }
+    if (packet.Size() - packet.GetReadPos() < 2)
+      return out;
+    out.itemGuid = packet.ReadPackedGuid();
+    if (packet.Size() - packet.GetReadPos() < 1)
+      return out;
+    out.dstSlot = packet.Read<uint8_t>();
+    out.consumed = packet.GetReadPos() - startPos;
+    out.ok = true;
+    return out;
+  };
+
+  size_t const payloadStart = packet.GetReadPos();
+  ParsedAutoEquipItemSlotPayload parsedWithPrefix =
+      tryParse(payloadStart, true);
+  ParsedAutoEquipItemSlotPayload parsedNoPrefix =
+      tryParse(payloadStart, false);
+
+  auto payloadMatchesBag0 = [&](ParsedAutoEquipItemSlotPayload const &p) {
+    if (!p.ok)
+      return false;
+    uint32_t const low = static_cast<uint32_t>(p.itemGuid & 0xFFFFFFFFu);
+    return FindBag0SlotByItemLowGuid(*ch, low).has_value();
+  };
+
+  ParsedAutoEquipItemSlotPayload parsed;
+  if (payloadMatchesBag0(parsedWithPrefix)) {
+    parsed = parsedWithPrefix;
+  } else if (payloadMatchesBag0(parsedNoPrefix)) {
+    parsed = parsedNoPrefix;
+  } else if (parsedNoPrefix.ok) {
+    parsed = parsedNoPrefix;
+  } else if (parsedWithPrefix.ok) {
+    parsed = parsedWithPrefix;
+  } else {
+    LOG_WARN("HandleAutoEquipItemSlot: unsupported payload size={}",
+             packet.Size() - payloadStart);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  uint64_t const itemGuid = parsed.itemGuid;
+  uint8_t const dstSlot = parsed.dstSlot;
+  LOG_INFO(
+      "HandleAutoEquipItemSlot: account={} guid={} itemLow={} dstSlot={} "
+      "usedInvPrefix={} invItems={} consumed={}",
+      _accountId, _playerGuid,
+      static_cast<uint32_t>(itemGuid & 0xFFFFFFFFu), dstSlot,
+      parsed.usedInvPrefix, parsed.invItems, parsed.consumed);
+
+  if (dstSlot >= EQUIPMENT_SLOT_END) {
+    LOG_INFO("HandleAutoEquipItemSlot: invalid dstSlot={}", dstSlot);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  uint32_t const itemLowGuid = static_cast<uint32_t>(itemGuid & 0xFFFFFFFFu);
+  auto srcSlotOpt = FindBag0SlotByItemLowGuid(*ch, itemLowGuid);
+  if (!srcSlotOpt) {
+    LOG_INFO("HandleAutoEquipItemSlot: itemLowGuid={} not found in bag0",
+             itemLowGuid);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  if (!_charService->SwapBag0Slots(_playerGuid, *srcSlotOpt, dstSlot)) {
+    LOG_INFO("HandleAutoEquipItemSlot: swap rejected src={} dst={} guid={}",
+             *srcSlotOpt, dstSlot, _playerGuid);
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
+  if (!refreshed) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
 
   UpdateData update(_mapId);
   update.AddValuesUpdate(
@@ -141,9 +338,12 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
 void WorldSession::HandleUseItem(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
+  int32_t constexpr kEquipErrCantEquipOther = 15;
   // TCPP `WorldPackets::Spells::UseItem::Read()` — first fields used for inventory use.
-  if (packet.Size() - packet.GetReadPos() < sizeof(uint8_t) * 3 + sizeof(int32_t))
+  if (packet.Size() - packet.GetReadPos() < sizeof(uint8_t) * 3 + sizeof(int32_t)) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
+  }
 
   uint8_t const packSlot = packet.Read<uint8_t>();
   uint8_t const slot = packet.Read<uint8_t>();
@@ -151,14 +351,20 @@ void WorldSession::HandleUseItem(WorldPacket &packet) {
   (void)packet.Read<uint8_t>(); // Cast.CastID
   (void)packet.Read<int32_t>(); // Cast.SpellID (non-zero for many equippables; TCPP uses spellmgr)
   packet.SetReadPos(packet.Size());
+  LOG_INFO("HandleUseItem: account={} guid={} packSlot={} slot={} normalized={}",
+           _accountId, _playerGuid, packSlot, slot, normalizedSlot);
 
   if (!_charService->AutoEquipFromBag0(_accountId, static_cast<uint32_t>(_playerGuid),
-                                        packSlot, normalizedSlot))
+                                        packSlot, normalizedSlot)) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
+  }
 
   auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
-  if (!refreshed)
+  if (!refreshed) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
+  }
 
   UpdateData update(_mapId);
   update.AddValuesUpdate(

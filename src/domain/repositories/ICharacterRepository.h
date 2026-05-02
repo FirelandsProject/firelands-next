@@ -46,7 +46,9 @@ public:
                                uint32_t count) = 0;
   virtual AccessLevel GetAccountAccessLevel(uint32_t accountId) = 0;
   /// Move an item from backpack grid (`INVENTORY_SLOT_ITEM_*`) to its default equipment slot.
-  virtual bool AutoEquipFromBag0Slot(uint32_t characterGuid, uint8_t srcSlot) = 0;
+  virtual bool AutoEquipFromBag0Slot(
+      uint32_t characterGuid, uint8_t srcSlot,
+      std::optional<uint8_t> fallbackInventoryType = std::nullopt) = 0;
   virtual bool SaveInventory(uint32_t characterGuid,
                           Bag0InventoryData const &invData) = 0;
 };
