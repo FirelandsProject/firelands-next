@@ -1,12 +1,11 @@
 #include <application/ports/IMapNotifier.h>
 #include <application/services/WorldService.h>
 #include <domain/models/Character.h>
-#include <domain/models/Chat.h>
 #include <domain/world/Player.h>
 #include <infrastructure/network/sessions/WorldSession.h>
+#include <infrastructure/network/sessions/worldsession/WorldSessionMovementChecks.h>
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <shared/Config.h>
-#include <shared/Crypto.h>
 #include <shared/Logger.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/UpdateFields.h>
@@ -14,7 +13,6 @@
 #include <shared/network/packets/VerifyWorldPacket.h>
 #include <shared/network/packets/SetProficiencyPacket.h>
 #include <shared/network/BitReader.h>
-#include <shared/network/MovementWire.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/game/ChatLanguages.h>
 #include <shared/game/EquipmentCache.h>
@@ -27,7 +25,6 @@
 #include <ctime>
 #include <map>
 #include <vector>
-#include <zlib.h>
 
 namespace Firelands {
 
@@ -66,86 +63,6 @@ std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
   }
 }
 
-// TrinityCore / TCPP WorldSession.cpp — public key sent when client HasKey is false
-// (SMSG_ADDON_INFO secure addon block).
-static uint8 const kAddonPublicKey[256] = {
-    0xC3, 0x5B, 0x50, 0x84, 0xB9, 0x3E, 0x32, 0x42, 0x8C, 0xD0, 0xC7, 0x48, 0xFA, 0x0E, 0x5D, 0x54,
-    0x5A, 0xA3, 0x0E, 0x14, 0xBA, 0x9E, 0x0D, 0xB9, 0x5D, 0x8B, 0xEE, 0xB6, 0x84, 0x93, 0x45, 0x75,
-    0xFF, 0x31, 0xFE, 0x2F, 0x64, 0x3F, 0x3D, 0x6D, 0x07, 0xD9, 0x44, 0x9B, 0x40, 0x85, 0x59, 0x34,
-    0x4E, 0x10, 0xE1, 0xE7, 0x43, 0x69, 0xEF, 0x7C, 0x16, 0xFC, 0xB4, 0xED, 0x1B, 0x95, 0x28, 0xA8,
-    0x23, 0x76, 0x51, 0x31, 0x57, 0x30, 0x2B, 0x79, 0x08, 0x50, 0x10, 0x1C, 0x4A, 0x1A, 0x2C, 0xC8,
-    0x8B, 0x8F, 0x05, 0x2D, 0x22, 0x3D, 0xDB, 0x5A, 0x24, 0x7A, 0x0F, 0x13, 0x50, 0x37, 0x8F, 0x5A,
-    0xCC, 0x9E, 0x04, 0x44, 0x0E, 0x87, 0x01, 0xD4, 0xA3, 0x15, 0x94, 0x16, 0x34, 0xC6, 0xC2, 0xC3,
-    0xFB, 0x49, 0xFE, 0xE1, 0xF9, 0xDA, 0x8C, 0x50, 0x3C, 0xBE, 0x2C, 0xBB, 0x57, 0xED, 0x46, 0xB9,
-    0xAD, 0x8B, 0xC6, 0xDF, 0x0E, 0xD6, 0x0F, 0xBE, 0x80, 0xB3, 0x8B, 0x1E, 0x77, 0xCF, 0xAD, 0x22,
-    0xCF, 0xB7, 0x4B, 0xCF, 0xFB, 0xF0, 0x6B, 0x11, 0x45, 0x2D, 0x7A, 0x81, 0x18, 0xF2, 0x92, 0x7E,
-    0x98, 0x56, 0x5D, 0x5E, 0x69, 0x72, 0x0A, 0x0D, 0x03, 0x0A, 0x85, 0xA2, 0x85, 0x9C, 0xCB, 0xFB,
-    0x56, 0x6E, 0x8F, 0x44, 0xBB, 0x8F, 0x02, 0x22, 0x68, 0x63, 0x97, 0xBC, 0x85, 0xBA, 0xA8, 0xF7,
-    0xB5, 0x40, 0x68, 0x3C, 0x77, 0x86, 0x6F, 0x4B, 0xD7, 0x88, 0xCA, 0x8A, 0xD7, 0xCE, 0x36, 0xF0,
-    0x45, 0x6E, 0xD5, 0x64, 0x79, 0x0F, 0x17, 0xFC, 0x64, 0xDD, 0x10, 0x6F, 0xF3, 0xF5, 0xE0, 0xA6,
-    0xC3, 0xFB, 0x1B, 0x8C, 0x29, 0xEF, 0x8E, 0xE5, 0x34, 0xCB, 0xD1, 0x2A, 0xCE, 0x79, 0xC3, 0x9A,
-    0x0D, 0x36, 0xEA, 0x01, 0xE0, 0xAA, 0x91, 0x20, 0x54, 0xF0, 0x72, 0xD8, 0x1E, 0xC7, 0x89, 0xD2,
-};
-
-static bool ReadAddonCString(std::vector<uint8> const &buf, size_t &pos,
-                              std::string &out) {
-  out.clear();
-  while (pos < buf.size() && buf[pos] != 0)
-    out.push_back(static_cast<char>(buf[pos++]));
-  if (pos >= buf.size())
-    return false;
-  ++pos; // NUL
-  return true;
-}
-
-/// Parses the wire blob from CMSG_AUTH_SESSION (zlib + addon list). See TCPP
-/// `WorldSession::ReadAddonsInfo`.
-static void TryPopulateAuthAddonsFromWire(std::vector<uint8> const &wire,
-                                          std::vector<AuthSecureAddonEntry> &out) {
-  out.clear();
-  if (wire.size() < 4)
-    return;
-
-  uint32 uncompressedSize = 0;
-  std::memcpy(&uncompressedSize, wire.data(), 4);
-  if (uncompressedSize == 0 || uncompressedSize > 0xFFFFF)
-    return;
-
-  std::vector<uint8> dec(uncompressedSize);
-  uLongf destLen = uncompressedSize;
-  int zrc = ::uncompress(dec.data(), &destLen, wire.data() + 4,
-                         static_cast<uLong>(wire.size() - 4));
-  if (zrc != Z_OK) {
-    LOG_DEBUG("CMSG_AUTH_SESSION addon zlib uncompress failed ({}).", zrc);
-    return;
-  }
-  dec.resize(destLen);
-
-  size_t p = 0;
-  if (p + 4 > dec.size())
-    return;
-  uint32 addonsCount = 0;
-  std::memcpy(&addonsCount, dec.data() + p, 4);
-  p += 4;
-
-  constexpr uint32 kMaxSecureAddons = 35;
-  if (addonsCount > kMaxSecureAddons)
-    addonsCount = kMaxSecureAddons;
-
-  for (uint32 i = 0; i < addonsCount; ++i) {
-    AuthSecureAddonEntry row;
-    if (!ReadAddonCString(dec, p, row.name))
-      return;
-    if (p >= dec.size())
-      return;
-    row.hasKey = dec[p++] != 0;
-    if (p + 8 > dec.size())
-      return;
-    p += 8; // publicKeyCrc, urlCrc
-    out.push_back(std::move(row));
-  }
-}
-
 // TCPP SharedDefines.h + QueryPackets.cpp (WorldPackets::Query::QueryPlayerNameResponse)
 enum QueryNameResponseCode : uint8 {
   RESPONSE_SUCCESS = 0, // full PlayerGuidLookupData after result byte
@@ -172,67 +89,6 @@ static uint64 ReadClientTargetGuid(WorldPacket &packet) {
     return packet.ReadPackedGuid();
   }
   return 0;
-}
-
-static bool IsClientMovementOpcode(WorldOpcode opcode) {
-  switch (opcode) {
-  case MSG_MOVE_HEARTBEAT:
-  case MSG_MOVE_START_FORWARD:
-  case MSG_MOVE_START_BACKWARD:
-  case MSG_MOVE_START_STRAFE_LEFT:
-  case MSG_MOVE_START_STRAFE_RIGHT:
-  case MSG_MOVE_STOP:
-  case MSG_MOVE_STOP_STRAFE:
-  case MSG_MOVE_START_ASCEND:
-  case MSG_MOVE_START_DESCEND:
-  case MSG_MOVE_STOP_ASCEND:
-  case MSG_MOVE_START_TURN_LEFT:
-  case MSG_MOVE_START_TURN_RIGHT:
-  case MSG_MOVE_STOP_TURN:
-  case MSG_MOVE_START_PITCH_UP:
-  case MSG_MOVE_START_PITCH_DOWN:
-  case MSG_MOVE_STOP_PITCH:
-  case MSG_MOVE_SET_RUN_MODE:
-  case MSG_MOVE_SET_WALK_MODE:
-  case MSG_MOVE_START_SWIM:
-  case MSG_MOVE_STOP_SWIM:
-  case MSG_MOVE_JUMP:
-  case MSG_MOVE_SET_FACING:
-  case MSG_MOVE_FALL_LAND:
-    return true;
-  default:
-    return false;
-  }
-}
-
-// FirelandsCore GridDefines.h: MAP_SIZE = SIZE_OF_GRIDS * MAX_NUMBER_OF_GRIDS,
-// MAP_HALFSIZE = MAP_SIZE / 2; Firelands::IsValidMapCoord uses these bounds.
-static constexpr float kMapCoordLimit =
-    (533.3333f * 64.0f) * 0.5f - 0.5f;
-
-/// Match reference `Firelands::IsValidMapCoord`:
-///   - x,y,z finite and within map half-size bounds
-///   - orientation finite AND in WoW's normalised range [-pi, 2*pi].
-///     The reference only checks isfinite(o), but our packed-420 parser may
-///     produce a finite-but-enormous orientation (e.g. -2.67e38) when it
-///     mis-reads a different opcode layout.  Clamping to +-7 catches that
-///     while accepting any real WoW orientation (which is in [0, 2*pi]).
-static constexpr float kMaxOrientation = 7.0f; // slightly above 2*pi (~6.283)
-
-static bool IsSaneWorldPosition(MovementInfo const &m) {
-  if (!std::isfinite(m.x) || !std::isfinite(m.y) || !std::isfinite(m.z) ||
-      !std::isfinite(m.orientation))
-    return false;
-  if (std::fabs(m.orientation) > kMaxOrientation)
-    return false;
-  return std::fabs(m.x) <= kMapCoordLimit && std::fabs(m.y) <= kMapCoordLimit &&
-         std::fabs(m.z) <= kMapCoordLimit;
-}
-
-/// Only heartbeat uses `TryReadMovementHeartbeat433`. Other MSG_MOVE_* share a
-/// different bit layout; our packed-420 parser can mis-read Z and corrupt DB on logout.
-static bool IsTrustedPositionOpcode(WorldOpcode opcode) {
-  return opcode == MSG_MOVE_HEARTBEAT;
 }
 
 std::map<uint16, uint32> BuildItemCreateFields(uint64 itemObjectGuid,
@@ -711,395 +567,7 @@ void WorldSession::HandlePacket(ByteBuffer &buffer) {
   }
 }
 
-void WorldSession::ProcessPacket(WorldPacket &packet) {
-  uint32 opcode = packet.GetOpcode();
-  LOG_INFO("[CMSG] {} payload={} crypt={}", packet.GetOpcodeName(),
-           packet.Size(), _crypt.IsInitialized());
-
-  switch (opcode) {
-  case CMSG_AUTH_SESSION:
-    HandleAuthSession(packet);
-    break;
-  case CMSG_CHAR_CREATE:
-    HandleCharCreate(packet);
-    break;
-  case CMSG_CHAR_DELETE:
-    HandleCharDelete(packet);
-    break;
-  case CMSG_CHAR_ENUM:
-    HandleCharEnum(packet);
-    break;
-  case MSG_QUERY_NEXT_MAIL_TIME:
-    HandleQueryNextMailTime(packet);
-    break;
-  case CMSG_CALENDAR_GET_NUM_PENDING:
-    HandleCalendarGetNumPending(packet);
-    break;
-  case CMSG_ZONEUPDATE:
-    HandleZoneUpdate(packet);
-    break;
-  case CMSG_SET_ACTIVE_MOVER:
-  case CMSG_SET_ACTIONBAR_TOGGLES:
-  case CMSG_REQUEST_RAID_INFO:
-  case CMSG_GMTICKET_GETTICKET:
-  case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
-  case CMSG_BATTLEFIELD_STATUS:
-  case CMSG_QUERY_BATTLEFIELD_STATE:
-  case CMSG_JOIN_CHANNEL:
-  case CMSG_CONTACT_LIST:
-  case CMSG_SAVE_CUF_PROFILES:
-  case CMSG_VOICE_SESSION_ENABLE:
-  case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
-  case CMSG_REQUEST_CATEGORY_COOLDOWNS:
-  case CMSG_DB_QUERY_BULK:
-  case CMSG_WORLD_STATE_UI_TIMER_UPDATE:
-    // Client probes features we haven't implemented yet. For stability we safely
-    // ignore these requests (no side effects, no disconnect).
-    break;
-  case CMSG_LFG_GET_STATUS:
-    HandleLfgGetStatus(packet);
-    break;
-  case CMSG_LFG_LOCK_INFO_REQUEST:
-    HandleLfgLockInfoRequest(packet);
-    break;
-  case CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY:
-    HandleGuildBankRemainingWithdrawMoneyQuery(packet);
-    break;
-  case CMSG_REQUEST_CEMETERY_LIST:
-    HandleRequestCemeteryList(packet);
-    break;
-  case CMSG_LOADING_SCREEN_NOTIFY:
-    // Simply acknowledge loading screen progress
-    break;
-  case CMSG_LOG_DISCONNECT:
-    Close();
-    break;
-  case CMSG_MESSAGECHAT_SAY:
-  case CMSG_MESSAGECHAT_YELL:
-  case CMSG_MESSAGECHAT_CHANNEL:
-  case CMSG_MESSAGECHAT_WHISPER:
-  case CMSG_MESSAGECHAT_GUILD:
-  case CMSG_MESSAGECHAT_OFFICER:
-  case CMSG_MESSAGECHAT_AFK:
-  case CMSG_MESSAGECHAT_DND:
-  case CMSG_MESSAGECHAT_EMOTE:
-  case CMSG_MESSAGECHAT_PARTY:
-  case CMSG_MESSAGECHAT_RAID:
-  case CMSG_MESSAGECHAT_BATTLEGROUND:
-  case CMSG_MESSAGECHAT_RAID_WARNING:
-    HandleMessageChat(packet);
-    break;
-  case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:
-  case CMSG_MESSAGECHAT_ADDON_GUILD:
-  case CMSG_MESSAGECHAT_ADDON_OFFICER:
-  case CMSG_MESSAGECHAT_ADDON_PARTY:
-  case CMSG_MESSAGECHAT_ADDON_RAID:
-  case CMSG_MESSAGECHAT_ADDON_WHISPER:
-    HandleAddonMessageChat(packet);
-    break;
-  case CMSG_CAST_SPELL:
-    HandleCastSpell(packet);
-    break;
-  case CMSG_GOSSIP_HELLO:
-    HandleGossipHello(packet);
-    break;
-  case CMSG_GOSSIP_SELECT_OPTION:
-    HandleGossipSelectOption(packet);
-    break;
-  case CMSG_NAME_QUERY:
-    HandleNameQuery(packet);
-    break;
-  case CMSG_QUERY_TIME:
-    HandleQueryTime(packet);
-    break;
-  case CMSG_PLAYED_TIME:
-    HandlePlayedTime(packet);
-    break;
-  case CMSG_MOVE_TIME_SKIPPED:
-    HandleMoveTimeSkipped(packet);
-    break;
-  case CMSG_SET_SELECTION:
-  case CMSG_AREA_TRIGGER:
-  case CMSG_STAND_STATE_CHANGE:
-  case CMSG_SET_SHEATHED:
-    // Target selection updates are client-side/UI-only for now.
-    break;
-  case CMSG_PING:
-    HandlePing(packet);
-    break;
-  case CMSG_PLAYER_LOGIN:
-    HandlePlayerLogin(packet);
-    break;
-  case CMSG_LOGOUT_REQUEST:
-    HandleLogoutRequest(packet);
-    break;
-  case CMSG_LOGOUT_CANCEL:
-    HandleLogoutCancel(packet);
-    break;
-  case CMSG_READY_FOR_ACCOUNT_DATA_TIMES:
-    HandleReadyForAccountDataTimes(packet);
-    break;
-  case CMSG_REQUEST_ACCOUNT_DATA:
-    HandleRequestAccountData(packet);
-    break;
-  case CMSG_REALM_SPLIT:
-    HandleRealmSplit(packet);
-    break;
-  case CMSG_TIME_SYNC_RESP:
-    HandleTimeSyncResp(packet);
-    break;
-  case CMSG_UPDATE_ACCOUNT_DATA:
-    HandleUpdateAccountData(packet);
-    break;
-  case CMSG_SWAP_INV_ITEM:
-    HandleSwapInvItem(packet);
-    break;
-  case CMSG_SWAP_ITEM:
-    HandleSwapItem(packet);
-    break;
-  case CMSG_CANCEL_TRADE:
-    // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.
-    break;
-  case CMSG_VIOLENCE_LEVEL:
-    // Ignore violence level settings
-    break;
-  case MSG_MOVE_HEARTBEAT:
-  case MSG_MOVE_START_FORWARD:
-  case MSG_MOVE_START_BACKWARD:
-  case MSG_MOVE_START_STRAFE_LEFT:
-  case MSG_MOVE_START_STRAFE_RIGHT:
-  case MSG_MOVE_STOP:
-  case MSG_MOVE_STOP_STRAFE:
-  case MSG_MOVE_START_ASCEND:
-  case MSG_MOVE_START_DESCEND:
-  case MSG_MOVE_STOP_ASCEND:
-  case MSG_MOVE_START_TURN_LEFT:
-  case MSG_MOVE_START_TURN_RIGHT:
-  case MSG_MOVE_STOP_TURN:
-  case MSG_MOVE_START_PITCH_UP:
-  case MSG_MOVE_START_PITCH_DOWN:
-  case MSG_MOVE_STOP_PITCH:
-  case MSG_MOVE_SET_RUN_MODE:
-  case MSG_MOVE_SET_WALK_MODE:
-  case MSG_MOVE_START_SWIM:
-  case MSG_MOVE_STOP_SWIM:
-  case MSG_MOVE_JUMP:
-  case MSG_MOVE_SET_FACING:
-  case MSG_MOVE_FALL_LAND:
-    HandleMovement(packet);
-    break;
-  default:
-    LOG_DEBUG("[PACKET] Unknown/unhandled opcode: 0x{:04X} (size: {})", opcode,
-              packet.Size());
-    break;
-  }
-}
-
 // --- Client Packet Handlers (CMSG) ---
-
-void WorldSession::HandleAuthSession(WorldPacket &packet) {
-  uint8 digest[20];
-  std::vector<uint8> localChallenge(4);
-  uint16 build;
-  uint32 realmId;
-  int32 loginServerId;
-
-  // 1. Read seeds, digest and build using the Scattered format
-  HandleAuthSessionScattered(packet, digest, localChallenge, build, realmId,
-                             loginServerId);
-
-  // 2. Addon blob: outer uint32 length, then [uint32 uncompressedLen][zlib...].
-  //    Must parse and later echo one SMSG_ADDON_INFO row per secure addon or the
-  //    client mis-parses the packet and flags Blizzard_* addons as "Banned".
-  _authSecureAddons.clear();
-  uint32 addonWireBytes = 0;
-  if (packet.GetReadPos() + 4 <= packet.Size()) {
-    addonWireBytes = packet.Read<uint32>();
-  }
-  if (addonWireBytes > 0) {
-    if (packet.GetReadPos() + addonWireBytes > packet.Size()) {
-      LOG_ERROR("CMSG_AUTH_SESSION: addon blob truncated ({} bytes).",
-                addonWireBytes);
-      Close();
-      return;
-    }
-    std::vector<uint8> wire(addonWireBytes);
-    packet.Read(wire.data(), addonWireBytes);
-    TryPopulateAuthAddonsFromWire(wire, _authSecureAddons);
-  }
-
-  // 3. Extract Account Name using BitReader (Cataclysm 4.3.4 Build 15595)
-  BitReader br(packet);
-  br.ReadBit(); // UseIPv6
-  uint32 accountNameLength = br.ReadBits(12);
-  std::string account = br.ReadString(accountNameLength);
-
-  LOG_DEBUG("CMSG_AUTH_SESSION: Account: '{}', Build: {}, RealmID: {}, "
-            "ClientSeed: {}, Packet Size: {}",
-            account, build, realmId,
-            Crypto::ToHexString(localChallenge.data(), 4), packet.Size());
-
-  auto accountOpt = _authService->FindAccount(account);
-  if (!accountOpt) {
-    LOG_ERROR("CMSG_AUTH_SESSION: Account '{}' not found.", account);
-    Close();
-    return;
-  }
-
-  std::vector<uint8_t> K = _authService->GetSessionKey(accountOpt->id);
-  if (K.empty()) {
-    LOG_ERROR("CMSG_AUTH_SESSION: No session key K for account '{}'.", account);
-    Close();
-    return;
-  }
-
-  // Initialize WorldCrypt IMMEDIATELY after getting K (Cataclysm requirement)
-  _crypt.Init(K);
-  LOG_DEBUG("[AUTH] WorldCrypt initialized with 40 bytes of K");
-
-  // 4. Perform Digest validation
-  // SHA1(Account, t(0), ClientChallenge, ServerSeed, SessionKey)
-  Crypto::SHA1 sha;
-  sha.Update(Crypto::ToUpper(account));
-
-  uint32 t = 0;
-  sha.Update(t);
-
-  sha.Update(localChallenge.data(), 4);
-  sha.Update(_serverSeed);
-  sha.Update(K.data(), K.size());
-
-  Crypto::SHA1Hash calculatedDigest = sha.Finalize();
-
-  if (std::memcmp(calculatedDigest.data(), digest, 20) != 0) {
-    LOG_ERROR("CMSG_AUTH_SESSION: Digest validation failed for account '{}'!",
-              account);
-    LOG_DEBUG("Calculated: {}", Crypto::ToHexString(calculatedDigest));
-    LOG_DEBUG("Received:   {}", Crypto::ToHexString(digest, 20));
-    Close();
-    return;
-  }
-
-  _accountId = accountOpt->id;
-  LOG_DEBUG("CMSG_AUTH_SESSION: Digest validated successfully for account '{}'.",
-            account);
-
-  ReloadGlobalAccountDataFromDb();
-
-  SendAuthResponse();
-  SendAddonInfo();
-  // Reference parity: after auth success, send cache version and tutorial flags.
-  // FirelandsCore does: SendAddonsInfo(); SendClientCacheVersion(...); SendTutorialsData();
-  SendClientCacheVersion(0);
-  SendTutorialFlags();
-}
-
-void WorldSession::HandleAuthSessionScattered(
-    WorldPacket &packet, uint8 *digest, std::vector<uint8> &localChallenge,
-    uint16 &build, uint32 &realmId, int32 &loginServerId) {
-  loginServerId = packet.Read<int32>();
-  uint32 battlegroupId = packet.Read<uint32>();
-  int8 loginServerType = packet.Read<int8>();
-
-  digest[10] = packet.Read<uint8>();
-  digest[18] = packet.Read<uint8>();
-  digest[12] = packet.Read<uint8>();
-  digest[5] = packet.Read<uint8>();
-
-  uint64 dosResponse = packet.Read<uint64>();
-
-  digest[15] = packet.Read<uint8>();
-  digest[9] = packet.Read<uint8>();
-  digest[19] = packet.Read<uint8>();
-  digest[4] = packet.Read<uint8>();
-  digest[7] = packet.Read<uint8>();
-  digest[16] = packet.Read<uint8>();
-  digest[3] = packet.Read<uint8>();
-
-  build = packet.Read<uint16>();
-  digest[8] = packet.Read<uint8>();
-
-  realmId = packet.Read<uint32>();
-  int8 buildType = packet.Read<int8>();
-
-  digest[17] = packet.Read<uint8>();
-  digest[6] = packet.Read<uint8>();
-  digest[0] = packet.Read<uint8>();
-  digest[1] = packet.Read<uint8>();
-  digest[11] = packet.Read<uint8>();
-
-  localChallenge[0] = packet.Read<uint8>();
-  localChallenge[1] = packet.Read<uint8>();
-  localChallenge[2] = packet.Read<uint8>();
-  localChallenge[3] = packet.Read<uint8>();
-
-  digest[2] = packet.Read<uint8>();
-  uint32 regionId = packet.Read<uint32>();
-
-  digest[14] = packet.Read<uint8>();
-  digest[13] = packet.Read<uint8>();
-}
-
-void WorldSession::HandleAuthSessionStandard(WorldPacket &packet, uint16 &build,
-                                             uint8 *digest,
-                                             std::vector<uint8> &localChallenge,
-                                             uint32 &realmId) {
-  build = static_cast<uint16>(packet.Read<uint32>());
-  packet.Read<uint32>(); // loginServerId or unknown
-  realmId = packet.Read<uint32>();
-
-  packet.Read(localChallenge.data(), 4);
-  packet.Read<uint32>(); // Seed
-  packet.Read<uint32>(); // Unk
-  packet.Read<uint32>(); // Unk
-
-  packet.Read(digest, 20);
-}
-
-void WorldSession::SendAuthResponse() {
-  WorldPacket response(SMSG_AUTH_RESPONSE);
-  BitWriter bw(response);
-  bw.WriteBit(false); // hasWaitInfo
-  bw.WriteBit(true);  // hasSuccessInfo
-  bw.Flush();
-
-  response.Append<uint32>(0); // TimeRemain
-  response.Append<uint8>(3);  // ActiveExpansionLevel (Cata)
-  response.Append<uint32>(0); // TimeSecondsUntilPCKick
-  response.Append<uint8>(3);  // AccountExpansionLevel (Cata)
-  response.Append<uint32>(0); // TimeRested
-  response.Append<uint8>(0);  // TimeOptions
-  response.Append<uint8>(12); // Result (AUTH_OK = 12)
-
-  SendPacket(response);
-}
-
-void WorldSession::SendAddonInfo() {
-  // TCPP WorldSession::SendAddonsInfo — one block per entry from CMSG_AUTH_SESSION,
-  // then uint32 bannedAddonCount (always last in this layout).
-  WorldPacket data(SMSG_ADDON_INFO);
-  constexpr uint8 kAddonSecureHidden = 2; // Addons::SecureAddonInfo::SECURE_HIDDEN
-
-  for (AuthSecureAddonEntry const &addonInfo : _authSecureAddons) {
-    uint8 const status = kAddonSecureHidden;
-    uint8 const infoProvided =
-        static_cast<uint8>((status != 0u) || addonInfo.hasKey);
-    data.Append<uint8>(status);
-    data.Append<uint8>(infoProvided);
-    if (infoProvided) {
-      uint8 const keyProvided = addonInfo.hasKey ? 0 : 1;
-      data.Append<uint8>(keyProvided);
-      if (!addonInfo.hasKey)
-        data.Append(kAddonPublicKey, sizeof(kAddonPublicKey));
-      data.Append<uint32>(0); // revision / toc version
-    }
-    data.Append<uint8>(0); // UrlProvided
-  }
-
-  data.Append<uint32>(0); // bannedAddonCount
-
-  SendPacket(data);
-}
 
 void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
   auto characters = _charService->GetCharactersForAccount(_accountId);
@@ -1254,6 +722,36 @@ void WorldSession::HandleCharDelete(WorldPacket &packet) {
 }
 
 void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
+  uint64 guid = 0;
+  LoginReadPackedPlayerGuid(packet, guid);
+
+  LOG_DEBUG("CMSG_PLAYER_LOGIN for GUID: {}", guid);
+  _playerGuid = guid;
+  _timeSyncNextCounter = 0;
+
+  auto characterOpt = _charService->GetCharacterByGuid(guid);
+  if (!characterOpt) {
+    LOG_ERROR("CMSG_PLAYER_LOGIN: Character not found.");
+    Close();
+    return;
+  }
+  Character const &character = *characterOpt;
+  _playerRace = character.GetRace();
+
+  LoginSendAccountDataAndPreMapPackets(guid, character);
+  LoginBuildKnownSpellsAndSendSpellbook(character);
+  LoginSendMotdAndMetaPackets();
+
+  MovementInfo move{};
+  LoginResolveMapPosition(guid, character, move);
+
+  LoginSpawnInWorld(guid, move);
+  LoginSendCreateUpdatesAndMutualVisibility(guid, character, move);
+  LoginFinalizeWorldEntry(guid);
+}
+
+void WorldSession::LoginReadPackedPlayerGuid(WorldPacket &packet,
+                                             uint64 &outGuid) {
   uint8 guid_bytes[8] = {0};
   BitReader br(packet);
 
@@ -1275,22 +773,12 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   if (g1) guid_bytes[1] = packet.Read<uint8>() ^ 1;
   if (g4) guid_bytes[4] = packet.Read<uint8>() ^ 1;
 
-  uint64 guid = 0;
-  std::memcpy(&guid, guid_bytes, 8);
+  outGuid = 0;
+  std::memcpy(&outGuid, guid_bytes, 8);
+}
 
-  LOG_DEBUG("CMSG_PLAYER_LOGIN for GUID: {}", guid);
-  _playerGuid = guid;
-  _timeSyncNextCounter = 0;
-
-  auto characterOpt = _charService->GetCharacterByGuid(guid);
-  if (!characterOpt) {
-    LOG_ERROR("CMSG_PLAYER_LOGIN: Character not found.");
-    Close();
-    return;
-  }
-  const auto &character = *characterOpt;
-  _playerRace = character.GetRace();
-
+void WorldSession::LoginSendAccountDataAndPreMapPackets(
+    uint64 guid, Character const &character) {
   // Login SMSG order aligned with firelands-cata-ref CharacterHandler::HandlePlayerLogin
   // and Player::SendInitialPacketsBeforeAddToMap (see Player.cpp ~23604).
   SendDungeonDifficulty(false);
@@ -1323,6 +811,9 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   SendWorldServerInfo();
   SendSetProficiency(1, 0xFFFFFFFF);
   SendSetProficiency(2, 0xFFFFFFFF);
+}
+
+void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &character) {
   {
     // Language passives must appear early in `SMSG_SEND_KNOWN_SPELLS`. Some 4.3.4
     // clients stop applying the list if an early spell id is unknown to the
@@ -1407,39 +898,45 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   SendAllAchievementDataEmpty();
   SendLoginSetTimeSpeed();
   SendEquipmentSetListEmpty();
+}
 
+void WorldSession::LoginSendMotdAndMetaPackets() {
   // Reference sends MOTD and SMSG_FEATURE_SYSTEM_STATUS after BeforeAddToMap.
   SendMotd();
   SendFeatureSystemStatus();
   SendTutorialFlags();
   SendClientCacheVersion(0);
+}
 
+void WorldSession::LoginResolveMapPosition(uint64 guid, Character const &character,
+                                           MovementInfo &outMove) {
   // Create in-memory player and add to map BEFORE sending verify-world + worldstates
   _mapId = character.GetMapId();
   _zoneId = character.GetZoneId();
-  MovementInfo move;
   static auto startTime = std::chrono::steady_clock::now();
   auto now = std::chrono::steady_clock::now();
-  move.time = static_cast<uint32>(std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count());
-  move.x = character.GetX();
-  move.y = character.GetY();
-  move.z = character.GetZ();
-  move.orientation = character.GetOrientation();
-  if (!IsSaneWorldPosition(move)) {
+  outMove.time = static_cast<uint32>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime)
+          .count());
+  outMove.x = character.GetX();
+  outMove.y = character.GetY();
+  outMove.z = character.GetZ();
+  outMove.orientation = character.GetOrientation();
+  if (!WsIsSaneWorldPosition(outMove)) {
     // Recover from previously persisted corrupt movement values by snapping to
     // race starter position. This avoids endless loading screens on relog.
     if (auto fallback = FallbackStartPosition(character.GetRace())) {
       _mapId = fallback->mapId;
       _zoneId = static_cast<uint16>(std::min<uint32_t>(fallback->zoneId, 0xFFFFu));
-      move.x = fallback->x;
-      move.y = fallback->y;
-      move.z = fallback->z;
-      move.orientation = fallback->orientation;
+      outMove.x = fallback->x;
+      outMove.y = fallback->y;
+      outMove.z = fallback->z;
+      outMove.orientation = fallback->orientation;
       LOG_WARN("Invalid saved position for guid {} (x={} y={} z={} o={}), "
                "using race fallback map={} zone={} x={} y={} z={} o={}",
                guid, character.GetX(), character.GetY(), character.GetZ(),
-               character.GetOrientation(), _mapId, _zoneId, move.x, move.y,
-               move.z, move.orientation);
+               character.GetOrientation(), _mapId, _zoneId, outMove.x, outMove.y,
+               outMove.z, outMove.orientation);
     } else {
       LOG_WARN("Invalid saved position for guid {} and no race fallback; "
                "keeping DB values.", guid);
@@ -1448,14 +945,19 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   // Seed session position immediately on login. If the user logs out before the
   // first movement heartbeat arrives, logout persistence must still save a valid
   // location instead of default zeros.
-  _position = move;
+  _position = outMove;
+}
 
+void WorldSession::LoginSpawnInWorld(uint64 guid, MovementInfo const &move) {
   auto player = std::make_shared<Player>(guid, shared_from_this());
   player->SetPosition(move);
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
+}
 
+void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
+    uint64 guid, Character const &character, MovementInfo const &move) {
   // Now that the player is on the map, send create/update data and "after add" packets
   UpdateData update(_mapId);
   update.AddCreateObject(guid, TYPEID_PLAYER, move,
@@ -1504,7 +1006,9 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
       }
     });
   }
+}
 
+void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
   // Equivalent of Player::SendInitialPacketsAfterAddToMap: world states, then
   // ResetTimeSync + SendTimeSync (WorldSession.cpp in reference).
   SendInitWorldStates(_mapId, _zoneId);
@@ -1547,7 +1051,7 @@ void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
   uint16 const zoneIdDb =
       static_cast<uint16>(std::min<uint32_t>(_zoneId, 0xFFFFu));
   MovementInfo persistPos = _position;
-  if (!IsSaneWorldPosition(persistPos)) {
+  if (!WsIsSaneWorldPosition(persistPos)) {
     if (auto ch = _charService->GetCharacterByGuid(guid)) {
       persistPos.x = ch->GetX();
       persistPos.y = ch->GetY();
@@ -1910,258 +1414,6 @@ void WorldSession::HandleMoveTimeSkipped(WorldPacket &packet) {
   LOG_DEBUG("CMSG_MOVE_TIME_SKIPPED: Time: {}", time);
 }
 
-namespace {
-
-bool DecodeStandardChatOpcode(uint32 opcode, uint32 &outType) {
-  switch (opcode) {
-  case CMSG_MESSAGECHAT_SAY:
-    outType = CHAT_MSG_SAY;
-    return true;
-  case CMSG_MESSAGECHAT_YELL:
-    outType = CHAT_MSG_YELL;
-    return true;
-  case CMSG_MESSAGECHAT_CHANNEL:
-    outType = CHAT_MSG_CHANNEL;
-    return true;
-  case CMSG_MESSAGECHAT_WHISPER:
-    outType = CHAT_MSG_WHISPER;
-    return true;
-  case CMSG_MESSAGECHAT_GUILD:
-    outType = CHAT_MSG_GUILD;
-    return true;
-  case CMSG_MESSAGECHAT_OFFICER:
-    outType = CHAT_MSG_OFFICER;
-    return true;
-  case CMSG_MESSAGECHAT_AFK:
-    outType = CHAT_MSG_AFK;
-    return true;
-  case CMSG_MESSAGECHAT_DND:
-    outType = CHAT_MSG_DND;
-    return true;
-  case CMSG_MESSAGECHAT_EMOTE:
-    outType = CHAT_MSG_EMOTE;
-    return true;
-  case CMSG_MESSAGECHAT_PARTY:
-    outType = CHAT_MSG_PARTY;
-    return true;
-  case CMSG_MESSAGECHAT_RAID:
-    outType = CHAT_MSG_RAID;
-    return true;
-  case CMSG_MESSAGECHAT_BATTLEGROUND:
-    outType = CHAT_MSG_BATTLEGROUND;
-    return true;
-  case CMSG_MESSAGECHAT_RAID_WARNING:
-    outType = CHAT_MSG_RAID_WARNING;
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool DecodeAddonChatOpcode(uint32 opcode, uint32 &outType) {
-  switch (opcode) {
-  case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:
-    outType = CHAT_MSG_BATTLEGROUND;
-    return true;
-  case CMSG_MESSAGECHAT_ADDON_GUILD:
-    outType = CHAT_MSG_GUILD;
-    return true;
-  case CMSG_MESSAGECHAT_ADDON_OFFICER:
-    outType = CHAT_MSG_OFFICER;
-    return true;
-  case CMSG_MESSAGECHAT_ADDON_PARTY:
-    outType = CHAT_MSG_PARTY;
-    return true;
-  case CMSG_MESSAGECHAT_ADDON_RAID:
-    outType = CHAT_MSG_RAID;
-    return true;
-  case CMSG_MESSAGECHAT_ADDON_WHISPER:
-    outType = CHAT_MSG_WHISPER;
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool AddonLangAllowedForType(uint32 type) {
-  switch (type) {
-  case CHAT_MSG_PARTY:
-  case CHAT_MSG_RAID:
-  case CHAT_MSG_GUILD:
-  case CHAT_MSG_WHISPER:
-  case CHAT_MSG_BATTLEGROUND:
-    return true;
-  default:
-    return false;
-  }
-}
-
-void AppendSmsgMessageChatPayload(WorldPacket &data, uint32 chatType, uint32 lang,
-                                  uint64 senderGuid, uint64 receiverGuid,
-                                  std::string const &message,
-                                  std::string const *channelNameOptional) {
-  data.Append<uint8>(static_cast<uint8>(chatType));
-  int32 const langWire =
-      (lang == CHAT_LANG_ADDON) ? -1 : static_cast<int32>(lang);
-  data.Append<int32>(langWire);
-  data.Append<uint64>(senderGuid);
-  data.Append<uint32>(0);
-  if (channelNameOptional && chatType == CHAT_MSG_CHANNEL)
-    data.WriteString(*channelNameOptional);
-  data.Append<uint64>(receiverGuid);
-  data.Append<uint32>(static_cast<uint32>(message.length() + 1));
-  data.WriteString(message);
-  data.Append<uint8>(0);
-}
-
-/// Build 15595 uses **per-opcode** chat (`CMSG_MESSAGECHAT_SAY`, etc.); the first
-/// uint32 in the payload is **language only** (`Language` from SharedDefines.h).
-/// Do not reinterpret that field as `ChatMsg` — chat kind comes from the opcode.
-static uint32 ReadCataChatLanguageField(WorldPacket &packet) {
-  if (packet.GetReadPos() + sizeof(uint32) > packet.Size())
-    return LANG_UNIVERSAL;
-  return packet.Read<uint32>();
-}
-
-} // namespace
-
-void WorldSession::HandleAddonMessageChat(WorldPacket &packet) {
-  uint32 type = 0;
-  if (!DecodeAddonChatOpcode(packet.GetOpcode(), type)) {
-    LOG_DEBUG("HandleAddonMessageChat: unknown opcode 0x{:X}", packet.GetOpcode());
-    return;
-  }
-  // Reference: `WorldSession::HandleAddonMessagechatOpcode` — different bit layout
-  // (prefix lengths, broadcast to group/guild). Not required for baseline world
-  // bring-up; consume nothing (payload is self-contained per TCP frame).
-  (void)type;
-  LOG_DEBUG("CMSG_MESSAGECHAT_ADDON_* (type {}) — addon channel not implemented",
-            type);
-}
-
-void WorldSession::HandleMessageChat(WorldPacket &packet) {
-  uint32 type = 0;
-  uint32 lang = LANG_UNIVERSAL;
-  if (!DecodeStandardChatOpcode(packet.GetOpcode(), type)) {
-    LOG_DEBUG("HandleMessageChat: opcode 0x{:X} not a standard chat opcode",
-              packet.GetOpcode());
-    return;
-  }
-
-  if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND) {
-    lang = ReadCataChatLanguageField(packet);
-    // On the wire the language field is often serialized as int32; -1 is LANG_ADDON
-    // (0xFFFFFFFF). Real addon messages use CMSG_MESSAGECHAT_ADDON_* for most
-    // channels; for /say and /yell the 4.3.4 client still sends -1 as "default
-    // speech" in some builds. If we treat that as addon here, `AddonLangAllowed`
-    // fails and the player always sees "You may not speak that language."
-    if (lang == CHAT_LANG_ADDON && !AddonLangAllowedForType(type))
-      lang = LANG_UNIVERSAL;
-  }
-
-  std::string target;
-  std::string channel;
-  std::string message;
-
-  BitReader br(packet);
-  switch (type) {
-  case CHAT_MSG_SAY:
-  case CHAT_MSG_YELL:
-  case CHAT_MSG_EMOTE:
-  case CHAT_MSG_PARTY:
-  case CHAT_MSG_GUILD:
-  case CHAT_MSG_OFFICER:
-  case CHAT_MSG_RAID:
-  case CHAT_MSG_RAID_WARNING:
-  case CHAT_MSG_BATTLEGROUND: {
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    break;
-  }
-  case CHAT_MSG_WHISPER: {
-    uint32 const nameLen = br.ReadBits(10);
-    uint32 const textLen = br.ReadBits(9);
-    target = br.ReadString(nameLen);
-    message = br.ReadString(textLen);
-    break;
-  }
-  case CHAT_MSG_CHANNEL: {
-    uint32 const chLen = br.ReadBits(10);
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    channel = br.ReadString(chLen);
-    break;
-  }
-  case CHAT_MSG_AFK:
-  case CHAT_MSG_DND: {
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    break;
-  }
-  default:
-    return;
-  }
-
-  if (type != CHAT_MSG_AFK && type != CHAT_MSG_DND && message.empty())
-    return;
-
-  auto const chatPreview = [&message]() {
-    if (message.size() <= 96)
-      return message;
-    return message.substr(0, 96) + "...";
-  };
-  LOG_INFO("[CHAT] in opcode=0x{:X} legacy={} type={} lang={} msgLen={} msg='{}'",
-           packet.GetOpcode(), 0, type, lang,
-           message.size(), chatPreview());
-  LOG_INFO("[CHAT] knows lang={} => {}", lang,
-           PlayerKnowsLanguage(_knownSpells, lang) ? 1 : 0);
-
-  if (_commandService->IsCommand(message)) {
-    _commandService->ExecuteCommand(shared_from_this(), message);
-    return;
-  }
-
-  if (_playerGuid == 0)
-    return;
-
-  if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND) {
-    // Force deterministic spoken language for this character. Some clients can
-    // keep stale language selections in the normal chat box and send invalid
-    // language ids; using race default avoids client-side "cannot speak" spam.
-    lang = DefaultLanguageForRace(_playerRace);
-    if (lang == CHAT_LANG_ADDON) {
-      if (!AddonLangAllowedForType(type)) {
-        lang = DefaultLanguageForRace(_playerRace);
-      }
-    } else {
-      // Keep permissive behavior: if spell list is out of sync, do not block chat.
-      if (!PlayerKnowsLanguage(_knownSpells, lang))
-        lang = DefaultLanguageForRace(_playerRace);
-    }
-  }
-
-  // `receiverGuid` must be 0 for open channels (/say, /yell, party, guild, …).
-  // Sending the sender GUID twice makes the 4.3.4 client mis-parse the packet
-  // (language filter / scramble + "You cannot speak that language.").
-  // TODO: set real target GUID for `CHAT_MSG_WHISPER` when name→guid exists.
-  uint64 const receiverGuid = 0;
-
-  WorldPacket response(SMSG_MESSAGECHAT);
-  std::string const *chPtr =
-      (type == CHAT_MSG_CHANNEL && !channel.empty()) ? &channel : nullptr;
-  AppendSmsgMessageChatPayload(response, type, lang, _playerGuid, receiverGuid,
-                              message, chPtr);
-  LOG_INFO("[CHAT] out type={} lang={} receiverGuid={} msgLen={}", type, lang,
-           receiverGuid, message.size());
-  SendPacket(response);
-
-  if (type == CHAT_MSG_SAY || type == CHAT_MSG_YELL) {
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
-      map->BroadcastPacketToNearby(_playerGuid, response, false);
-    }
-  }
-}
-
 void WorldSession::HandleGossipHello(WorldPacket &packet) {
   const uint64 npcGuid = ReadClientTargetGuid(packet);
   if (auto host = WorldService::Instance().GetScriptHost()) {
@@ -2190,163 +1442,6 @@ void WorldSession::HandleRealmSplit(WorldPacket &packet) {
   SendPacket(data);
 }
 
-void WorldSession::HandleReadyForAccountDataTimes(WorldPacket & /*packet*/) {
-  SendAccountDataTimes(kGlobalAccountDataMask);
-}
-
-void WorldSession::ReloadGlobalAccountDataFromDb() {
-  _accountData = {};
-  _preLoginPerCharAccountDirtyMask = 0;
-  if (!_accountDataRepo || _accountId == 0)
-    return;
-  _accountDataRepo->LoadGlobal(_accountId, _accountData);
-}
-
-void WorldSession::ReloadCharacterAccountDataFromDb(uint32 characterGuid) {
-  if (!_accountDataRepo)
-    return;
-  _accountDataRepo->LoadCharacter(characterGuid, _accountData);
-}
-
-void WorldSession::HandleUpdateAccountData(WorldPacket &packet) {
-  uint32 const type = packet.Read<uint32>();
-  uint32 const timestamp = packet.Read<uint32>();
-  uint32 const decompressedSize = packet.Read<uint32>();
-
-  auto sendAck = [this, type]() {
-    WorldPacket ack(SMSG_UPDATE_ACCOUNT_DATA_COMPLETE);
-    ack.Append<uint32>(type);
-    ack.Append<uint32>(0);
-    SendPacket(ack);
-  };
-
-  if (type >= NUM_ACCOUNT_DATA_TYPES) {
-    return;
-  }
-
-  if (!_accountDataRepo || _accountId == 0) {
-    sendAck();
-    return;
-  }
-
-  if (decompressedSize == 0) {
-    _accountData[type].time = 0;
-    _accountData[type].data.clear();
-    if (IsGlobalAccountDataType(type))
-      _accountDataRepo->DeleteGlobal(_accountId, static_cast<uint8_t>(type));
-    else if (_activeCharacterGuid != 0)
-      _accountDataRepo->DeleteCharacter(_activeCharacterGuid,
-                                       static_cast<uint8_t>(type));
-    else if (IsPerCharacterAccountDataType(type))
-      _preLoginPerCharAccountDirtyMask |= (1u << type);
-    sendAck();
-    return;
-  }
-
-  if (decompressedSize > 0xFFFF) {
-    LOG_ERROR("CMSG_UPDATE_ACCOUNT_DATA: decompressedSize {} too large", decompressedSize);
-    return;
-  }
-
-  size_t const compressedOffset = packet.GetReadPos();
-  if (compressedOffset > packet.Size() ||
-      (packet.Size() - compressedOffset == 0)) {
-    LOG_ERROR("CMSG_UPDATE_ACCOUNT_DATA: missing compressed payload (size={}, "
-              "offset={})",
-              packet.Size(), compressedOffset);
-    return;
-  }
-  uLongf destLen = decompressedSize;
-  std::vector<uint8_t> dest(decompressedSize);
-  int const zrc = ::uncompress(
-      dest.data(), &destLen, packet.GetBuffer() + compressedOffset,
-      static_cast<uLong>(packet.Size() - compressedOffset));
-  if (zrc != Z_OK) {
-    LOG_ERROR("CMSG_UPDATE_ACCOUNT_DATA: zlib uncompress failed ({})", zrc);
-    return;
-  }
-  dest.resize(static_cast<size_t>(destLen));
-  std::string const adata(reinterpret_cast<char const *>(dest.data()),
-                          dest.size());
-
-  _accountData[type].time = timestamp;
-  _accountData[type].data = adata;
-  if (IsGlobalAccountDataType(type))
-    _accountDataRepo->UpsertGlobal(_accountId, static_cast<uint8_t>(type),
-                                   timestamp, adata);
-  else if (_activeCharacterGuid != 0)
-    _accountDataRepo->UpsertCharacter(_activeCharacterGuid,
-                                     static_cast<uint8_t>(type), timestamp, adata);
-  else if (IsPerCharacterAccountDataType(type))
-    _preLoginPerCharAccountDirtyMask |= (1u << type);
-  sendAck();
-}
-
-void WorldSession::HandleRequestAccountData(WorldPacket &packet) {
-  uint32 const type = packet.Read<uint32>();
-  if (type >= NUM_ACCOUNT_DATA_TYPES || !_accountDataRepo)
-    return;
-
-  AccountDataSlot const &slot = _accountData[type];
-  uint32 const size = static_cast<uint32>(slot.data.size());
-  uLongf destLen = ::compressBound(size);
-  std::vector<uint8_t> compressed(static_cast<size_t>(destLen));
-  if (size > 0) {
-    int const zc = ::compress(
-        compressed.data(), &destLen,
-        reinterpret_cast<unsigned char const *>(slot.data.data()),
-        static_cast<uLong>(size));
-    if (zc != Z_OK) {
-      LOG_ERROR("CMSG_REQUEST_ACCOUNT_DATA: zlib compress failed ({})", zc);
-      return;
-    }
-  } else {
-    destLen = 0;
-  }
-  compressed.resize(static_cast<size_t>(destLen));
-
-  WorldPacket data(SMSG_UPDATE_ACCOUNT_DATA);
-  data.Append<uint64>(_playerGuid);
-  data.Append<uint32>(type);
-  data.Append<uint32>(slot.time);
-  data.Append<uint32>(size);
-  if (!compressed.empty())
-    data.Append(compressed.data(), compressed.size());
-  SendPacket(data);
-}
-
-void WorldSession::HandleMovement(WorldPacket &packet) {
-  WorldOpcode const op = static_cast<WorldOpcode>(packet.GetOpcode());
-  MovementInfo move{};
-  bool const parsed = TryReadClientMovement(packet, op, move);
-
-  // After logout the client may still send movement while transitioning to character
-  // select. Echoing those packets breaks that transition (stuck loading).
-  if (_playerGuid == 0)
-    return;
-
-  bool const canPersistPosition =
-      parsed && IsTrustedPositionOpcode(op) && IsSaneWorldPosition(move);
-
-  if (canPersistPosition)
-    _position = move;
-
-  // Cataclysm expects the server to echo MSG_MOVE_* payloads for these opcodes.
-  // If parsing fails (wrong layout for a given opcode), still echo the raw bytes so
-  // the client state machine does not stall; only apply map/DB position when parsed.
-  if (IsClientMovementOpcode(op)) {
-    auto map = WorldService::Instance().GetMap(_mapId);
-    if (map) {
-      if (canPersistPosition)
-        map->UpdateObjectPosition(_playerGuid, move);
-      WorldPacket broadcast(packet.GetOpcode(), packet.Size());
-      broadcast.Append(packet.GetBuffer(), packet.Size());
-      map->BroadcastPacketToNearby(_playerGuid, broadcast);
-      SendPacket(broadcast);
-    }
-  }
-}
-
 // --- Server Packet Senders (SMSG) ---
 
 void WorldSession::SendClientCacheVersion(uint32 version) {
@@ -2358,18 +1453,6 @@ void WorldSession::SendClientCacheVersion(uint32 version) {
 void WorldSession::SendTutorialFlags() {
   WorldPacket data(SMSG_TUTORIAL_FLAGS);
   for (int i = 0; i < 8; ++i) data.Append<uint32>(0xFFFFFFFF);
-  SendPacket(data);
-}
-
-void WorldSession::SendAccountDataTimes(uint32 mask) {
-  WorldPacket data(SMSG_ACCOUNT_DATA_TIMES);
-  data.Append<uint32>(static_cast<uint32>(std::time(nullptr)));
-  data.Append<uint8>(1);
-  data.Append<uint32>(mask);
-  for (int i = 0; i < NUM_ACCOUNT_DATA_TYPES; ++i) {
-    if (mask & (1u << i))
-      data.Append<uint32>(_accountData[static_cast<size_t>(i)].time);
-  }
   SendPacket(data);
 }
 
@@ -2592,24 +1675,6 @@ void WorldSession::SendInitialFactions() {
 
 void WorldSession::SendLoginVerifyWorld(uint32 mapId, float x, float y, float z, float o) {
   SendPacket(new Firelands::WorldPackets::Login::VerifyWorld(mapId, x, y, z, o));
-}
-
-// --- Helpers ---
-
-void WorldSession::SendNotification(const std::string &message) {
-  WorldPacket response(SMSG_MESSAGECHAT);
-  AppendSmsgMessageChatPayload(response, CHAT_MSG_SYSTEM, LANG_UNIVERSAL, 0, 0,
-                               message, nullptr);
-  SendPacket(response);
-}
-
-void WorldSession::TeleportTo(uint32 /*mapId*/, float x, float y, float z, float orientation) {
-  _position.x = x;
-  _position.y = y;
-  _position.z = z;
-  _position.orientation = orientation;
-  SendNotification("Teleported to: " + std::to_string(x) + ", " +
-                   std::to_string(y) + ", " + std::to_string(z));
 }
 
 } // namespace Firelands

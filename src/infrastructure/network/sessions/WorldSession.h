@@ -28,6 +28,8 @@
 
 namespace Firelands {
 
+class Character;
+
 using boost::asio::ip::tcp;
 
 /// One row from the zlib-compressed secure-addon block in CMSG_AUTH_SESSION (4.3.4).
@@ -69,7 +71,6 @@ public:
   uint64 GetGuid() const override { return _playerGuid; }
   const MovementInfo &GetPosition() const { return _position; }
 
-private:
 private:
   // Core Network Logic
   void DoRead();
@@ -162,6 +163,18 @@ private:
   /// every CMSG_TIME_SYNC_RESP (that floods the client and breaks map loading).
   void SchedulePeriodicTimeSync();
   void CancelPeriodicTimeSync();
+
+  /// CMSG_PLAYER_LOGIN sub-steps (keeps `HandlePlayerLogin` readable).
+  void LoginReadPackedPlayerGuid(WorldPacket &packet, uint64 &outGuid);
+  void LoginSendAccountDataAndPreMapPackets(uint64 guid, Character const &character);
+  void LoginBuildKnownSpellsAndSendSpellbook(Character const &character);
+  void LoginSendMotdAndMetaPackets();
+  void LoginResolveMapPosition(uint64 guid, Character const &character,
+                                MovementInfo &outMove);
+  void LoginSpawnInWorld(uint64 guid, MovementInfo const &move);
+  void LoginSendCreateUpdatesAndMutualVisibility(uint64 guid, Character const &character,
+                                                 MovementInfo const &move);
+  void LoginFinalizeWorldEntry(uint64 guid);
 
   tcp::socket _socket;
   std::shared_ptr<AuthService> _authService;

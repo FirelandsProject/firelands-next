@@ -6,6 +6,11 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlPlayerCreateInfoRepository.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
+    network/sessions/worldsession/WorldSessionDispatcher.cpp
+    network/sessions/worldsession/WorldSessionAccountDataHandlers.cpp
+    network/sessions/worldsession/WorldSessionAuthHandlers.cpp
+    network/sessions/worldsession/WorldSessionChatHandlers.cpp
+    network/sessions/worldsession/WorldSessionMovementHandlers.cpp
     network/asio/AsyncNetworkServer.cpp
     network/realm_link/RealmLiveRegistry.cpp
     network/realm_link/RealmLinkSession.cpp

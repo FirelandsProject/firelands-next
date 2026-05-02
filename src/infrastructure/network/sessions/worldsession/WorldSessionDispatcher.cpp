@@ -1,0 +1,190 @@
+#include <infrastructure/network/sessions/WorldSession.h>
+#include <shared/Logger.h>
+
+namespace Firelands {
+
+void WorldSession::ProcessPacket(WorldPacket &packet) {
+  uint32 opcode = packet.GetOpcode();
+  LOG_INFO("[CMSG] {} payload={} crypt={}", packet.GetOpcodeName(),
+           packet.Size(), _crypt.IsInitialized());
+
+  switch (opcode) {
+  case CMSG_AUTH_SESSION:
+    HandleAuthSession(packet);
+    break;
+  case CMSG_CHAR_CREATE:
+    HandleCharCreate(packet);
+    break;
+  case CMSG_CHAR_DELETE:
+    HandleCharDelete(packet);
+    break;
+  case CMSG_CHAR_ENUM:
+    HandleCharEnum(packet);
+    break;
+  case MSG_QUERY_NEXT_MAIL_TIME:
+    HandleQueryNextMailTime(packet);
+    break;
+  case CMSG_CALENDAR_GET_NUM_PENDING:
+    HandleCalendarGetNumPending(packet);
+    break;
+  case CMSG_ZONEUPDATE:
+    HandleZoneUpdate(packet);
+    break;
+  case CMSG_SET_ACTIVE_MOVER:
+  case CMSG_SET_ACTIONBAR_TOGGLES:
+  case CMSG_REQUEST_RAID_INFO:
+  case CMSG_GMTICKET_GETTICKET:
+  case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
+  case CMSG_BATTLEFIELD_STATUS:
+  case CMSG_QUERY_BATTLEFIELD_STATE:
+  case CMSG_JOIN_CHANNEL:
+  case CMSG_CONTACT_LIST:
+  case CMSG_SAVE_CUF_PROFILES:
+  case CMSG_VOICE_SESSION_ENABLE:
+  case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
+  case CMSG_REQUEST_CATEGORY_COOLDOWNS:
+  case CMSG_DB_QUERY_BULK:
+  case CMSG_WORLD_STATE_UI_TIMER_UPDATE:
+    // Client probes features we haven't implemented yet. For stability we safely
+    // ignore these requests (no side effects, no disconnect).
+    break;
+  case CMSG_LFG_GET_STATUS:
+    HandleLfgGetStatus(packet);
+    break;
+  case CMSG_LFG_LOCK_INFO_REQUEST:
+    HandleLfgLockInfoRequest(packet);
+    break;
+  case CMSG_GUILD_BANK_REMAINING_WITHDRAW_MONEY_QUERY:
+    HandleGuildBankRemainingWithdrawMoneyQuery(packet);
+    break;
+  case CMSG_REQUEST_CEMETERY_LIST:
+    HandleRequestCemeteryList(packet);
+    break;
+  case CMSG_LOADING_SCREEN_NOTIFY:
+    // Simply acknowledge loading screen progress
+    break;
+  case CMSG_LOG_DISCONNECT:
+    Close();
+    break;
+  case CMSG_MESSAGECHAT_SAY:
+  case CMSG_MESSAGECHAT_YELL:
+  case CMSG_MESSAGECHAT_CHANNEL:
+  case CMSG_MESSAGECHAT_WHISPER:
+  case CMSG_MESSAGECHAT_GUILD:
+  case CMSG_MESSAGECHAT_OFFICER:
+  case CMSG_MESSAGECHAT_AFK:
+  case CMSG_MESSAGECHAT_DND:
+  case CMSG_MESSAGECHAT_EMOTE:
+  case CMSG_MESSAGECHAT_PARTY:
+  case CMSG_MESSAGECHAT_RAID:
+  case CMSG_MESSAGECHAT_BATTLEGROUND:
+  case CMSG_MESSAGECHAT_RAID_WARNING:
+    HandleMessageChat(packet);
+    break;
+  case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:
+  case CMSG_MESSAGECHAT_ADDON_GUILD:
+  case CMSG_MESSAGECHAT_ADDON_OFFICER:
+  case CMSG_MESSAGECHAT_ADDON_PARTY:
+  case CMSG_MESSAGECHAT_ADDON_RAID:
+  case CMSG_MESSAGECHAT_ADDON_WHISPER:
+    HandleAddonMessageChat(packet);
+    break;
+  case CMSG_CAST_SPELL:
+    HandleCastSpell(packet);
+    break;
+  case CMSG_GOSSIP_HELLO:
+    HandleGossipHello(packet);
+    break;
+  case CMSG_GOSSIP_SELECT_OPTION:
+    HandleGossipSelectOption(packet);
+    break;
+  case CMSG_NAME_QUERY:
+    HandleNameQuery(packet);
+    break;
+  case CMSG_QUERY_TIME:
+    HandleQueryTime(packet);
+    break;
+  case CMSG_PLAYED_TIME:
+    HandlePlayedTime(packet);
+    break;
+  case CMSG_MOVE_TIME_SKIPPED:
+    HandleMoveTimeSkipped(packet);
+    break;
+  case CMSG_SET_SELECTION:
+  case CMSG_AREA_TRIGGER:
+  case CMSG_STAND_STATE_CHANGE:
+  case CMSG_SET_SHEATHED:
+    // Target selection updates are client-side/UI-only for now.
+    break;
+  case CMSG_PING:
+    HandlePing(packet);
+    break;
+  case CMSG_PLAYER_LOGIN:
+    HandlePlayerLogin(packet);
+    break;
+  case CMSG_LOGOUT_REQUEST:
+    HandleLogoutRequest(packet);
+    break;
+  case CMSG_LOGOUT_CANCEL:
+    HandleLogoutCancel(packet);
+    break;
+  case CMSG_READY_FOR_ACCOUNT_DATA_TIMES:
+    HandleReadyForAccountDataTimes(packet);
+    break;
+  case CMSG_REQUEST_ACCOUNT_DATA:
+    HandleRequestAccountData(packet);
+    break;
+  case CMSG_REALM_SPLIT:
+    HandleRealmSplit(packet);
+    break;
+  case CMSG_TIME_SYNC_RESP:
+    HandleTimeSyncResp(packet);
+    break;
+  case CMSG_UPDATE_ACCOUNT_DATA:
+    HandleUpdateAccountData(packet);
+    break;
+  case CMSG_SWAP_INV_ITEM:
+    HandleSwapInvItem(packet);
+    break;
+  case CMSG_SWAP_ITEM:
+    HandleSwapItem(packet);
+    break;
+  case CMSG_CANCEL_TRADE:
+    // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.
+    break;
+  case CMSG_VIOLENCE_LEVEL:
+    // Ignore violence level settings
+    break;
+  case MSG_MOVE_HEARTBEAT:
+  case MSG_MOVE_START_FORWARD:
+  case MSG_MOVE_START_BACKWARD:
+  case MSG_MOVE_START_STRAFE_LEFT:
+  case MSG_MOVE_START_STRAFE_RIGHT:
+  case MSG_MOVE_STOP:
+  case MSG_MOVE_STOP_STRAFE:
+  case MSG_MOVE_START_ASCEND:
+  case MSG_MOVE_START_DESCEND:
+  case MSG_MOVE_STOP_ASCEND:
+  case MSG_MOVE_START_TURN_LEFT:
+  case MSG_MOVE_START_TURN_RIGHT:
+  case MSG_MOVE_STOP_TURN:
+  case MSG_MOVE_START_PITCH_UP:
+  case MSG_MOVE_START_PITCH_DOWN:
+  case MSG_MOVE_STOP_PITCH:
+  case MSG_MOVE_SET_RUN_MODE:
+  case MSG_MOVE_SET_WALK_MODE:
+  case MSG_MOVE_START_SWIM:
+  case MSG_MOVE_STOP_SWIM:
+  case MSG_MOVE_JUMP:
+  case MSG_MOVE_SET_FACING:
+  case MSG_MOVE_FALL_LAND:
+    HandleMovement(packet);
+    break;
+  default:
+    LOG_DEBUG("[PACKET] Unknown/unhandled opcode: 0x{:04X} (size: {})", opcode,
+              packet.Size());
+    break;
+  }
+}
+
+} // namespace Firelands
