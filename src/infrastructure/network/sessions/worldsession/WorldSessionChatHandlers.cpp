@@ -1,6 +1,7 @@
 #include <application/ports/IMapNotifier.h>
 #include <application/services/WorldService.h>
 #include <domain/models/Chat.h>
+#include <application/ports/ICommandSession.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <shared/game/ChatLanguages.h>
 #include <shared/Logger.h>
@@ -215,7 +216,8 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
            PlayerKnowsLanguage(_knownSpells, lang) ? 1 : 0);
 
   if (_commandService->IsCommand(message)) {
-    _commandService->ExecuteCommand(shared_from_this(), message);
+    _commandService->ExecuteCommand(
+        std::static_pointer_cast<ICommandSession>(shared_from_this()), message);
     return;
   }
 

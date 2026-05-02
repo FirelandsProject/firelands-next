@@ -10,6 +10,7 @@
 #include <shared/Banner.h>
 #include <shared/Logger.h>
 
+#include "AuthFtxuiConsole.h"
 #include <application/services/AuthService.h>
 #include <application/services/RealmListService.h>
 #include <chrono>
@@ -48,7 +49,17 @@ int main(int argc, char **argv) {
         "Log.StickyBanner is enabled but stdout is not a TTY (pipe/redirect); "
         "using normal console layout.");
   }
-  PrintBanner(BannerType::Auth, stickyWant);
+  bool consoleEnabledForBanner =
+      config.GetNested<bool>({"Console", "Enabled"}, true);
+  if (consoleEnabledForBanner && !StdoutIsInteractiveTerminal()) {
+    consoleEnabledForBanner = false;
+  }
+  const bool useTerminalUiForBanner =
+      consoleEnabledForBanner &&
+      config.GetNested<bool>({"Console", "Tui"}, true);
+  if (!useTerminalUiForBanner) {
+    PrintBanner(BannerType::Auth, stickyWant);
+  }
 
   // Update logging with config values if needed
   LogLevel consoleLevel = config.GetNested<LogLevel>({"Log", "Level"}, LogLevel::Info);
@@ -183,13 +194,35 @@ int main(int argc, char **argv) {
                  restPort);
       }
 
-      // Server Loop
-      while (true) {
-        authServer.Update();
-        if (realmLinkServer)
-          realmLinkServer->Update();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      bool consoleEnabled =
+          config.GetNested<bool>({"Console", "Enabled"}, true);
+      if (consoleEnabled && !StdoutIsInteractiveTerminal()) {
+        LOG_INFO("Console.Enabled is true but stdout is not a TTY; using plain "
+                 "log loop (no TUI).");
+        consoleEnabled = false;
       }
+      const bool useTerminalUi =
+          consoleEnabled && config.GetNested<bool>({"Console", "Tui"}, true);
+
+      if (useTerminalUi) {
+        LOG_INFO("Terminal UI (FTXUI): logs only; press Q or Ctrl+C to stop.");
+        RunAuthFtxuiConsole(authServer, realmLinkServer.get());
+      } else {
+        while (true) {
+          authServer.Update();
+          if (realmLinkServer) {
+            realmLinkServer->Update();
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+      }
+
+      restServer.Stop();
+      authServer.Stop();
+      if (realmLinkServer) {
+        realmLinkServer->Stop();
+      }
+      LOG_INFO("Authentication server stopped.");
     } else {
       LOG_CRITICAL("Failed to start Authentication Server.");
       Logger::Shutdown();

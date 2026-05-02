@@ -4,6 +4,17 @@ Network:
   BindAddress: "0.0.0.0"
   Port: 8085
 
+# Interactive stdin on the world process (same commands as in-game: .help, etc.).
+# Disabled automatically when stdout is not a TTY (e.g. Docker without -t).
+Console:
+  Enabled: true
+  # Full-screen TUI (FTXUI): scrollable log + fixed bottom command bar. If false,
+  # falls back to plain stdin (StyledPrompt applies there). TTY required.
+  # Tip: set Log.StickyBanner to false while using TUI (both fight for the terminal).
+  Tui: true
+  # Reserved full-width command row (stdin mode only); NO_COLOR disables.
+  StyledPrompt: true
+
 # Persistent outbound TCP to auth (realm online / instant offline on crash).
 # Must match authserver.yaml RealmLink.Token and realmlist id.
 RealmLink:

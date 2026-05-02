@@ -11,6 +11,13 @@
 #include <thread>
 #include <vector>
 
+#if defined(_WIN32)
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#include <sys/time.h>
+#endif
+
 namespace Firelands {
 
 namespace {
@@ -25,6 +32,30 @@ void appendU32Le(std::vector<uint8> &out, uint32_t v) {
 void appendU16Le(std::vector<uint8> &out, uint16_t v) {
   out.push_back(static_cast<uint8>(v & 0xFF));
   out.push_back(static_cast<uint8>((v >> 8) & 0xFF));
+}
+
+/// Lets the realm-link thread observe `stop` between blocking I/O calls instead
+/// of wedging `main` on `join()` (e.g. auth never sends the handshake byte).
+void applyTcpIoTimeouts(boost::asio::ip::tcp::socket &socket) {
+#if defined(_WIN32)
+  DWORD const ms = 5000;
+  SOCKET const h = socket.native_handle();
+  if (h != INVALID_SOCKET) {
+    (void)::setsockopt(h, SOL_SOCKET, SO_RCVTIMEO,
+                       reinterpret_cast<char const *>(&ms), sizeof(ms));
+    (void)::setsockopt(h, SOL_SOCKET, SO_SNDTIMEO,
+                       reinterpret_cast<char const *>(&ms), sizeof(ms));
+  }
+#else
+  timeval tv {};
+  tv.tv_sec = 5;
+  tv.tv_usec = 0;
+  int const fd = socket.native_handle();
+  if (fd >= 0) {
+    (void)::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    (void)::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  }
+#endif
 }
 
 } // namespace
@@ -55,6 +86,7 @@ void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
       tcp::resolver resolver(io);
       auto endpoints = resolver.resolve(host, std::to_string(port));
       boost::asio::connect(socket, endpoints);
+      applyTcpIoTimeouts(socket);
 
       std::vector<uint8> handshake;
       appendU32Le(handshake, kRealmLinkMagic);
@@ -80,7 +112,13 @@ void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
                realmId);
 
       while (!stop) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        // Wake at least every 250ms so shutdown does not wait on a 10s sleep.
+        for (int i = 0; i < 40 && !stop; ++i) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        if (stop) {
+          break;
+        }
         uint8_t ping = kRealmLinkPing;
         boost::asio::write(socket, boost::asio::buffer(&ping, 1));
       }

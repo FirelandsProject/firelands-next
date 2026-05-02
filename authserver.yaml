@@ -1,5 +1,10 @@
 # Firelands Auth Server Configuration
 
+# Full-screen log TUI (FTXUI): same look as world, no command line. TTY required.
+Console:
+  Enabled: true
+  Tui: true
+
 Network:
   BindAddress: "0.0.0.0"
   Port: 3724

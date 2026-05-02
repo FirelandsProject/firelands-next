@@ -19,6 +19,8 @@
 #include <memory>
 #include <shared/Banner.h>
 #include <shared/Config.h>
+#include "WorldFtxuiConsole.h"
+#include "WorldInteractiveConsole.h"
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/dbc/SpellDbc.h>
 #include <shared/Logger.h>
@@ -52,7 +54,19 @@ int main(int argc, char **argv) {
         "Log.StickyBanner is enabled but stdout is not a TTY (pipe/redirect); "
         "using normal console layout.");
   }
-  PrintBanner(BannerType::World, stickyWant);
+  // When Console.Tui is on, the FTXUI screen owns the banner; skip stdout art
+  // so startup does not flash plain terminal before fullscreen.
+  bool consoleEnabledForBanner =
+      config.GetNested<bool>({"Console", "Enabled"}, true);
+  if (consoleEnabledForBanner && !StdoutIsInteractiveTerminal()) {
+    consoleEnabledForBanner = false;
+  }
+  const bool useTerminalUiForBanner =
+      consoleEnabledForBanner &&
+      config.GetNested<bool>({"Console", "Tui"}, true);
+  if (!useTerminalUiForBanner) {
+    PrintBanner(BannerType::World, stickyWant);
+  }
 
   // Re-initialize logger with config values
   Logger::Shutdown();
@@ -185,10 +199,44 @@ int main(int argc, char **argv) {
     if (worldServer.Start(bindIp, port)) {
       LOG_INFO("World Server listening on {}:{}", bindIp, port);
 
-      // Server Loop
-      while (true) {
-        worldServer.Update();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      bool consoleEnabled =
+          config.GetNested<bool>({"Console", "Enabled"}, true);
+      if (consoleEnabled && !StdoutIsInteractiveTerminal()) {
+        LOG_INFO("Console.Enabled is true but stdin is not a TTY; interactive "
+                 "console disabled.");
+        consoleEnabled = false;
+      }
+
+      WorldInteractiveConsole interactiveConsole(commandService);
+      const bool styledConsolePrompt =
+          config.GetNested<bool>({"Console", "StyledPrompt"}, true);
+      const bool useTerminalUi =
+          consoleEnabled &&
+          config.GetNested<bool>({"Console", "Tui"}, true);
+
+      if (useTerminalUi) {
+        interactiveConsole.Start(consoleEnabled, false, false);
+        LOG_INFO("Terminal UI (FTXUI): logs above, command input fixed below.");
+        RunWorldFtxuiConsole(worldServer, interactiveConsole);
+      } else if (consoleEnabled) {
+        interactiveConsole.Start(consoleEnabled, styledConsolePrompt, true);
+        LOG_INFO("Interactive console (stdin); type .help or quit to exit.");
+        while (!interactiveConsole.ShutdownRequested()) {
+          worldServer.Update();
+          interactiveConsole.ProcessPending();
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+      } else {
+        while (true) {
+          worldServer.Update();
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+      }
+      stopRealmLink.store(true);
+      LOG_INFO("World server main loop stopped.");
+      worldServer.Stop();
+      if (realmLinkThread && realmLinkThread->joinable()) {
+        realmLinkThread->join();
       }
     } else {
       LOG_CRITICAL("Failed to start World Server.");

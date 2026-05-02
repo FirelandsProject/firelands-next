@@ -3,6 +3,7 @@
 
 #include <application/ports/IAuthSession.h>
 #include <application/ports/ICommandService.h>
+#include <application/ports/ICommandSession.h>
 #include <application/ports/IMapNotifier.h>
 #include <application/services/AuthService.h>
 #include <application/services/CharacterService.h>
@@ -44,6 +45,7 @@ class IRealmRepository;
 
 class WorldSession : public IAuthSession,
                      public IMapNotifier,
+                     public ICommandSession,
                      public std::enable_shared_from_this<WorldSession> {
 public:
   explicit WorldSession(
@@ -67,13 +69,15 @@ public:
   std::string GetIpAddress() const override;
 
   // Command Support
-  void SendNotification(const std::string &message);
+  void SendNotification(const std::string &message) override;
   void TeleportTo(uint32 mapId, float x, float y, float z,
-                  float orientation = 0.0f);
+                  float orientation = 0.0f) override;
 
   uint64 GetGuid() const override { return _playerGuid; }
-  const MovementInfo &GetPosition() const { return _position; }
-  AccessLevel GetAccountAccessLevel() const { return _accountAccessLevel; }
+  const MovementInfo &GetPosition() const override { return _position; }
+  AccessLevel GetAccountAccessLevel() const override {
+    return _accountAccessLevel;
+  }
 
 private:
   // Core Network Logic

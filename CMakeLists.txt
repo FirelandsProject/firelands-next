@@ -99,6 +99,17 @@ set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL       OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(spdlog)
 
+# 2.2 FTXUI (world server full-screen console UI)
+FetchContent_Declare(
+    ftxui
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
+    GIT_TAG v5.0.0
+)
+set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(ftxui)
+
 # 3. MariaDB Connector/C
 FetchContent_Declare(
     mariadb-connector-c
@@ -176,16 +187,23 @@ add_subdirectory(tools/vmap)
 add_subdirectory(tests)
 
 # Main Executables
-add_executable(auth src/auth/main.cpp)
+add_executable(auth src/auth/main.cpp src/auth/AuthFtxuiConsole.cpp)
+set_source_files_properties(src/auth/AuthFtxuiConsole.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_precompile_headers(auth PRIVATE ${PROJECT_PCH_HEADERS})
-target_link_libraries(auth 
+target_link_libraries(auth
     PRIVATE FirelandsInfrastructure
+    PRIVATE ftxui::component
 )
 
-add_executable(world src/world/main.cpp)
+add_executable(world src/world/main.cpp src/world/WorldInteractiveConsole.cpp
+    src/world/WorldFtxuiConsole.cpp)
+set_source_files_properties(src/world/WorldFtxuiConsole.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_precompile_headers(world PRIVATE ${PROJECT_PCH_HEADERS})
-target_link_libraries(world 
+target_link_libraries(world
     PRIVATE FirelandsInfrastructure
+    PRIVATE ftxui::component
 )
 
 # Merge sql/*.sql into sql/merged/<database>.sql (one file per detected DB)

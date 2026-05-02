@@ -1,5 +1,6 @@
 #include "CommandService.h"
-#include <infrastructure/network/sessions/WorldSession.h>
+#include <application/ports/ICommandSession.h>
+#include <shared/network/MovementInfo.h>
 #include <iterator>
 #include <sstream>
 
@@ -22,10 +23,10 @@ bool CommandService::IsCommand(const std::string &message) const {
   return !message.empty() && (message[0] == '.' || message[0] == '!');
 }
 
-bool CommandService::ExecuteCommand(std::shared_ptr<WorldSession> session,
+bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
                                     const std::string &message,
                                     PrivilegeOrigin origin) {
-  if (!IsCommand(message))
+  if (!session || !IsCommand(message))
     return false;
 
   std::string cmdStr = message.substr(1);
@@ -59,7 +60,7 @@ bool CommandService::ExecuteCommand(std::shared_ptr<WorldSession> session,
   return false;
 }
 
-bool CommandService::HandleGps(std::shared_ptr<WorldSession> session,
+bool CommandService::HandleGps(std::shared_ptr<ICommandSession> session,
                                const std::vector<std::string> &) {
   const auto &pos = session->GetPosition();
   std::string msg = "Current Position: X=" + std::to_string(pos.x) +
@@ -70,7 +71,7 @@ bool CommandService::HandleGps(std::shared_ptr<WorldSession> session,
   return true;
 }
 
-bool CommandService::HandleTele(std::shared_ptr<WorldSession> session,
+bool CommandService::HandleTele(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &args) {
   try {
     if (args.size() < 3) {
@@ -92,10 +93,26 @@ bool CommandService::HandleTele(std::shared_ptr<WorldSession> session,
   }
 }
 
-bool CommandService::HandleHelp(std::shared_ptr<WorldSession> session,
+bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &) {
+  // Several short lines read better in-game and in the world console.
+  session->SendNotification("--- Firelands staff commands ---");
   session->SendNotification(
-      "Commands: .help | .gps (moderator+) | .tele (game master+)");
+      "Every command starts with '.' or '!' (example: .help or !help).");
+  session->SendNotification(
+      ".help  Shows this help. No special rank required.");
+  session->SendNotification(
+      ".gps   Prints your current position (X, Y, Z, orientation). "
+      "Requires moderator (or higher).");
+  session->SendNotification(
+      ".tele <x> <y> <z> [mapId]  Teleports your character. "
+      "mapId is optional (default 0). Requires game master (or higher).");
+  session->SendNotification(
+      "Ranks: Player < Moderator < Game Master < Administrator. "
+      "The world server console runs commands with full privileges.");
+  session->SendNotification(
+      "From the world console (TUI or stdin), type quit, exit, .quit, or "
+      ".exit to shut down the server process.");
   return true;
 }
 
