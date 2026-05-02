@@ -1,5 +1,6 @@
 add_library(FirelandsShared STATIC 
     Config.cpp
+    system/SystemClipboard.cpp
     dbc/DbcReader.cpp
     dbc/CharStartOutfitDbc.cpp
     dbc/LanguagesDbc.cpp
@@ -24,3 +25,8 @@ target_link_libraries(FirelandsShared PUBLIC
     nlohmann_json::nlohmann_json
     yaml-cpp
 )
+
+if(WIN32)
+  # Propagate to executables that link FirelandsShared (clipboard Win32 APIs).
+  target_link_libraries(FirelandsShared PUBLIC user32)
+endif()

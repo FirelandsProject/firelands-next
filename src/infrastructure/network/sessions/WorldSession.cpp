@@ -56,7 +56,13 @@ WorldSession::WorldSession(
       _gmTicketService(std::move(gmTicketService)), _serverSeed(0),
       _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()) {}
 
-WorldSession::~WorldSession() { UnregisterFromOnlineCharacterRegistryIfNeeded(); }
+WorldSession::~WorldSession() {
+  if (_playerGuid != 0) {
+    FinalizeWorldExit();
+  } else {
+    UnregisterFromOnlineCharacterRegistryIfNeeded();
+  }
+}
 
 void WorldSession::Start() {
   LOG_INFO("WorldSession started for {}", GetIpAddress());
@@ -193,10 +199,16 @@ void WorldSession::UnregisterFromOnlineCharacterRegistryIfNeeded() {
 }
 
 void WorldSession::Close() {
-  UnregisterFromOnlineCharacterRegistryIfNeeded();
+  if (_playerGuid != 0) {
+    LOG_INFO("Closing WorldSession for {} (saving and removing from world)",
+             GetIpAddress());
+    FinalizeWorldExit();
+  } else {
+    UnregisterFromOnlineCharacterRegistryIfNeeded();
+  }
   CancelPeriodicTimeSync();
   if (_socket.is_open()) {
-    LOG_INFO("Closing WorldSession for {}", GetIpAddress());
+    LOG_INFO("Closing WorldSession for {} (socket)", GetIpAddress());
     _socket.close();
   }
 }
@@ -705,24 +717,14 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
     PublishGmMovementPacketsIfInWorld();
 }
 
-void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
-  if (_playerGuid == 0) {
-    LOG_WARN("CMSG_LOGOUT_REQUEST ignored (not in world)");
+void WorldSession::FinalizeWorldExit() {
+  if (_playerGuid == 0)
     return;
-  }
 
   CancelPeriodicTimeSync();
 
   uint64 const guid = _playerGuid;
   uint32 const mapId = _mapId;
-
-  // Trinity TCPP order: uint32 reason (0 = OK), uint8 instantLogout.
-  // We always allow instant logout (no combat/rest model yet); client returns to
-  // character selection after SMSG_LOGOUT_COMPLETE.
-  WorldPacket response(SMSG_LOGOUT_RESPONSE, 5);
-  response.Append<uint32>(0); // reason
-  response.Append<uint8>(1);  // instant logout
-  SendPacket(response);
 
   uint32 const charGuidLow = static_cast<uint32>(guid);
   uint16 const mapIdDb =
@@ -770,6 +772,24 @@ void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
   _zoneId = 0;
   _timeSyncNextCounter = 0;
   _position = MovementInfo{};
+}
+
+void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
+  if (_playerGuid == 0) {
+    LOG_WARN("CMSG_LOGOUT_REQUEST ignored (not in world)");
+    return;
+  }
+
+  // Trinity TCPP order: uint32 reason (0 = OK), uint8 instantLogout.
+  // We always allow instant logout (no combat/rest model yet); client returns to
+  // character selection after SMSG_LOGOUT_COMPLETE.
+  WorldPacket response(SMSG_LOGOUT_RESPONSE, 5);
+  response.Append<uint32>(0); // reason
+  response.Append<uint8>(1);  // instant logout
+  SendPacket(response);
+
+  uint64 const guid = _playerGuid;
+  FinalizeWorldExit();
 
   WorldPacket complete(SMSG_LOGOUT_COMPLETE, 0);
   SendPacket(complete);

@@ -1,12 +1,5 @@
-CREATE DATABASE IF NOT EXISTS `firelands_characters`;
-USE `firelands_characters`;
-
--- Per-character account data (bindings/macros/config per char), Trinity-style.
-CREATE TABLE IF NOT EXISTS `character_account_data` (
-  `guid` int(10) unsigned NOT NULL,
-  `type` tinyint(3) unsigned NOT NULL,
-  `time` int(10) unsigned NOT NULL DEFAULT '0',
-  `data` blob NOT NULL,
-  PRIMARY KEY (`guid`,`type`),
-  CONSTRAINT `fk_character_account_data_guid` FOREIGN KEY (`guid`) REFERENCES `characters` (`guid`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Legacy filename kept for migration bookkeeping.
+-- `character_account_data` is created in `characters_schema.sql` (after `characters`,
+-- so the FK is valid). This file used to run *before* `characters_schema.sql` in
+-- lexicographic order and failed on the FK; do not recreate the table here.
+SELECT 1;

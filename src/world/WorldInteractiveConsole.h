@@ -32,6 +32,9 @@ public:
   void ProcessPending();
   bool ShutdownRequested() const { return _shutdownRequested.load(); }
 
+  /// Stops the world main loop (same effect as `quit` / `.exit`).
+  void RequestShutdown();
+
 private:
   void ReaderLoop();
 

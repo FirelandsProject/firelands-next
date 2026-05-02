@@ -7,6 +7,10 @@ namespace Firelands {
 
 namespace {
 
+bool IsMissingTableSqlError(sql::SQLException &e) {
+  return e.getErrorCode() == 1146;
+}
+
 std::string ReadBlobAsString(sql::ResultSet &rs, char const *column) {
   auto stream = rs.getBlob(column);
   if (!stream)
@@ -69,7 +73,14 @@ void MySqlAccountDataRepository::LoadCharacter(
       slots[type].data = ReadBlobAsString(*res, "data");
     }
   } catch (sql::SQLException &e) {
-    LOG_ERROR("LoadCharacter character_account_data: {}", e.what());
+    if (IsMissingTableSqlError(e)) {
+      LOG_WARN(
+          "character_account_data table missing (run world migrations / apply "
+          "sql/z_ensure_character_account_data.sql): {}",
+          e.what());
+    } else {
+      LOG_ERROR("LoadCharacter character_account_data: {}", e.what());
+    }
   }
 }
 
@@ -112,7 +123,14 @@ void MySqlAccountDataRepository::UpsertCharacter(uint32_t characterGuid,
     stmnt->setBlob(4, &blobStream, static_cast<int64_t>(data.size()));
     stmnt->executeUpdate();
   } catch (sql::SQLException &e) {
-    LOG_ERROR("UpsertCharacter character_account_data: {}", e.what());
+    if (IsMissingTableSqlError(e)) {
+      LOG_WARN(
+          "character_account_data missing; bindings/macros not saved until "
+          "sql/z_ensure_character_account_data.sql is applied: {}",
+          e.what());
+    } else {
+      LOG_ERROR("UpsertCharacter character_account_data: {}", e.what());
+    }
   }
 }
 
@@ -142,7 +160,12 @@ void MySqlAccountDataRepository::DeleteCharacter(uint32_t characterGuid,
     stmnt->setUInt(2, type);
     stmnt->executeUpdate();
   } catch (sql::SQLException &e) {
-    LOG_ERROR("DeleteCharacter character_account_data: {}", e.what());
+    if (IsMissingTableSqlError(e)) {
+      LOG_WARN("DeleteCharacter character_account_data (table missing): {}",
+               e.what());
+    } else {
+      LOG_ERROR("DeleteCharacter character_account_data: {}", e.what());
+    }
   }
 }
 

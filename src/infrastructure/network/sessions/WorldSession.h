@@ -225,6 +225,9 @@ private:
                                                  MovementInfo const &move);
   void LoginFinalizeWorldEntry(uint64 guid);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
+  /// Persists position, `player_logout`, removes from map and online registry, clears
+  /// in-world fields. Requires `_playerGuid != 0`.
+  void FinalizeWorldExit();
   void PublishSelfCoinageUpdate();
 
   tcp::socket _socket;

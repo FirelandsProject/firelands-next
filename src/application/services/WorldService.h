@@ -35,7 +35,16 @@ public:
   }
 
   void RemovePlayerFromMap(uint32 mapId, uint64 guid) {
-    GetMap(mapId)->RemoveObject(guid);
+    std::shared_ptr<Map> map;
+    {
+      std::lock_guard<std::mutex> lock(m_worldMutex);
+      auto it = m_maps.find(mapId);
+      if (it == m_maps.end()) {
+        return;
+      }
+      map = it->second;
+    }
+    map->RemoveObject(guid);
   }
 
   /// Adds a creature to the map grid and notifies Lua (`creature_spawn`).
@@ -49,6 +58,9 @@ public:
 
   void SetCollisionQueries(std::shared_ptr<IMapCollisionQueries> queries);
   std::shared_ptr<IMapCollisionQueries> GetCollisionQueries();
+  /// Explicit teardown hook for process shutdown. Releases map-held objects
+  /// (players/sessions) while core services (io_context, logger) are still alive.
+  void ResetForShutdown();
 
 private:
   WorldService() = default;

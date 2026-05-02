@@ -41,4 +41,18 @@ std::shared_ptr<IMapCollisionQueries> WorldService::GetCollisionQueries() {
   return m_collisionQueries;
 }
 
+void WorldService::ResetForShutdown() {
+  std::unordered_map<uint32, std::shared_ptr<Map>> mapsToDestroy;
+  {
+    std::lock_guard<std::mutex> lock(m_worldMutex);
+    mapsToDestroy.swap(m_maps);
+  }
+  {
+    std::lock_guard<std::mutex> lock(m_auxMutex);
+    m_scriptHost.reset();
+    m_collisionQueries.reset();
+  }
+  mapsToDestroy.clear();
+}
+
 } // namespace Firelands

@@ -12,8 +12,11 @@
 #include <shared/Logger.h>
 #include <shared/network/MovementInfo.h>
 #include <cmath>
+#include <cctype>
+#include <chrono>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <sstream>
 
 namespace Firelands {
@@ -151,6 +154,67 @@ static std::string StripWowChatColorTokens(std::string const &in) {
   return out;
 }
 
+static constexpr uint64_t kMaxRestartDelaySeconds = 7ULL * 24 * 3600;
+
+static bool ParseRestartDelayToken(std::string const &token,
+                                    std::chrono::seconds &out) {
+  if (token.size() < 2)
+    return false;
+  char const u =
+      static_cast<char>(std::tolower(static_cast<unsigned char>(token.back())));
+  if (u != 's' && u != 'm')
+    return false;
+  std::string const num = token.substr(0, token.size() - 1);
+  if (num.empty())
+    return false;
+  for (unsigned char c : num) {
+    if (!std::isdigit(c))
+      return false;
+  }
+  uint64_t n = 0;
+  try {
+    n = std::stoull(num);
+  } catch (...) {
+    return false;
+  }
+  if (n == 0)
+    return false;
+  uint64_t seconds = 0;
+  if (u == 's') {
+    seconds = n;
+  } else {
+    if (n > kMaxRestartDelaySeconds / 60)
+      return false;
+    seconds = n * 60;
+  }
+  if (seconds > kMaxRestartDelaySeconds)
+    return false;
+  if (seconds > static_cast<uint64_t>(std::numeric_limits<int>::max()))
+    return false;
+  out = std::chrono::seconds(static_cast<int>(seconds));
+  return true;
+}
+
+static int CeilSecondsRemaining(std::chrono::steady_clock::time_point now,
+                                std::chrono::steady_clock::time_point deadline) {
+  if (now >= deadline)
+    return 0;
+  auto const ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+  int64_t const c = ms.count();
+  return std::max(1, static_cast<int>((c + 999) / 1000));
+}
+
+static std::string FormatRestartLeadIn(std::chrono::seconds total) {
+  auto const s = static_cast<uint64_t>(total.count());
+  if (s >= 60 && s % 60 == 0) {
+    uint64_t const m = s / 60;
+    return (m == 1) ? std::string("1 minute.")
+                    : (std::to_string(m) + " minutes.");
+  }
+  return std::to_string(s) + ((s == 1) ? " second." : " seconds.");
+}
+
 } // namespace
 
 CommandService::CommandService(
@@ -253,6 +317,10 @@ CommandService::CommandService(
   RegisterCommand(
       "ticket", {[this](auto s, auto a, auto o) { return HandleTicket(s, a, o); },
                  ToMask(Permission::ManageGmTickets), CommandAvailability::Game,
+                 ConsoleArgLayout::SameAsInGame});
+  RegisterCommand(
+      "server", {[this](auto s, auto a, auto o) { return HandleServer(s, a, o); },
+                 ToMask(Permission::ServerControl), CommandAvailability::Both,
                  ConsoleArgLayout::SameAsInGame});
 }
 
@@ -488,6 +556,10 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cffCCCCCC.ban|r |cff888888/|r |cffCCCCCC.unban|r |cff888888—|r Lock or "
       "unlock auth login for an account.  |cff666666e.g.|r |cffffffff.ban "
       "PLAYERONE|r\n"
+      "|cffCCCCCC.server restart|r |cff888888—|r Scheduled shutdown/restart "
+      "after a delay (|cffffffff30s|r, |cffffffff5m|r, ...). Last 10 seconds: "
+      "one |cffFFCC00[Server]|r countdown line per second.  "
+      "|cff666666Administrator (or world console).|r\n"
       "|cffAAAAAAShutdown the world process:|r |cffffffffquit|r |cff888888or|r "
       "|cffffffffexit|r |cffAAAAAA(no leading dot).|r");
 
@@ -1190,6 +1262,70 @@ bool CommandService::HandleTicket(std::shared_ptr<ICommandSession> session,
   }
 
   session->SendNotification("Unknown .ticket subcommand.");
+  return true;
+}
+
+void CommandService::SetShutdownRequestHandler(std::function<void()> handler) {
+  _shutdownRequestHandler = std::move(handler);
+}
+
+void CommandService::PollScheduledRestart() {
+  if (!_restartDeadline)
+    return;
+  auto const now = std::chrono::steady_clock::now();
+  if (now >= *_restartDeadline) {
+    _restartDeadline.reset();
+    _restartAnnouncedDownTo = 0;
+    LOG_INFO("Scheduled server restart: timer elapsed; stopping world loop.");
+    if (_shutdownRequestHandler)
+      _shutdownRequestHandler();
+    else
+      LOG_CRITICAL("Scheduled restart elapsed but no shutdown handler is set.");
+    return;
+  }
+  if (!_onlineCharacters)
+    return;
+  int const rem = CeilSecondsRemaining(now, *_restartDeadline);
+  if (rem < _restartAnnouncedDownTo && rem >= 1 && rem <= 10) {
+    std::string const plain =
+        "Restarting in " + std::to_string(rem) + (rem == 1 ? " second." : " seconds.");
+    _onlineCharacters->BroadcastAnnouncement("|cffFFCC00[Server]|r " + plain, plain);
+    _restartAnnouncedDownTo = rem;
+  }
+}
+
+bool CommandService::HandleServer(std::shared_ptr<ICommandSession> session,
+                                    const std::vector<std::string> &args,
+                                    PrivilegeOrigin origin) {
+  (void)origin;
+  if (args.empty() || !AsciiEqualsLower(args[0], "restart")) {
+    session->SendNotification(
+        "Usage: .server restart <delay>   (delay: number + s or m, e.g. 30s, 5m)");
+    return false;
+  }
+  if (args.size() < 2) {
+    session->SendNotification("Usage: .server restart <delay>   (examples: 30s, 5m)");
+    return false;
+  }
+  std::chrono::seconds delay{0};
+  if (!ParseRestartDelayToken(args[1], delay)) {
+    session->SendNotification(
+        "Invalid delay. Use a positive value with unit s (seconds) or m (minutes), "
+        "e.g. 30s or 5m (max 7 days).");
+    return false;
+  }
+  auto const deadline =
+      std::chrono::steady_clock::now() +
+      std::chrono::duration_cast<std::chrono::steady_clock::duration>(delay);
+  _restartDeadline = deadline;
+  _restartAnnouncedDownTo = static_cast<int>(delay.count());
+
+  std::string const lead = FormatRestartLeadIn(delay);
+  std::string const plain = "The server will restart in " + lead;
+  if (_onlineCharacters)
+    _onlineCharacters->BroadcastAnnouncement("|cffFFCC00[Server]|r " + plain, plain);
+  session->SendNotification("Scheduled: " + plain);
+  LOG_INFO("[server] {}", plain);
   return true;
 }
 

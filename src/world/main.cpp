@@ -215,6 +215,9 @@ int main(int argc, char **argv) {
       }
 
       WorldInteractiveConsole interactiveConsole(commandService);
+      commandService->SetShutdownRequestHandler([&interactiveConsole]() {
+        interactiveConsole.RequestShutdown();
+      });
       const bool useTerminalUi =
           consoleEnabled &&
           config.GetNested<bool>({"Console", "Tui"}, true);
@@ -232,17 +235,20 @@ int main(int argc, char **argv) {
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       } else {
-        while (true) {
+        while (!interactiveConsole.ShutdownRequested()) {
           worldServer.Update();
+          commandService->PollScheduledRestart();
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
       stopRealmLink.store(true);
       LOG_INFO("World server main loop stopped.");
+      WorldService::Instance().ResetForShutdown();
       worldServer.Stop();
       if (realmLinkThread && realmLinkThread->joinable()) {
         realmLinkThread->join();
       }
+      commandService->SetShutdownRequestHandler({});
     } else {
       LOG_CRITICAL("Failed to start World Server.");
       Logger::Shutdown();

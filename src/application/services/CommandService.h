@@ -2,9 +2,11 @@
 #include <application/ports/ICommandService.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/Permissions.h>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,6 +48,8 @@ public:
                       const std::string &message,
                       PrivilegeOrigin origin = PrivilegeOrigin::GameClient) override;
   bool IsCommand(const std::string &message) const override;
+  void PollScheduledRestart() override;
+  void SetShutdownRequestHandler(std::function<void()> handler) override;
 
 private:
   using CommandHandler =
@@ -105,12 +109,21 @@ private:
                    const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleTicket(std::shared_ptr<ICommandSession> session,
                     const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleServer(std::shared_ptr<ICommandSession> session,
+                    const std::vector<std::string> &args, PrivilegeOrigin origin);
 
   std::shared_ptr<OnlineCharacterSessionRegistry> _onlineCharacters;
   std::shared_ptr<IAccountRepository> _accountRepo;
   std::shared_ptr<CharacterService> _characterService;
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::map<std::string, CommandEntry> _commands;
+
+  std::function<void()> _shutdownRequestHandler;
+  std::optional<std::chrono::steady_clock::time_point> _restartDeadline;
+  /// Highest whole-second "remaining" value already communicated (initial
+  /// announcement uses the total delay; countdown covers 10…1 without duplicating
+  /// the top second when total ≤ 10).
+  int _restartAnnouncedDownTo = 0;
 };
 
 } // namespace Firelands

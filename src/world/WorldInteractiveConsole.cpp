@@ -141,6 +141,11 @@ WorldInteractiveConsole::~WorldInteractiveConsole() {
   }
 }
 
+void WorldInteractiveConsole::RequestShutdown() {
+  _shutdownRequested = true;
+  LOG_INFO("[console] shutdown requested; stopping world loop.");
+}
+
 void WorldInteractiveConsole::Start(bool enabled, bool useStdinReader) {
   if (!enabled || !_commands) {
     _enabled = false;
@@ -212,6 +217,9 @@ void WorldInteractiveConsole::ReaderLoop() {
 }
 
 void WorldInteractiveConsole::ProcessPending() {
+  if (_commands) {
+    _commands->PollScheduledRestart();
+  }
   if (!_enabled.load()) {
     return;
   }
@@ -226,16 +234,14 @@ void WorldInteractiveConsole::ProcessPending() {
       continue;
     }
     if (IEqualsAscii(line, "quit") || IEqualsAscii(line, "exit")) {
-      _shutdownRequested = true;
-      LOG_INFO("[console] shutdown requested; stopping world loop.");
+      RequestShutdown();
       continue;
     }
     // Same as bare quit/exit; users often type .exit after .help.
     if (line.size() >= 2 && line[0] == '.') {
       std::string const inner = TrimInPlace(line.substr(1));
       if (IEqualsAscii(inner, "quit") || IEqualsAscii(inner, "exit")) {
-        _shutdownRequested = true;
-        LOG_INFO("[console] shutdown requested; stopping world loop.");
+        RequestShutdown();
         continue;
       }
     }
