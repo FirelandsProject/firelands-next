@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS `account` (
   `last_ip` varchar(15) NOT NULL DEFAULT '127.0.0.1',
   `expansion` tinyint(3) unsigned NOT NULL DEFAULT '3', -- 3 for Cataclysm
   `locked` tinyint unsigned NOT NULL DEFAULT '0', -- 1 = banned (auth rejects login); see migration 16
-  `access_level` tinyint unsigned NOT NULL DEFAULT '0', -- 0=player … 3=admin (see AccessLevel.h); migration 15
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

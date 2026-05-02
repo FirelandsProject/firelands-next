@@ -206,21 +206,6 @@ target_link_libraries(world
     PRIVATE ftxui::component
 )
 
-# Merge sql/*.sql into sql/merged/<database>.sql (one file per detected DB)
-find_program(MERGE_MIGRATIONS_PYTHON python3)
-if(MERGE_MIGRATIONS_PYTHON)
-  add_custom_target(merge-migrations
-    COMMAND ${MERGE_MIGRATIONS_PYTHON} ${CMAKE_SOURCE_DIR}/tools/merge_migrations.py
-            --input-dir ${CMAKE_SOURCE_DIR}/sql
-            --output-dir ${CMAKE_SOURCE_DIR}/sql/merged
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Condensing SQL migrations into sql/merged/ (per database)"
-    VERBATIM
-  )
-else()
-  message(STATUS "python3 not found; target merge-migrations will not be defined")
-endif()
-
 # Tools
 add_executable(FirelandsDevTools src/tools/DevTools.cpp)
 target_precompile_headers(FirelandsDevTools PRIVATE ${PROJECT_PCH_HEADERS})
