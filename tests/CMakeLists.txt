@@ -32,7 +32,6 @@ target_link_libraries(FirelandsUnitTests
     GTest::gmock
     FirelandsInfrastructure
     FirelandsExtractCommon
-    FirelandsVmapCommon
     FirelandsMapExtractorLib
 )
 target_compile_definitions(FirelandsUnitTests PRIVATE

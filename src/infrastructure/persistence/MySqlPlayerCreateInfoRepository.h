@@ -21,6 +21,8 @@ public:
   std::vector<StarterItemGrant> GetExtraCreateItems(uint8 race,
                                                      uint8 klass) override;
 
+  std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) override;
+
 private:
   std::shared_ptr<sql::Connection> m_connection;
 };

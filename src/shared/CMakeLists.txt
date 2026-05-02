@@ -2,7 +2,10 @@ add_library(FirelandsShared STATIC
     Config.cpp
     dbc/DbcReader.cpp
     dbc/CharStartOutfitDbc.cpp
+    dbc/LanguagesDbc.cpp
+    dbc/SpellDbc.cpp
     game/EquipmentCache.cpp
+    game/ChatLanguages.cpp
     game/ItemEquipSlots.cpp
     network/MovementWire.cpp
     network/SpellCastWire.cpp

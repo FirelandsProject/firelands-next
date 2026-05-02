@@ -18,6 +18,8 @@
 #include <memory>
 #include <shared/Banner.h>
 #include <shared/Config.h>
+#include <shared/dbc/LanguagesDbc.h>
+#include <shared/dbc/SpellDbc.h>
 #include <shared/Logger.h>
 #include <thread>
 
@@ -145,10 +147,30 @@ int main(int argc, char **argv) {
         std::make_shared<CharacterService>(charRepo, playerCreateInfoService);
     auto commandService = std::make_shared<CommandService>();
 
+    const std::string dbcBasePath =
+        config.GetNested<std::string>({"Data", "DbcPath"}, "data/dbc");
+    auto languagesDbc = std::make_shared<LanguagesDbc>();
+    if (!languagesDbc->Load(dbcBasePath + "/Languages.dbc")) {
+      LOG_WARN("Languages.dbc not loaded from {}; chat language validation "
+               "falls back to spell table only.",
+               dbcBasePath + "/Languages.dbc");
+      languagesDbc.reset();
+    }
+
+    auto spellDbc = std::make_shared<SpellDbc>();
+    if (!spellDbc->Load(dbcBasePath + "/Spell.dbc")) {
+      LOG_WARN("Spell.dbc not loaded from {}; known spells are not filtered "
+               "against client data.",
+               dbcBasePath + "/Spell.dbc");
+      spellDbc.reset();
+    }
+
     auto sessionFactory = [authService, charService, commandService,
-                           accountDataRepo](boost::asio::ip::tcp::socket socket) {
+                           accountDataRepo, languagesDbc, spellDbc](
+                              boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
-                                     commandService, accountDataRepo)
+                                     commandService, accountDataRepo,
+                                     languagesDbc, spellDbc)
           ->Start();
     };
 

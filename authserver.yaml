@@ -13,6 +13,11 @@ RealmLink:
   Port: 3725
   Token: "7f60c01601f61a28210fbfd729313d98074443838bda1fe9ca18d4a7198e4330"
 
+# When true, AUTH_REALM_LIST sends an empty realm display name so the 4.3.4
+# client does not append "-Realm" in chat (realm row in the list may look blank).
+RealmList:
+  HideRealmSuffixInAuthList: true
+
 Database:
   User: "firelands"
   Password: "firelands"

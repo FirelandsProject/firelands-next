@@ -3,6 +3,7 @@
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/repositories/ICharacterRepository.h>
 #include <application/services/PlayerCreateInfoService.h>
+#include <cstdint>
 #include <memory>
 #include <shared/game/EquipmentCache.h>
 #include <shared/Common.h>
@@ -62,6 +63,12 @@ public:
   std::vector<std::shared_ptr<Character>>
   GetCharactersForAccount(uint32 accountId) {
     return m_repository->GetCharactersByAccount(accountId);
+  }
+
+  std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) const {
+    if (!m_playerCreateInfoService)
+      return {};
+    return m_playerCreateInfoService->GetStarterSpells(race, klass);
   }
 
   bool CreateCharacter(uint32 accountId, std::string name, uint8 race,

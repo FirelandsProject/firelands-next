@@ -1,5 +1,6 @@
 #include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <shared/Logger.h>
+#include <cstdint>
 #include <unordered_set>
 
 namespace Firelands {
@@ -7,6 +8,7 @@ namespace Firelands {
 namespace {
 
 bool IsMissingTableError(sql::SQLException &e) {
+  // MariaDB connector-cpp accessors are not const-qualified.
   return e.getErrorCode() == 1146 || e.getSQLState() == "42S02";
 }
 
@@ -126,6 +128,29 @@ std::vector<PlayerCreateVisualItem> MySqlPlayerCreateInfoRepository::GetVisualIt
   }
 
   return rows;
+}
+
+std::vector<uint32_t> MySqlPlayerCreateInfoRepository::GetStarterSpells(
+    uint8_t race, uint8_t klass) {
+  std::vector<uint32_t> out;
+  std::unordered_set<uint32_t> seen;
+  try {
+    std::unique_ptr<sql::PreparedStatement> stmt(m_connection->prepareStatement(
+        "SELECT spellId FROM firelands_world.playercreateinfo_spell "
+        "WHERE (race = ? OR race = 0) AND (class = ? OR class = 0)"));
+    stmt->setUInt(1, static_cast<unsigned>(race));
+    stmt->setUInt(2, static_cast<unsigned>(klass));
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next()) {
+      uint32_t const sid = rs->getUInt("spellId");
+      if (sid != 0u && seen.insert(sid).second)
+        out.push_back(sid);
+    }
+  } catch (sql::SQLException &e) {
+    if (!IsMissingTableError(e))
+      LOG_ERROR("GetStarterSpells query failed: {}", e.what());
+  }
+  return out;
 }
 
 std::vector<StarterItemGrant>

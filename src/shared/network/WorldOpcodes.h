@@ -38,6 +38,8 @@ enum WorldOpcode : uint32 {
   /// Reference: SMSG_STOP_MIRROR_TIMER (not used for spell book in 4.3.4).
   SMSG_STOP_MIRROR_TIMER = 0x0B06,
   SMSG_SEND_KNOWN_SPELLS = 0x0104,
+  /// Reference: TCPP `Player::LearnSpell` — `SMSG_LEARNED_SPELL` (two uint32).
+  SMSG_LEARNED_SPELL = 0x58A2,
   SMSG_SEND_UNLEARN_SPELLS = 0x4E25,
   /// Reference: SMSG_UPDATE_ACTION_BUTTONS
   SMSG_ACTION_BUTTONS = 0x38B5,
@@ -135,9 +137,36 @@ enum WorldOpcode : uint32 {
   MSG_MOVE_JUMP = 0x7A06,
   MSG_MOVE_SET_FACING = 0x7914,
 
-  /// Reference: CMSG_MESSAGECHAT_SAY (client uses one opcode per chat type).
-  CMSG_MESSAGECHAT = 0x1154,
+  /// Channel join request (e.g. General/Trade on login).
+  CMSG_JOIN_CHANNEL = 0x0156,
+  /// Reference: TrinityCore `Opcodes.h` OpcodeClient (build 15595) — one opcode
+  /// per chat kind; payload is bit-packed (`ChatHandler::HandleMessagechatOpcode`).
+  CMSG_MESSAGECHAT_ADDON_BATTLEGROUND = 0x0D46,
+  CMSG_MESSAGECHAT_ADDON_GUILD = 0x0544,
+  CMSG_MESSAGECHAT_ADDON_OFFICER = 0x3954,
+  CMSG_MESSAGECHAT_ADDON_PARTY = 0x0546,
+  CMSG_MESSAGECHAT_ADDON_RAID = 0x1D56,
+  CMSG_MESSAGECHAT_ADDON_WHISPER = 0x2146,
+  CMSG_MESSAGECHAT_AFK = 0x0D44,
+  CMSG_MESSAGECHAT_BATTLEGROUND = 0x2156,
+  CMSG_MESSAGECHAT_CHANNEL = 0x1D44,
+  CMSG_MESSAGECHAT_DND = 0x2946,
+  CMSG_MESSAGECHAT_EMOTE = 0x1156,
+  CMSG_MESSAGECHAT_GUILD = 0x3956,
+  CMSG_MESSAGECHAT_OFFICER = 0x1946,
+  CMSG_MESSAGECHAT_PARTY = 0x1D46,
+  CMSG_MESSAGECHAT_RAID = 0x2D44,
+  CMSG_MESSAGECHAT_RAID_WARNING = 0x0944,
+  CMSG_MESSAGECHAT_SAY = 0x1154,
+  /// Contact/friends list query.
+  CMSG_CONTACT_LIST = 0x4534,
+  CMSG_MESSAGECHAT_WHISPER = 0x0D56,
+  CMSG_MESSAGECHAT_YELL = 0x3544,
+  /// Compact Unit Frame profiles save request.
+  CMSG_SAVE_CUF_PROFILES = 0x730E,
   SMSG_MESSAGECHAT = 0x2026,
+  /// Reference: `SMSG_GM_MESSAGECHAT` (GM chat tag); not wired yet.
+  SMSG_GM_MESSAGECHAT = 0x6434,
 
   /// Reference: WowPacketParser V4_3_4_15595 Opcodes.cs
   CMSG_CAST_SPELL = 0x4C07,

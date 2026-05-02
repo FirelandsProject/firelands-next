@@ -66,10 +66,9 @@ public:
     if (length == 0)
       return res;
 
-    // Strings are byte-aligned after the bit-field header usually
-    // But we must check if we need to skip the rest of the current byte
-    // In WoW Cataclysm, strings in bit-packed packets start at the next byte
-    // boundary if we just finished a bitfield.
+    // Strings follow bit-length fields on a byte boundary (TCPP `ReadBits` +
+    // `ReadString`); align before consuming raw bytes from `ByteBuffer`.
+    AlignToByteBoundary();
 
     std::vector<uint8> bytes(length);
     _buffer.Read(bytes.data(), length);

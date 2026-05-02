@@ -1,6 +1,7 @@
 #pragma once
 
 #include <domain/models/PlayerCreateInfo.h>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -19,6 +20,11 @@ public:
   /// Rows from `playercreateinfo_item` (reference merges after CharStartOutfit).
   virtual std::vector<StarterItemGrant>
   GetExtraCreateItems(uint8 race, uint8 klass) = 0;
+
+  /// Spell IDs from `playercreateinfo_spell` (race/class wildcards 0), same merge
+  /// rules as Trinity `playercreateinfo_spell` / `PlayerCreateInfo`.
+  virtual std::vector<uint32_t> GetStarterSpells(uint8_t race,
+                                                 uint8_t klass) = 0;
 };
 
 } // namespace Firelands

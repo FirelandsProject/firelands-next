@@ -13,8 +13,10 @@
 #include <shared/network/packets/MotdPacket.h>
 #include <shared/network/packets/VerifyWorldPacket.h>
 #include <shared/network/packets/SetProficiencyPacket.h>
+#include <shared/network/BitReader.h>
 #include <shared/network/MovementWire.h>
 #include <shared/network/SpellCastWire.h>
+#include <shared/game/ChatLanguages.h>
 #include <shared/game/EquipmentCache.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
@@ -45,17 +47,20 @@ std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
   case 4: // Rogue
     return {1784, 2098, 53, 1752, 921, 1766, 1776, 82245};
   case 5: // Priest
-    return {585, 589, 2061, 17, 139, 2050, 8092, 86475};
+    // Do not use post-4.3.4 spell ids (e.g. 86475): some clients stop applying
+    // `SMSG_SEND_KNOWN_SPELLS` after an unknown id, which blocks `/say` (no
+    // `CMSG_MESSAGECHAT_SAY`) until language passives never register.
+    return {585, 589, 2061, 17, 139, 2050, 8092};
   case 6: // Death Knight
-    return {48263, 45524, 49998, 47528, 48721, 45529, 48792, 86471};
+    return {48263, 45524, 49998, 47528, 48721, 45529, 48792};
   case 7: // Shaman
     return {331, 8042, 8017, 8050, 324, 51730, 5185, 52127};
   case 8: // Mage
-    return {116, 133, 2136, 1459, 130, 1953, 118, 86473};
+    return {116, 133, 2136, 1459, 130, 1953, 118};
   case 9: // Warlock
-    return {172, 348, 687, 1454, 5782, 980, 603, 86478};
+    return {172, 348, 687, 1454, 5782, 980, 603};
   case 11: // Druid
-    return {8921, 5185, 774, 768, 1126, 339, 467, 86470};
+    return {8921, 5185, 774, 768, 1126, 339, 467};
   default:
     return {6673, 78, 2457, 3127};
   }
@@ -296,6 +301,31 @@ std::map<uint16, uint32> BuildPlayerBag0InventoryValues(Character const &charact
   return fields;
 }
 
+void SetPackedShort(std::map<uint16, uint32> &fields, uint16 field,
+                    uint8 slot, uint16 value) {
+  uint32 &packed = fields[static_cast<uint16>(field + (slot / 2))];
+  if ((slot % 2) == 0)
+    packed = (packed & 0xFFFF0000u) | value;
+  else
+    packed = (packed & 0x0000FFFFu) | (static_cast<uint32>(value) << 16);
+}
+
+void AddLanguageSkillFields(std::map<uint16, uint32> &fields, uint8 race) {
+  std::vector<uint32> skills;
+  AppendRacialLanguageSkills(race, skills);
+  constexpr uint16 kRank = 300;
+  for (size_t i = 0; i < skills.size() && i < 64; ++i) {
+    uint8 const slot = static_cast<uint8>(i);
+    uint16 const skill = static_cast<uint16>(skills[i]);
+    SetPackedShort(fields, PLAYER_SKILL_LINEID_0, slot, skill);
+    SetPackedShort(fields, PLAYER_SKILL_STEP_0, slot, 0);
+    SetPackedShort(fields, PLAYER_SKILL_RANK_0, slot, kRank);
+    SetPackedShort(fields, PLAYER_SKILL_MAX_RANK_0, slot, kRank);
+    SetPackedShort(fields, PLAYER_SKILL_MODIFIER_0, slot, 0);
+    SetPackedShort(fields, PLAYER_SKILL_TALENT_0, slot, 0);
+  }
+}
+
 std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
                                                  Character const &character) {
   std::map<uint16, uint32> fields;
@@ -318,6 +348,8 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(uint64 guid,
   fields[UNIT_FIELD_DISPLAYID] = character.GetDisplayId();
   fields[UNIT_FIELD_NATIVEDISPLAYID] = character.GetDisplayId();
   fields[UNIT_FIELD_BYTES_2] = 0;
+
+  AddLanguageSkillFields(fields, character.GetRace());
 
   for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
     uint32 const entry = character.GetVisibleItemEntry(slot);
@@ -370,11 +402,15 @@ WorldSession::WorldSession(
     tcp::socket socket, std::shared_ptr<AuthService> authService,
     std::shared_ptr<CharacterService> charService,
     std::shared_ptr<ICommandService> commandService,
-    std::shared_ptr<MySqlAccountDataRepository> accountDataRepo)
+    std::shared_ptr<MySqlAccountDataRepository> accountDataRepo,
+    std::shared_ptr<LanguagesDbc const> languagesDbc,
+    std::shared_ptr<SpellDbc const> spellDbc)
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
       _commandService(std::move(commandService)),
-      _accountDataRepo(std::move(accountDataRepo)), _serverSeed(0),
+      _accountDataRepo(std::move(accountDataRepo)),
+      _languagesDbc(std::move(languagesDbc)),
+      _spellDbc(std::move(spellDbc)), _serverSeed(0),
       _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()) {}
 
 WorldSession::~WorldSession() = default;
@@ -709,6 +745,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
   case CMSG_BATTLEFIELD_STATUS:
   case CMSG_QUERY_BATTLEFIELD_STATE:
+  case CMSG_JOIN_CHANNEL:
+  case CMSG_CONTACT_LIST:
+  case CMSG_SAVE_CUF_PROFILES:
   case CMSG_VOICE_SESSION_ENABLE:
   case CMSG_GUILD_SET_ACHIEVEMENT_TRACKING:
   case CMSG_REQUEST_CATEGORY_COOLDOWNS:
@@ -735,8 +774,28 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_LOG_DISCONNECT:
     Close();
     break;
-  case CMSG_MESSAGECHAT:
+  case CMSG_MESSAGECHAT_SAY:
+  case CMSG_MESSAGECHAT_YELL:
+  case CMSG_MESSAGECHAT_CHANNEL:
+  case CMSG_MESSAGECHAT_WHISPER:
+  case CMSG_MESSAGECHAT_GUILD:
+  case CMSG_MESSAGECHAT_OFFICER:
+  case CMSG_MESSAGECHAT_AFK:
+  case CMSG_MESSAGECHAT_DND:
+  case CMSG_MESSAGECHAT_EMOTE:
+  case CMSG_MESSAGECHAT_PARTY:
+  case CMSG_MESSAGECHAT_RAID:
+  case CMSG_MESSAGECHAT_BATTLEGROUND:
+  case CMSG_MESSAGECHAT_RAID_WARNING:
     HandleMessageChat(packet);
+    break;
+  case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:
+  case CMSG_MESSAGECHAT_ADDON_GUILD:
+  case CMSG_MESSAGECHAT_ADDON_OFFICER:
+  case CMSG_MESSAGECHAT_ADDON_PARTY:
+  case CMSG_MESSAGECHAT_ADDON_RAID:
+  case CMSG_MESSAGECHAT_ADDON_WHISPER:
+    HandleAddonMessageChat(packet);
     break;
   case CMSG_CAST_SPELL:
     HandleCastSpell(packet);
@@ -1230,6 +1289,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
     return;
   }
   const auto &character = *characterOpt;
+  _playerRace = character.GetRace();
 
   // Login SMSG order aligned with firelands-cata-ref CharacterHandler::HandlePlayerLogin
   // and Player::SendInitialPacketsBeforeAddToMap (see Player.cpp ~23604).
@@ -1263,9 +1323,80 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   SendWorldServerInfo();
   SendSetProficiency(1, 0xFFFFFFFF);
   SendSetProficiency(2, 0xFFFFFFFF);
-  _knownSpells = BuildDefaultKnownSpells(character.GetClass());
+  {
+    // Language passives must appear early in `SMSG_SEND_KNOWN_SPELLS`. Some 4.3.4
+    // clients stop applying the list if an early spell id is unknown to the
+    // client DB, which leaves language passives unlearned and blocks `/say`
+    // before `CMSG_MESSAGECHAT_SAY` is ever sent.
+    std::vector<uint32> spells;
+    AppendRacialLanguageSpells(character.GetRace(), spells);
+    std::vector<uint32_t> const fromDb = _charService->GetStarterSpells(
+        static_cast<uint8_t>(character.GetRace()),
+        static_cast<uint8_t>(character.GetClass()));
+    auto pushUnique = [&spells](uint32 sid) {
+      if (sid == 0)
+        return;
+      if (std::find(spells.begin(), spells.end(), sid) == spells.end())
+        spells.push_back(sid);
+    };
+    if (!fromDb.empty()) {
+      spells.reserve(spells.size() + fromDb.size());
+      for (uint32_t sid : fromDb)
+        pushUnique(static_cast<uint32>(sid));
+    } else {
+      for (uint32 sid : BuildDefaultKnownSpells(character.GetClass()))
+        pushUnique(sid);
+    }
+    // Strip ids from wrong client eras that break spellbook application on 4.3.4.
+    for (auto it = spells.begin(); it != spells.end();) {
+      uint32 const sid = *it;
+      if (sid >= 86450u && sid <= 86550u)
+        it = spells.erase(it);
+      else
+        ++it;
+    }
+    if (_spellDbc && _spellDbc->IsLoaded()) {
+      for (auto it = spells.begin(); it != spells.end();) {
+        uint32 const sid = *it;
+        // Never drop passive "Language *" spells: wrong-era DBC would break /say.
+        if (!IsLanguagePassiveSpell(sid) && !_spellDbc->HasSpell(sid)) {
+          LOG_WARN(
+              "Spell id {} not in Spell.dbc; omitted from known spells (race={} "
+              "class={})",
+              sid, static_cast<uint32>(character.GetRace()),
+              static_cast<uint32>(character.GetClass()));
+          it = spells.erase(it);
+        } else
+          ++it;
+      }
+    }
+    EnsureRacialLanguageSpells(static_cast<uint8>(character.GetRace()), spells);
+    PrioritizeDefaultLanguageSpell(static_cast<uint8>(character.GetRace()),
+                                   spells);
+    _knownSpells = std::move(spells);
+    uint32 const defaultLang = DefaultLanguageForRace(character.GetRace());
+    uint32 const defaultLangSpell = LanguageSpellIdForLang(defaultLang);
+    {
+      std::string ids;
+      for (size_t i = 0; i < _knownSpells.size(); ++i) {
+        if (i)
+          ids.push_back(',');
+        ids += std::to_string(_knownSpells[i]);
+      }
+      LOG_INFO("[CHAT] login race={} class={} defaultLang={} langSpell={} known={} "
+               "spells={} ids=[{}]",
+               static_cast<uint32>(character.GetRace()),
+               static_cast<uint32>(character.GetClass()), defaultLang,
+               defaultLangSpell,
+               PlayerKnowsLanguage(_knownSpells, defaultLang) ? 1 : 0,
+               _knownSpells.size(), ids);
+    }
+  }
   _gcdReady = {};
-  SendKnownSpells(character.IsFirstLogin(), _knownSpells);
+  // At world login this packet must initialize client spellbook state,
+  // including passive language spells. Existing characters may have
+  // `firstLogin = false`, but the client still expects InitialLogin=1 here.
+  SendKnownSpells(true, _knownSpells);
   SendUnlearnSpellsEmpty();
   SendTalentsInfo();
   SendInitialActionButtons();
@@ -1445,6 +1576,7 @@ void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
 
   _playerGuid = 0;
   _activeCharacterGuid = 0;
+  _playerRace = 0;
   _knownSpells.clear();
   _gcdReady = {};
   _mapId = 0;
@@ -1658,9 +1790,9 @@ void WorldSession::HandleNameQuery(WorldPacket &packet) {
   }
 
   response.Append<uint8>(RESPONSE_SUCCESS);
-  std::string const realmName =
-      Config::Instance().GetNested<std::string>({"World", "RealmName"}, "");
-  AppendPlayerGuidLookupData(response, *chOpt, realmName);
+  // 4.3.4 chat UI shows "Name-Realm" when this realm string is non-empty; use
+  // empty so only the character name appears (RealmName in yaml is for auth/link).
+  AppendPlayerGuidLookupData(response, *chOpt, "");
   SendPacket(response);
 }
 
@@ -1778,11 +1910,211 @@ void WorldSession::HandleMoveTimeSkipped(WorldPacket &packet) {
   LOG_DEBUG("CMSG_MOVE_TIME_SKIPPED: Time: {}", time);
 }
 
+namespace {
+
+bool DecodeStandardChatOpcode(uint32 opcode, uint32 &outType) {
+  switch (opcode) {
+  case CMSG_MESSAGECHAT_SAY:
+    outType = CHAT_MSG_SAY;
+    return true;
+  case CMSG_MESSAGECHAT_YELL:
+    outType = CHAT_MSG_YELL;
+    return true;
+  case CMSG_MESSAGECHAT_CHANNEL:
+    outType = CHAT_MSG_CHANNEL;
+    return true;
+  case CMSG_MESSAGECHAT_WHISPER:
+    outType = CHAT_MSG_WHISPER;
+    return true;
+  case CMSG_MESSAGECHAT_GUILD:
+    outType = CHAT_MSG_GUILD;
+    return true;
+  case CMSG_MESSAGECHAT_OFFICER:
+    outType = CHAT_MSG_OFFICER;
+    return true;
+  case CMSG_MESSAGECHAT_AFK:
+    outType = CHAT_MSG_AFK;
+    return true;
+  case CMSG_MESSAGECHAT_DND:
+    outType = CHAT_MSG_DND;
+    return true;
+  case CMSG_MESSAGECHAT_EMOTE:
+    outType = CHAT_MSG_EMOTE;
+    return true;
+  case CMSG_MESSAGECHAT_PARTY:
+    outType = CHAT_MSG_PARTY;
+    return true;
+  case CMSG_MESSAGECHAT_RAID:
+    outType = CHAT_MSG_RAID;
+    return true;
+  case CMSG_MESSAGECHAT_BATTLEGROUND:
+    outType = CHAT_MSG_BATTLEGROUND;
+    return true;
+  case CMSG_MESSAGECHAT_RAID_WARNING:
+    outType = CHAT_MSG_RAID_WARNING;
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool DecodeAddonChatOpcode(uint32 opcode, uint32 &outType) {
+  switch (opcode) {
+  case CMSG_MESSAGECHAT_ADDON_BATTLEGROUND:
+    outType = CHAT_MSG_BATTLEGROUND;
+    return true;
+  case CMSG_MESSAGECHAT_ADDON_GUILD:
+    outType = CHAT_MSG_GUILD;
+    return true;
+  case CMSG_MESSAGECHAT_ADDON_OFFICER:
+    outType = CHAT_MSG_OFFICER;
+    return true;
+  case CMSG_MESSAGECHAT_ADDON_PARTY:
+    outType = CHAT_MSG_PARTY;
+    return true;
+  case CMSG_MESSAGECHAT_ADDON_RAID:
+    outType = CHAT_MSG_RAID;
+    return true;
+  case CMSG_MESSAGECHAT_ADDON_WHISPER:
+    outType = CHAT_MSG_WHISPER;
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool AddonLangAllowedForType(uint32 type) {
+  switch (type) {
+  case CHAT_MSG_PARTY:
+  case CHAT_MSG_RAID:
+  case CHAT_MSG_GUILD:
+  case CHAT_MSG_WHISPER:
+  case CHAT_MSG_BATTLEGROUND:
+    return true;
+  default:
+    return false;
+  }
+}
+
+void AppendSmsgMessageChatPayload(WorldPacket &data, uint32 chatType, uint32 lang,
+                                  uint64 senderGuid, uint64 receiverGuid,
+                                  std::string const &message,
+                                  std::string const *channelNameOptional) {
+  data.Append<uint8>(static_cast<uint8>(chatType));
+  int32 const langWire =
+      (lang == CHAT_LANG_ADDON) ? -1 : static_cast<int32>(lang);
+  data.Append<int32>(langWire);
+  data.Append<uint64>(senderGuid);
+  data.Append<uint32>(0);
+  if (channelNameOptional && chatType == CHAT_MSG_CHANNEL)
+    data.WriteString(*channelNameOptional);
+  data.Append<uint64>(receiverGuid);
+  data.Append<uint32>(static_cast<uint32>(message.length() + 1));
+  data.WriteString(message);
+  data.Append<uint8>(0);
+}
+
+/// Build 15595 uses **per-opcode** chat (`CMSG_MESSAGECHAT_SAY`, etc.); the first
+/// uint32 in the payload is **language only** (`Language` from SharedDefines.h).
+/// Do not reinterpret that field as `ChatMsg` — chat kind comes from the opcode.
+static uint32 ReadCataChatLanguageField(WorldPacket &packet) {
+  if (packet.GetReadPos() + sizeof(uint32) > packet.Size())
+    return LANG_UNIVERSAL;
+  return packet.Read<uint32>();
+}
+
+} // namespace
+
+void WorldSession::HandleAddonMessageChat(WorldPacket &packet) {
+  uint32 type = 0;
+  if (!DecodeAddonChatOpcode(packet.GetOpcode(), type)) {
+    LOG_DEBUG("HandleAddonMessageChat: unknown opcode 0x{:X}", packet.GetOpcode());
+    return;
+  }
+  // Reference: `WorldSession::HandleAddonMessagechatOpcode` — different bit layout
+  // (prefix lengths, broadcast to group/guild). Not required for baseline world
+  // bring-up; consume nothing (payload is self-contained per TCP frame).
+  (void)type;
+  LOG_DEBUG("CMSG_MESSAGECHAT_ADDON_* (type {}) — addon channel not implemented",
+            type);
+}
+
 void WorldSession::HandleMessageChat(WorldPacket &packet) {
-  uint32 type = packet.Read<uint32>();
-  uint32 language = packet.Read<uint32>();
-  if (type == CHAT_MSG_WHISPER || type == CHAT_MSG_CHANNEL) packet.ReadString();
-  std::string message = packet.ReadString();
+  uint32 type = 0;
+  uint32 lang = LANG_UNIVERSAL;
+  if (!DecodeStandardChatOpcode(packet.GetOpcode(), type)) {
+    LOG_DEBUG("HandleMessageChat: opcode 0x{:X} not a standard chat opcode",
+              packet.GetOpcode());
+    return;
+  }
+
+  if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND) {
+    lang = ReadCataChatLanguageField(packet);
+    // On the wire the language field is often serialized as int32; -1 is LANG_ADDON
+    // (0xFFFFFFFF). Real addon messages use CMSG_MESSAGECHAT_ADDON_* for most
+    // channels; for /say and /yell the 4.3.4 client still sends -1 as "default
+    // speech" in some builds. If we treat that as addon here, `AddonLangAllowed`
+    // fails and the player always sees "You may not speak that language."
+    if (lang == CHAT_LANG_ADDON && !AddonLangAllowedForType(type))
+      lang = LANG_UNIVERSAL;
+  }
+
+  std::string target;
+  std::string channel;
+  std::string message;
+
+  BitReader br(packet);
+  switch (type) {
+  case CHAT_MSG_SAY:
+  case CHAT_MSG_YELL:
+  case CHAT_MSG_EMOTE:
+  case CHAT_MSG_PARTY:
+  case CHAT_MSG_GUILD:
+  case CHAT_MSG_OFFICER:
+  case CHAT_MSG_RAID:
+  case CHAT_MSG_RAID_WARNING:
+  case CHAT_MSG_BATTLEGROUND: {
+    uint32 const textLen = br.ReadBits(9);
+    message = br.ReadString(textLen);
+    break;
+  }
+  case CHAT_MSG_WHISPER: {
+    uint32 const nameLen = br.ReadBits(10);
+    uint32 const textLen = br.ReadBits(9);
+    target = br.ReadString(nameLen);
+    message = br.ReadString(textLen);
+    break;
+  }
+  case CHAT_MSG_CHANNEL: {
+    uint32 const chLen = br.ReadBits(10);
+    uint32 const textLen = br.ReadBits(9);
+    message = br.ReadString(textLen);
+    channel = br.ReadString(chLen);
+    break;
+  }
+  case CHAT_MSG_AFK:
+  case CHAT_MSG_DND: {
+    uint32 const textLen = br.ReadBits(9);
+    message = br.ReadString(textLen);
+    break;
+  }
+  default:
+    return;
+  }
+
+  if (type != CHAT_MSG_AFK && type != CHAT_MSG_DND && message.empty())
+    return;
+
+  auto const chatPreview = [&message]() {
+    if (message.size() <= 96)
+      return message;
+    return message.substr(0, 96) + "...";
+  };
+  LOG_INFO("[CHAT] in opcode=0x{:X} legacy={} type={} lang={} msgLen={} msg='{}'",
+           packet.GetOpcode(), 0, type, lang,
+           message.size(), chatPreview());
+  LOG_INFO("[CHAT] knows lang={} => {}", lang,
+           PlayerKnowsLanguage(_knownSpells, lang) ? 1 : 0);
 
   if (_commandService->IsCommand(message)) {
     _commandService->ExecuteCommand(shared_from_this(), message);
@@ -1792,19 +2124,38 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
 
+  if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND) {
+    // Force deterministic spoken language for this character. Some clients can
+    // keep stale language selections in the normal chat box and send invalid
+    // language ids; using race default avoids client-side "cannot speak" spam.
+    lang = DefaultLanguageForRace(_playerRace);
+    if (lang == CHAT_LANG_ADDON) {
+      if (!AddonLangAllowedForType(type)) {
+        lang = DefaultLanguageForRace(_playerRace);
+      }
+    } else {
+      // Keep permissive behavior: if spell list is out of sync, do not block chat.
+      if (!PlayerKnowsLanguage(_knownSpells, lang))
+        lang = DefaultLanguageForRace(_playerRace);
+    }
+  }
+
+  // `receiverGuid` must be 0 for open channels (/say, /yell, party, guild, …).
+  // Sending the sender GUID twice makes the 4.3.4 client mis-parse the packet
+  // (language filter / scramble + "You cannot speak that language.").
+  // TODO: set real target GUID for `CHAT_MSG_WHISPER` when name→guid exists.
+  uint64 const receiverGuid = 0;
+
   WorldPacket response(SMSG_MESSAGECHAT);
-  response.Append<uint8>(static_cast<uint8>(type));
-  response.Append<uint32>(language);
-  response.Append<uint64>(_playerGuid);
-  response.Append<uint32>(0);
-  response.Append<uint64>(_playerGuid);
-  response.Append<uint32>(static_cast<uint32>(message.length() + 1));
-  response.WriteString(message);
-  response.Append<uint8>(0);
+  std::string const *chPtr =
+      (type == CHAT_MSG_CHANNEL && !channel.empty()) ? &channel : nullptr;
+  AppendSmsgMessageChatPayload(response, type, lang, _playerGuid, receiverGuid,
+                              message, chPtr);
+  LOG_INFO("[CHAT] out type={} lang={} receiverGuid={} msgLen={}", type, lang,
+           receiverGuid, message.size());
   SendPacket(response);
 
-  if (_playerGuid != 0 &&
-      (type == CHAT_MSG_SAY || type == CHAT_MSG_YELL)) {
+  if (type == CHAT_MSG_SAY || type == CHAT_MSG_YELL) {
     if (auto map = WorldService::Instance().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, response, false);
     }
@@ -2098,6 +2449,15 @@ void WorldSession::SendKnownSpells(bool initialLogin,
   SendPacket(data);
 }
 
+void WorldSession::SendLearnedSpell(uint32 spellId) {
+  if (spellId == 0)
+    return;
+  WorldPacket data(SMSG_LEARNED_SPELL);
+  data.Append<uint32>(spellId);
+  data.Append<uint32>(0);
+  SendPacket(data);
+}
+
 void WorldSession::SendUnlearnSpellsEmpty() {
   WorldPacket data(SMSG_SEND_UNLEARN_SPELLS);
   data.Append<uint32>(0);
@@ -2238,14 +2598,8 @@ void WorldSession::SendLoginVerifyWorld(uint32 mapId, float x, float y, float z,
 
 void WorldSession::SendNotification(const std::string &message) {
   WorldPacket response(SMSG_MESSAGECHAT);
-  response.Append<uint8>(CHAT_MSG_SYSTEM);
-  response.Append<uint32>(LANG_UNIVERSAL);
-  response.Append<uint64>(0);
-  response.Append<uint32>(0);
-  response.Append<uint64>(0);
-  response.Append<uint32>(static_cast<uint32>(message.length() + 1));
-  response.WriteString(message);
-  response.Append<uint8>(0);
+  AppendSmsgMessageChatPayload(response, CHAT_MSG_SYSTEM, LANG_UNIVERSAL, 0, 0,
+                               message, nullptr);
   SendPacket(response);
 }
 

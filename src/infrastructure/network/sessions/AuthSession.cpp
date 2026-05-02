@@ -1,6 +1,7 @@
 #include <application/services/SRPService.h>
 #include <cstring>
 #include <infrastructure/network/sessions/AuthSession.h>
+#include <shared/Config.h>
 #include <shared/Logger.h>
 
 #include <mutex>
@@ -222,8 +223,15 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
                                             : static_cast<uint8_t>(0);
     payloadBuffer.Append<uint8>(lock);
     payloadBuffer.Append<uint8>(realm.GetRealmListFlags());
-    // Name (ByteBuffer::Append(std::string) adds null terminator)
-    payloadBuffer.Append(realm.GetName());
+    // Name (ByteBuffer::Append(std::string) adds null terminator). The 4.3.4
+    // client uses this label for "Player-Realm" in chat; optional auth config
+    // can send "" so only the character name appears (DB `realmlist.name` unchanged).
+    std::string const realmWireName =
+        Config::Instance().GetNestedBool(
+            {"RealmList", "HideRealmSuffixInAuthList"}, false)
+            ? std::string()
+            : realm.GetName();
+    payloadBuffer.Append(realmWireName);
 
     // Address:port
     std::string address_port =

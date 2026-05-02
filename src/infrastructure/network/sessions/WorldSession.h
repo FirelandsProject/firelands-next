@@ -16,6 +16,8 @@
 #include <shared/network/ServerPacket.h>
 #include <shared/network/WorldCrypt.h>
 #include <shared/network/AccountDataTypes.h>
+#include <shared/dbc/LanguagesDbc.h>
+#include <shared/dbc/SpellDbc.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <array>
@@ -44,7 +46,9 @@ public:
       tcp::socket socket, std::shared_ptr<AuthService> authService,
       std::shared_ptr<CharacterService> charService,
       std::shared_ptr<ICommandService> commandService,
-      std::shared_ptr<MySqlAccountDataRepository> accountDataRepo);
+      std::shared_ptr<MySqlAccountDataRepository> accountDataRepo,
+      std::shared_ptr<LanguagesDbc const> languagesDbc = nullptr,
+      std::shared_ptr<SpellDbc const> spellDbc = nullptr);
 
   ~WorldSession();
 
@@ -98,6 +102,7 @@ private:
   void HandleTimeSyncResp(WorldPacket &packet);
   void HandleMoveTimeSkipped(WorldPacket &packet);
   void HandleMessageChat(WorldPacket &packet);
+  void HandleAddonMessageChat(WorldPacket &packet);
   void HandleRealmSplit(WorldPacket &packet);
   void HandleReadyForAccountDataTimes(WorldPacket &packet);
   void HandleUpdateAccountData(WorldPacket &packet);
@@ -131,6 +136,8 @@ private:
   void SendInitialObjectUpdate(uint64 guid);
   /// Matches WorldPackets::Spells::SendKnownSpells (FirelandsCore / TCPP 4.3.4).
   void SendKnownSpells(bool initialLogin, std::vector<uint32> const &spellIds);
+  /// Same payload as Trinity `Player::LearnSpell` → `SMSG_LEARNED_SPELL`.
+  void SendLearnedSpell(uint32 spellId);
   void SendUnlearnSpellsEmpty();
   void SendDungeonDifficulty(bool inGroup = false);
   void SendHotfixNotifyBlobEmpty();
@@ -161,6 +168,8 @@ private:
   std::shared_ptr<CharacterService> _charService;
   std::shared_ptr<ICommandService> _commandService;
   std::shared_ptr<MySqlAccountDataRepository> _accountDataRepo;
+  std::shared_ptr<LanguagesDbc const> _languagesDbc;
+  std::shared_ptr<SpellDbc const> _spellDbc;
   std::array<AccountDataSlot, NUM_ACCOUNT_DATA_TYPES> _accountData{};
   uint32_t _activeCharacterGuid = 0;
   /// Per-character account blobs edited at character select (no guid yet); flushed on login.
@@ -169,6 +178,7 @@ private:
   uint32 _serverSeed;
   uint32 _accountId = 0;
   uint64 _playerGuid = 0;
+  uint8 _playerRace = 0;
   uint32 _mapId = 0;
   uint32 _zoneId = 0;
   MovementInfo _position;

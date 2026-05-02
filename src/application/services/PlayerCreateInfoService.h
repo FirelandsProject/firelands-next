@@ -2,9 +2,11 @@
 
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/repositories/IPlayerCreateInfoRepository.h>
+#include <cstdint>
 #include <memory>
 #include <shared/dbc/CharStartOutfitDbc.h>
 #include <string>
+#include <vector>
 
 namespace Firelands {
 
@@ -43,6 +45,14 @@ public:
     }
 
     return {};
+  }
+
+  /// Starter spells from `playercreateinfo_spell` (world DB), merged with
+  /// wildcard rows (`race`/`class` = 0) like Trinity reference data.
+  std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) const {
+    if (!m_repository)
+      return {};
+    return m_repository->GetStarterSpells(race, klass);
   }
 
   std::vector<StarterItemGrant>

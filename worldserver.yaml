@@ -14,7 +14,7 @@ RealmLink:
   RealmId: 1
   Token: "7f60c01601f61a28210fbfd729313d98074443838bda1fe9ca18d4a7198e4330"
 
-# Used in SMSG_QUERY_PLAYER_NAME_RESPONSE (realm string); optional, default "".
+# Realm label for auth/realm link; not sent in name-query (chat shows plain name).
 World:
   RealmName: "Firelands"
 
