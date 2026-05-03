@@ -3,6 +3,7 @@
 #include <chrono>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <domain/models/SpellDefinition.h>
@@ -17,14 +18,14 @@ namespace Firelands {
 class IMapCollisionQueries;
 
 /// Input for a client-initiated cast after `TryReadClientCastSpell` succeeds.
-/// `knownSpells` must outlive the call (typically `WorldSession::_knownSpells`).
+/// `knownSpells` must outlive the call (typically `WorldSession::_knownSpellIds`).
 struct SpellCastRequest {
   uint64 casterGuid = 0;
   uint32 mapId = 0;
   SpellCastWire::ClientCastSpellData client{};
   std::chrono::steady_clock::time_point now{};
   std::chrono::steady_clock::time_point gcdReady{};
-  std::vector<uint32> const *knownSpells = nullptr;
+  std::unordered_set<uint32> const *knownSpells = nullptr;
   /// When both are set, `SpellManager` checks 3D distance vs `SpellRange.dbc` min/max for the
   /// hostile or friendly column pair (plus slack). Otherwise range checks are skipped.
   bool hasCasterWorldPosition = false;
@@ -83,7 +84,7 @@ struct SpellCastOutcome {
 /// Phase D hit payloads (direct health, …) are composed via `SpellHitEffects::*` into
 /// `SpellCastOutcome`; add functions there to extend behavior without bloating this class.
 /// Thread-safety: const methods only; per-session mutable state stays on `WorldSession`
-/// (`_gcdReady`, `_knownSpells`) passed in/out via `SpellCastRequest` / `SpellCastOutcome`.
+/// (`_gcdReady`, `_knownSpellIds`) passed in/out via `SpellCastRequest` / `SpellCastOutcome`.
 class SpellManager {
 public:
   explicit SpellManager(
@@ -96,7 +97,8 @@ public:
                           SpellCastOutcome *out) const;
 
 private:
-  static bool IsSpellKnown(uint32 spellId, std::vector<uint32> const *knownSpells);
+  static bool IsSpellKnown(uint32 spellId,
+                           std::unordered_set<uint32> const *knownSpells);
 
   std::shared_ptr<ISpellDefinitionStore const> m_spellDefinitions;
   std::shared_ptr<ISpellCastTables const> m_spellCastTables;

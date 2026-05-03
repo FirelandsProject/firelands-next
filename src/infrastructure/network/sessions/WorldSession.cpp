@@ -36,7 +36,6 @@
 #include <memory>
 #include <optional>
 #include <optional>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -68,6 +67,14 @@ std::optional<std::pair<uint32, uint32>> TryLivePlayerPower1(uint32 mapId,
   if (!pl)
     return std::nullopt;
   return std::make_pair(pl->GetLivePower1(), pl->GetLiveMaxPower1());
+}
+
+void RebuildKnownSpellIdSet(std::vector<uint32> const &ordered,
+                            std::unordered_set<uint32> &outIds) {
+  outIds.clear();
+  outIds.reserve(ordered.size());
+  for (uint32 sid : ordered)
+    outIds.insert(sid);
 }
 
 constexpr uint8_t kMailMessageTypeNormal = 0;
@@ -647,6 +654,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
     PrioritizeDefaultLanguageSpell(static_cast<uint8>(character.GetRace()),
                                    spells);
     _knownSpells = std::move(spells);
+    RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
     uint32 const defaultLang = DefaultLanguageForRace(character.GetRace());
     uint32 const defaultLangSpell = LanguageSpellIdForLang(defaultLang);
     {
@@ -923,6 +931,7 @@ void WorldSession::FinalizeWorldExit() {
   _playerRace = 0;
   _playerXp = 0;
   _knownSpells.clear();
+  _knownSpellIds.clear();
   _gcdReady = {};
   _spellCooldownUntil.clear();
   _spellCategoryCooldownUntil.clear();
@@ -1129,7 +1138,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   req.client = c;
   req.now = now;
   req.gcdReady = _gcdReady;
-  req.knownSpells = &_knownSpells;
+  req.knownSpells = &_knownSpellIds;
   MovementInfo const &pos = GetPosition();
   req.hasCasterWorldPosition = true;
   req.casterX = pos.x;
@@ -1724,8 +1733,7 @@ void WorldSession::PublishSelfCoinageUpdate() {
 bool WorldSession::GmLearnSpell(uint32 spellId) {
   if (_playerGuid == 0 || spellId == 0)
     return false;
-  if (std::find(_knownSpells.begin(), _knownSpells.end(), spellId) !=
-      _knownSpells.end()) {
+  if (_knownSpellIds.count(spellId) != 0u) {
     SendNotification("Already knows spell " + std::to_string(spellId) + ".");
     return true;
   }
@@ -1740,6 +1748,7 @@ bool WorldSession::GmLearnSpell(uint32 spellId) {
     return false;
   }
   _knownSpells.push_back(spellId);
+  _knownSpellIds.insert(spellId);
   SendLearnedSpell(spellId);
   SendNotification("Learned spell " + std::to_string(spellId) + ".");
   return true;

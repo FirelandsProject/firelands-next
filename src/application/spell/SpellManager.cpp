@@ -55,13 +55,10 @@ SpellManager::SpellManager(std::shared_ptr<ISpellDefinitionStore const> spellDef
       m_spellCastTables(std::move(spellCastTables)) {}
 
 bool SpellManager::IsSpellKnown(uint32 spellId,
-                                std::vector<uint32> const *knownSpells) {
+                                std::unordered_set<uint32> const *knownSpells) {
   if (!knownSpells || spellId == 0u)
     return false;
-  // Hot path: linear scan on a small list (~100–200). For higher load, replace
-  // `_knownSpells` storage with a sorted vector + binary_search or a flat_hash_set.
-  auto const &v = *knownSpells;
-  return std::find(v.begin(), v.end(), spellId) != v.end();
+  return knownSpells->find(spellId) != knownSpells->end();
 }
 
 void SpellManager::ProcessCastRequest(SpellCastRequest const &req,

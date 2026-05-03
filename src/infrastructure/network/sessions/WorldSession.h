@@ -29,6 +29,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Firelands {
@@ -308,6 +309,8 @@ private:
 
   /// Known spells for the logged-in character (mirrors `SMSG_SEND_KNOWN_SPELLS` payload).
   std::vector<uint32> _knownSpells;
+  /// Same ids as `_knownSpells` for O(1) lookups (`SpellManager`, GM helpers).
+  std::unordered_set<uint32> _knownSpellIds;
   std::chrono::steady_clock::time_point _gcdReady{};
   /// Phase E: per-spell recovery (`SpellCooldowns.dbc` RecoveryTime) until instant.
   std::unordered_map<uint32, std::chrono::steady_clock::time_point> _spellCooldownUntil;

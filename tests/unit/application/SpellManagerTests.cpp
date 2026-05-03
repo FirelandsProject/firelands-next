@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <application/ports/IMapCollisionQueries.h>
 #include <application/spell/SpellManager.h>
 #include <domain/repositories/ISpellCastTables.h>
@@ -355,7 +356,7 @@ static uint8 ReadSpellFailureReason(WorldPacket &p) {
 } // namespace
 
 static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
-                                    std::vector<uint32> *knownSpells) {
+                                    std::unordered_set<uint32> *knownSpells) {
   SpellCastRequest req;
   req.casterGuid = casterGuid;
   req.mapId = 0;
@@ -373,7 +374,7 @@ static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
 
 TEST(SpellManagerTests, UnknownSpell_ReturnsSpellFailure) {
   SpellManager mgr(nullptr);
-  std::vector<uint32> known = {100, 200};
+  std::unordered_set<uint32> known = {100, 200};
   SpellCastRequest req = MakeRequest(0x10ULL, 999, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -383,7 +384,7 @@ TEST(SpellManagerTests, UnknownSpell_ReturnsSpellFailure) {
 
 TEST(SpellManagerTests, GcdActive_ReturnsNotReady) {
   SpellManager mgr(nullptr);
-  std::vector<uint32> known = {6673};
+  std::unordered_set<uint32> known = {6673};
   SpellCastRequest req = MakeRequest(0x10ULL, 6673, &known);
   req.gcdReady = req.now + std::chrono::seconds(10);
   SpellCastOutcome out;
@@ -394,7 +395,7 @@ TEST(SpellManagerTests, GcdActive_ReturnsNotReady) {
 
 TEST(SpellManagerTests, KnownSpellOffGcd_ReturnsStartAndGo) {
   SpellManager mgr(nullptr);
-  std::vector<uint32> known = {6673};
+  std::unordered_set<uint32> known = {6673};
   SpellCastRequest req = MakeRequest(0xABCDULL, 6673, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -414,7 +415,7 @@ TEST(SpellManagerTests, NullKnownList_TreatedAsUnknown) {
 
 TEST(SpellManagerTests, DefinitionStoreRejectsKnownSpell) {
   SpellManager mgr(std::make_shared<SpellDefinitionStoreMiss>());
-  std::vector<uint32> known = {4242};
+  std::unordered_set<uint32> known = {4242};
   SpellCastRequest req = MakeRequest(0x10ULL, 4242, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -426,7 +427,7 @@ TEST(SpellManagerTests, CastTablesFillSpellStartCastTime) {
   auto defs = std::make_shared<SpellDefinitionStoreWithCasting>(9);
   auto tables = std::make_shared<MockSpellCastTables>(3200u, 9u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -439,7 +440,7 @@ TEST(SpellManagerTests, RangeExceeded_ReturnsOutOfRange) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(5.f, kRi);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.hasCasterWorldPosition = true;
   req.casterX = 0.f;
@@ -461,7 +462,7 @@ TEST(SpellManagerTests, RangeWithinMax_ReturnsStartAndGo) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.hasCasterWorldPosition = true;
   req.casterX = 0.f;
@@ -481,7 +482,7 @@ TEST(SpellManagerTests, RangeBelowMin_ReturnsTooClose) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi, 10.f);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.hasCasterWorldPosition = true;
   req.casterX = 0.f;
@@ -503,7 +504,7 @@ TEST(SpellManagerTests, RangeAboveMin_ReturnsStartAndGo) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi, 10.f);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.hasCasterWorldPosition = true;
   req.casterX = 0.f;
@@ -522,7 +523,7 @@ TEST(SpellManagerTests, FriendlySpellRangeUsesHigherMaxThanHostile) {
   uint32 constexpr kRi = 11;
   auto tables =
       std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -556,7 +557,7 @@ TEST(SpellManagerTests, BeneficialSpell_FactionHintEnemyTeam_UsesHostileSpellRan
       std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
   auto defsHeal = std::make_shared<SpellDefinitionWithRange>(kRi, 1);
   SpellManager mgrHeal(defsHeal, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -583,7 +584,7 @@ TEST(SpellManagerTests, BeneficialSpell_FactionHintSameTeam_UsesFriendlySpellRan
       std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
   auto defsHeal = std::make_shared<SpellDefinitionWithRange>(kRi, 1);
   SpellManager mgrHeal(defsHeal, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -609,7 +610,7 @@ TEST(SpellManagerTests, AuraDebuffAttrUsesHostileRangeOnOtherUnit) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(
       kRi, 0, SpellAttr0::kAuraIsDebuff);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -635,7 +636,7 @@ TEST(SpellManagerTests, InitiatesCombatAttrUsesHostileRangeOnOtherUnit) {
   auto defs =
       std::make_shared<SpellDefinitionWithRange>(kRi, 0, 0, SpellAttrEx::kInitiatesCombat);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -661,7 +662,7 @@ TEST(SpellManagerTests, SpellEffectHarmKindUsesHostileRangeWhenDeltaZero) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(
       kRi, 0, 0, 0, false /*heal*/, true /*harm from SpellEffect.dbc*/);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -687,7 +688,7 @@ TEST(SpellManagerTests, NegativeSpellAttrUsesHostileRangeOnOtherUnit) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(
       kRi, 0, SpellAttr0::kNegativeSpell);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -712,7 +713,7 @@ TEST(SpellManagerTests, SpellAttr2IgnoreLineOfSight_BypassesBlockedLos) {
       kRi, SpellAttr2::kIgnoreLineOfSight);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -737,7 +738,7 @@ TEST(SpellManagerTests, LineOfSightBlocked_ReturnsLineOfSightFailure) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -764,7 +765,7 @@ TEST(SpellManagerTests, LineOfSightSkipFlag_IgnoresBlockedLos) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x20ULL;
@@ -789,7 +790,7 @@ TEST(SpellManagerTests, GcdUsesSpellCooldownsStartRecovery) {
   auto defs = std::make_shared<SpellDefWithCooldownsId>(42);
   auto tables = std::make_shared<CooldownTablesStub>(3200u, 0u, 42u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -817,7 +818,7 @@ TEST(SpellManagerTests, SufficientMana_SetsPower1Delta) {
   auto defs = std::make_shared<DefMana>();
   auto tables = std::make_shared<MockSpellCastTables>(0u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {555};
+  std::unordered_set<uint32> known = {555};
   SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
   req.hasCasterPowerSnapshot = true;
   req.casterPower1 = 100;
@@ -844,7 +845,7 @@ TEST(SpellManagerTests, InsufficientMana_ReturnsNoPower) {
   auto defs = std::make_shared<DefMana>();
   auto tables = std::make_shared<MockSpellCastTables>(0u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {555};
+  std::unordered_set<uint32> known = {555};
   SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
   req.hasCasterPowerSnapshot = true;
   req.casterPower1 = 50;
@@ -860,7 +861,7 @@ TEST(SpellManagerTests, PerSpellCooldownActive_ReturnsNotReady) {
   auto defs = std::make_shared<SpellDefinitionWithRange>(11);
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, 11);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   std::unordered_map<uint32, std::chrono::steady_clock::time_point> cd;
   cd[100u] = req.now + std::chrono::hours(1);
@@ -876,7 +877,7 @@ TEST(SpellManagerTests, CategoryCooldownActive_ReturnsNotReady) {
   auto defs = std::make_shared<SpellDefWithCategoriesAndCooldownsId>(100u, 42u);
   auto tables = std::make_shared<CooldownTablesWithCategoryRecovery>(8000u, 42u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {200};
+  std::unordered_set<uint32> known = {200};
   SpellCastRequest req = MakeRequest(0x10ULL, 200, &known);
   std::unordered_map<uint32, std::chrono::steady_clock::time_point> catCd;
   catCd[7u] = req.now + std::chrono::hours(1);
@@ -892,7 +893,7 @@ TEST(SpellManagerTests, CategoryCooldownOnSuccess_FillsOutcome) {
   auto defs = std::make_shared<SpellDefWithCategoriesAndCooldownsId>(100u, 42u);
   auto tables = std::make_shared<CooldownTablesWithCategoryRecovery>(5000u, 42u);
   SpellManager mgr(defs, tables);
-  std::vector<uint32> known = {200};
+  std::unordered_set<uint32> known = {200};
   SpellCastRequest req = MakeRequest(0x10ULL, 200, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
@@ -904,7 +905,7 @@ TEST(SpellManagerTests, CategoryCooldownOnSuccess_FillsOutcome) {
 TEST(SpellManagerTests, DirectHealthEffect_FilledOnSuccess) {
   auto defs = std::make_shared<SpellDefinitionWithDirectHealth>(-42);
   SpellManager mgr(defs, nullptr);
-  std::vector<uint32> known = {555};
+  std::unordered_set<uint32> known = {555};
   SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = 0x99ULL;
@@ -922,7 +923,7 @@ TEST(SpellManagerTests, LineOfSightNotCheckedForSelfTarget) {
   auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
   SpellManager mgr(defs, tables);
   uint64 constexpr kGuid = 0x10ULL;
-  std::vector<uint32> known = {100};
+  std::unordered_set<uint32> known = {100};
   SpellCastRequest req = MakeRequest(kGuid, 100, &known);
   req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
   req.client.unitTargetGuid = kGuid;
