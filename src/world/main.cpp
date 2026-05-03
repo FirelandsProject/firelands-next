@@ -5,6 +5,7 @@
 #include <application/services/PlayerCreateInfoService.h>
 #include <application/services/WorldService.h>
 #include <application/spell/SpellManager.h>
+#include <domain/repositories/ISpellDefinitionStore.h>
 #include <chrono>
 #include <conncpp.hpp>
 #include <infrastructure/network/asio/AsyncNetworkServer.h>
@@ -16,6 +17,7 @@
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
+#include <infrastructure/dbc/SpellEntryDbcStore.h>
 #include <infrastructure/persistence/MySqlRealmRepository.h>
 #include <infrastructure/scripting/LuaGameScriptHost.h>
 #include <infrastructure/world/MapCollisionQueriesStub.h>
@@ -28,7 +30,6 @@
 #include <shared/dbc/ItemDbHotfixStore.h>
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/dbc/SpellDifficultyDbc.h>
-#include <shared/dbc/SpellDbc.h>
 #include <shared/Logger.h>
 #include <thread>
 
@@ -181,12 +182,16 @@ int main(int argc, char **argv) {
       languagesDbc.reset();
     }
 
-    auto spellDbc = std::make_shared<SpellDbc>();
-    if (!spellDbc->Load(dbcBasePath + "/Spell.dbc")) {
-      LOG_WARN("Spell.dbc not loaded from {}; known spells are not filtered "
-               "against client data.",
-               dbcBasePath + "/Spell.dbc");
-      spellDbc.reset();
+    std::shared_ptr<ISpellDefinitionStore const> spellDefinitions;
+    {
+      auto store = std::make_shared<SpellEntryDbcStore>();
+      if (!store->Load(dbcBasePath + "/Spell.dbc")) {
+        LOG_WARN("Spell.dbc not loaded from {}; known spells are not filtered "
+                 "against client data.",
+                 dbcBasePath + "/Spell.dbc");
+      } else {
+        spellDefinitions = std::move(store);
+      }
     }
 
     SpellDifficultyDbc spellDifficultyDbc;
@@ -201,15 +206,15 @@ int main(int argc, char **argv) {
     auto itemDbHotfix = std::make_shared<ItemDbHotfixStore>();
     itemDbHotfix->load(dbcBasePath);
 
-    auto spellManager = std::make_shared<SpellManager>();
+    auto spellManager = std::make_shared<SpellManager>(spellDefinitions);
 
     auto sessionFactory = [authService, charService, commandService,
-                           accountDataRepo, languagesDbc, spellDbc, realmRepo,
-                           onlineCharRegistry, gmTicketService, itemDbHotfix,
-                           spellManager](boost::asio::ip::tcp::socket socket) {
+                           accountDataRepo, languagesDbc, spellDefinitions,
+                           realmRepo, onlineCharRegistry, gmTicketService,
+                           itemDbHotfix, spellManager](boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
                                      commandService, accountDataRepo,
-                                     languagesDbc, spellDbc, realmRepo,
+                                     languagesDbc, spellDefinitions, realmRepo,
                                      onlineCharRegistry, gmTicketService,
                                      itemDbHotfix, spellManager)
           ->Start();

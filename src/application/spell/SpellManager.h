@@ -1,8 +1,10 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 #include <vector>
 
+#include <domain/repositories/ISpellDefinitionStore.h>
 #include <shared/Common.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldPacket.h>
@@ -36,7 +38,8 @@ struct SpellCastOutcome {
 /// (`_gcdReady`, `_knownSpells`) passed in/out via `SpellCastRequest` / `SpellCastOutcome`.
 class SpellManager {
 public:
-  SpellManager() = default;
+  explicit SpellManager(
+      std::shared_ptr<ISpellDefinitionStore const> spellDefinitions = nullptr);
 
   /// Evaluates a cast request. On success, sets `newGcdReady` and fills start/go packets.
   /// On failure, fills `failurePacket` only. Does not send on the wire.
@@ -45,6 +48,8 @@ public:
 
 private:
   static bool IsSpellKnown(uint32 spellId, std::vector<uint32> const *knownSpells);
+
+  std::shared_ptr<ISpellDefinitionStore const> m_spellDefinitions;
 };
 
 } // namespace Firelands

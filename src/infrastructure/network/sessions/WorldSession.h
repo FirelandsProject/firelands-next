@@ -22,7 +22,6 @@
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PlayerGmAppearance.h>
-#include <shared/dbc/SpellDbc.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <array>
@@ -47,6 +46,7 @@ class MySqlAccountDataRepository;
 class IRealmRepository;
 class OnlineCharacterSessionRegistry;
 class GmTicketService;
+class ISpellDefinitionStore;
 
 class WorldSession : public IAuthSession,
                      public IMapNotifier,
@@ -59,7 +59,7 @@ public:
       std::shared_ptr<ICommandService> commandService,
       std::shared_ptr<MySqlAccountDataRepository> accountDataRepo,
       std::shared_ptr<LanguagesDbc const> languagesDbc = nullptr,
-      std::shared_ptr<SpellDbc const> spellDbc = nullptr,
+      std::shared_ptr<ISpellDefinitionStore const> spellDefinitions = nullptr,
       std::shared_ptr<IRealmRepository> realmRepo = nullptr,
       std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharRegistry =
           nullptr,
@@ -254,7 +254,7 @@ private:
   std::shared_ptr<ICommandService> _commandService;
   std::shared_ptr<MySqlAccountDataRepository> _accountDataRepo;
   std::shared_ptr<LanguagesDbc const> _languagesDbc;
-  std::shared_ptr<SpellDbc const> _spellDbc;
+  std::shared_ptr<ISpellDefinitionStore const> _spellDefinitions;
   std::shared_ptr<IRealmRepository> _realmRepo;
   std::shared_ptr<OnlineCharacterSessionRegistry> _onlineCharRegistry;
   std::shared_ptr<GmTicketService> _gmTicketService;

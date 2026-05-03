@@ -4,6 +4,9 @@
 
 namespace Firelands {
 
+SpellManager::SpellManager(std::shared_ptr<ISpellDefinitionStore const> spellDefinitions)
+    : m_spellDefinitions(std::move(spellDefinitions)) {}
+
 bool SpellManager::IsSpellKnown(uint32 spellId,
                                 std::vector<uint32> const *knownSpells) {
   if (!knownSpells || spellId == 0u)
@@ -22,6 +25,14 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
 
   uint32 const spellId = static_cast<uint32>(req.client.spellId);
   if (!IsSpellKnown(spellId, req.knownSpells)) {
+    SpellCastWire::BuildSpellFailure(
+        out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+        SpellCastWire::SPELL_FAILED_SPELL_UNAVAILABLE);
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
+
+  if (m_spellDefinitions && !m_spellDefinitions->HasSpell(spellId)) {
     SpellCastWire::BuildSpellFailure(
         out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
         SpellCastWire::SPELL_FAILED_SPELL_UNAVAILABLE);

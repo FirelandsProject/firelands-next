@@ -79,6 +79,8 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 ### Fase B — Definición de hechizo en memoria
 
+**Estado (parcial):** puerto `ISpellDefinitionStore`, modelo `SpellDefinition`, adaptador `SpellEntryDbcStore` que carga `Spell.dbc` con `SpellEntryfmt` TCPP, valida `fieldCount` + `recordSize`, mapa `unordered_map` O(1). Integrado en login/GM/`SpellManager`. **Pendiente:** overrides SQL (`spell_dbc`), más campos, `SpellCastTimes`/`SpellRange` resueltos.
+
 1. Puerto `ISpellDefinitionStore` + `SpellDefinition` compacto.
 2. Loader infra: DBC (y opcionalmente merge con `spell_dbc` / `spelleffect_dbc` al arranque).
 3. Fallo coherente si no hay definición.
@@ -138,7 +140,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 ## 7. Referencias internas
 
 - Cast actual: `WorldSession::HandleCastSpell`, `SpellCastWire`.
-- Definición mínima de ids: `SpellDbc`; dificultad: `SpellDifficultyDbc`.
+- Definición de hechizos: `ISpellDefinitionStore` + `SpellEntryDbcStore` (`Spell.dbc`); dificultad: `SpellDifficultyDbc`.
 - Tablas world recientes: migración `16_world_spell_tables.sql` (paridad esquema con TCPP para datos/overrides).
 
 ---

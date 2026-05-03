@@ -1,9 +1,22 @@
 #include <gtest/gtest.h>
 #include <application/spell/SpellManager.h>
+#include <domain/repositories/ISpellDefinitionStore.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldOpcodes.h>
 
 using namespace Firelands;
+
+namespace {
+
+class SpellDefinitionStoreMiss final : public ISpellDefinitionStore {
+public:
+  bool HasSpell(uint32 /*spellId*/) const override { return false; }
+  std::optional<SpellDefinition> GetDefinition(uint32 /*spellId*/) const override {
+    return std::nullopt;
+  }
+};
+
+} // namespace
 
 static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
                                     std::vector<uint32> *knownSpells) {
@@ -23,7 +36,7 @@ static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
 }
 
 TEST(SpellManagerTests, UnknownSpell_ReturnsSpellFailure) {
-  SpellManager mgr;
+  SpellManager mgr(nullptr);
   std::vector<uint32> known = {100, 200};
   SpellCastRequest req = MakeRequest(0x10ULL, 999, &known);
   SpellCastOutcome out;
@@ -33,7 +46,7 @@ TEST(SpellManagerTests, UnknownSpell_ReturnsSpellFailure) {
 }
 
 TEST(SpellManagerTests, GcdActive_ReturnsNotReady) {
-  SpellManager mgr;
+  SpellManager mgr(nullptr);
   std::vector<uint32> known = {6673};
   SpellCastRequest req = MakeRequest(0x10ULL, 6673, &known);
   req.gcdReady = req.now + std::chrono::seconds(10);
@@ -44,7 +57,7 @@ TEST(SpellManagerTests, GcdActive_ReturnsNotReady) {
 }
 
 TEST(SpellManagerTests, KnownSpellOffGcd_ReturnsStartAndGo) {
-  SpellManager mgr;
+  SpellManager mgr(nullptr);
   std::vector<uint32> known = {6673};
   SpellCastRequest req = MakeRequest(0xABCDULL, 6673, &known);
   SpellCastOutcome out;
@@ -56,9 +69,19 @@ TEST(SpellManagerTests, KnownSpellOffGcd_ReturnsStartAndGo) {
 }
 
 TEST(SpellManagerTests, NullKnownList_TreatedAsUnknown) {
-  SpellManager mgr;
+  SpellManager mgr(nullptr);
   SpellCastRequest req = MakeRequest(0x10ULL, 1, nullptr);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
   EXPECT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+}
+
+TEST(SpellManagerTests, DefinitionStoreRejectsKnownSpell) {
+  SpellManager mgr(std::make_shared<SpellDefinitionStoreMiss>());
+  std::vector<uint32> known = {4242};
+  SpellCastRequest req = MakeRequest(0x10ULL, 4242, &known);
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_TRUE(out.failurePacket.Is(SMSG_SPELL_FAILURE));
 }

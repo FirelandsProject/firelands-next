@@ -25,6 +25,7 @@
 #include <shared/game/WowGuid.h>
 #include <shared/game/Permissions.h>
 #include <domain/repositories/ICharacterRepository.h>
+#include <domain/repositories/ISpellDefinitionStore.h>
 #include <algorithm>
 #include <map>
 #include <chrono>
@@ -111,7 +112,7 @@ WorldSession::WorldSession(
     std::shared_ptr<ICommandService> commandService,
     std::shared_ptr<MySqlAccountDataRepository> accountDataRepo,
     std::shared_ptr<LanguagesDbc const> languagesDbc,
-    std::shared_ptr<SpellDbc const> spellDbc,
+    std::shared_ptr<ISpellDefinitionStore const> spellDefinitions,
     std::shared_ptr<IRealmRepository> realmRepo,
     std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharRegistry,
     std::shared_ptr<GmTicketService> gmTicketService,
@@ -122,7 +123,7 @@ WorldSession::WorldSession(
       _commandService(std::move(commandService)),
       _accountDataRepo(std::move(accountDataRepo)),
       _languagesDbc(std::move(languagesDbc)),
-      _spellDbc(std::move(spellDbc)),
+      _spellDefinitions(std::move(spellDefinitions)),
       _realmRepo(std::move(realmRepo)),
       _onlineCharRegistry(std::move(onlineCharRegistry)),
       _gmTicketService(std::move(gmTicketService)),
@@ -586,11 +587,11 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       else
         ++it;
     }
-    if (_spellDbc && _spellDbc->IsLoaded()) {
+    if (_spellDefinitions) {
       for (auto it = spells.begin(); it != spells.end();) {
         uint32 const sid = *it;
         // Never drop passive "Language *" spells: wrong-era DBC would break /say.
-        if (!IsLanguagePassiveSpell(sid) && !_spellDbc->HasSpell(sid)) {
+        if (!IsLanguagePassiveSpell(sid) && !_spellDefinitions->HasSpell(sid)) {
           LOG_WARN(
               "Spell id {} not in Spell.dbc; omitted from known spells (race={} "
               "class={})",
@@ -605,8 +606,8 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       uint32 const u = static_cast<uint32>(sid);
       if (u == 0)
         continue;
-      if (_spellDbc && _spellDbc->IsLoaded() && !IsLanguagePassiveSpell(u) &&
-          !_spellDbc->HasSpell(u)) {
+      if (_spellDefinitions && !IsLanguagePassiveSpell(u) &&
+          !_spellDefinitions->HasSpell(u)) {
         continue;
       }
       if (std::find(spells.begin(), spells.end(), u) == spells.end())
@@ -1588,8 +1589,8 @@ bool WorldSession::GmLearnSpell(uint32 spellId) {
     SendNotification("Already knows spell " + std::to_string(spellId) + ".");
     return true;
   }
-  if (_spellDbc && _spellDbc->IsLoaded() && !IsLanguagePassiveSpell(spellId) &&
-      !_spellDbc->HasSpell(spellId)) {
+  if (_spellDefinitions && !IsLanguagePassiveSpell(spellId) &&
+      !_spellDefinitions->HasSpell(spellId)) {
     SendNotification("Spell id not in Spell.dbc (refused).");
     return false;
   }
