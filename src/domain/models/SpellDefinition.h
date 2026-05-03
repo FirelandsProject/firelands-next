@@ -29,6 +29,10 @@ struct SpellDefinition {
   /// First spell-hit immediate HP delta from `SpellEffect.dbc` (school damage / generic heal).
   /// Negative removes HP (damage); positive restores HP (heal). Zero = none for Phase D simplification.
   int32 immediateHealthEffectDelta = 0;
+  /// Any `SpellEffect.dbc` row uses `SPELL_EFFECT_HEAL` for this spell (all indices scanned).
+  bool spellEffectHasHealKind = false;
+  /// Any row uses school damage, health leech, or environmental damage (polarity hint when delta is 0).
+  bool spellEffectHasHarmKind = false;
 };
 
 } // namespace Firelands

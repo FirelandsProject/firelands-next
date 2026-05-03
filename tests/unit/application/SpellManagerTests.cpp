@@ -81,11 +81,15 @@ public:
   explicit SpellDefinitionWithRange(uint32 rangeIndex,
                                     int32 immediateHealthEffectDelta = 0,
                                     uint32 attributes = 0,
-                                    uint32 attributesEx = 0)
+                                    uint32 attributesEx = 0,
+                                    bool spellEffectHasHealKind = false,
+                                    bool spellEffectHasHarmKind = false)
       : m_rangeIndex(rangeIndex),
         m_immediateHealthEffectDelta(immediateHealthEffectDelta),
         m_attributes(attributes),
-        m_attributesEx(attributesEx) {}
+        m_attributesEx(attributesEx),
+        m_spellEffectHasHealKind(spellEffectHasHealKind),
+        m_spellEffectHasHarmKind(spellEffectHasHarmKind) {}
 
   bool HasSpell(uint32 /*spellId*/) const override { return true; }
   std::optional<SpellDefinition> GetDefinition(uint32 spellId) const override {
@@ -96,6 +100,8 @@ public:
     d.immediateHealthEffectDelta = m_immediateHealthEffectDelta;
     d.attributes = m_attributes;
     d.attributesEx = m_attributesEx;
+    d.spellEffectHasHealKind = m_spellEffectHasHealKind;
+    d.spellEffectHasHarmKind = m_spellEffectHasHarmKind;
     return d;
   }
 
@@ -104,6 +110,8 @@ private:
   int32 m_immediateHealthEffectDelta;
   uint32 m_attributes;
   uint32 m_attributesEx;
+  bool m_spellEffectHasHealKind;
+  bool m_spellEffectHasHarmKind;
 };
 
 class SpellDefinitionWithRangeAndAttr2 final : public ISpellDefinitionStore {
@@ -573,6 +581,32 @@ TEST(SpellManagerTests, InitiatesCombatAttrUsesHostileRangeOnOtherUnit) {
       std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
   auto defs =
       std::make_shared<SpellDefinitionWithRange>(kRi, 0, 0, SpellAttrEx::kInitiatesCombat);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
+  req.client.unitTargetGuid = 0x20ULL;
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 10.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_EQ(ReadSpellFailureReason(out.failurePacket),
+            static_cast<uint8>(SpellCastWire::SPELL_FAILED_OUT_OF_RANGE));
+}
+
+TEST(SpellManagerTests, SpellEffectHarmKindUsesHostileRangeWhenDeltaZero) {
+  uint32 constexpr kRi = 11;
+  auto tables =
+      std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
+  auto defs = std::make_shared<SpellDefinitionWithRange>(
+      kRi, 0, 0, 0, false /*heal*/, true /*harm from SpellEffect.dbc*/);
   SpellManager mgr(defs, tables);
   std::vector<uint32> known = {100};
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);

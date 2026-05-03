@@ -24,6 +24,8 @@ static bool SpellTreatAsBeneficialForFriendlySpellRange(SpellDefinition const &d
     return false;
   if ((def.attributesEx & SpellAttrEx::kInitiatesCombat) != 0u)
     return false;
+  if (def.spellEffectHasHarmKind)
+    return false;
   return true;
 }
 

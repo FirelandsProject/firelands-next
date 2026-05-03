@@ -26,7 +26,9 @@ constexpr uint32_t kSpellEffectFieldSpellID = 24;
 constexpr uint32_t kSpellEffectFieldEffectIndex = 25;
 
 constexpr uint32_t SPELL_EFFECT_SCHOOL_DAMAGE = 2;
+constexpr uint32_t SPELL_EFFECT_HEALTH_LEECH = 9;
 constexpr uint32_t SPELL_EFFECT_HEAL = 10;
+constexpr uint32_t SPELL_EFFECT_ENVIRONMENTAL_DAMAGE = 13;
 
 // TCPP `src/server/game/DataStores/DBCfmt.h` — must match client `Spell.dbc` for 15595.
 constexpr std::string_view kSpellEntryFmt =
@@ -284,16 +286,25 @@ void SpellEntryDbcStore::MergeImmediateHealthFromSpellEffect(
     int32_t dieSides;
   };
   std::vector<CandidateRow> candidates;
+  std::unordered_map<uint32_t, std::pair<bool, bool>> polarityBySpell;
   uint32_t const n = reader.GetRecordCount();
   candidates.reserve(static_cast<size_t>(n) / 8u + 8u);
 
   for (uint32_t rec = 0; rec < n; ++rec) {
     uint32_t const spellId =
         reader.ReadUInt32(rec, kSpellEffectFieldSpellID, offsets);
-    if (spellId == 0u)
+    if (spellId == 0u || m_byId.find(spellId) == m_byId.end())
       continue;
     uint32_t const effect =
         reader.ReadUInt32(rec, kSpellEffectFieldEffect, offsets);
+
+    if (effect == SPELL_EFFECT_HEAL)
+      polarityBySpell[spellId].first = true;
+    if (effect == SPELL_EFFECT_SCHOOL_DAMAGE ||
+        effect == SPELL_EFFECT_HEALTH_LEECH ||
+        effect == SPELL_EFFECT_ENVIRONMENTAL_DAMAGE)
+      polarityBySpell[spellId].second = true;
+
     if (effect != SPELL_EFFECT_SCHOOL_DAMAGE && effect != SPELL_EFFECT_HEAL)
       continue;
     int32_t const basePoints =
@@ -304,6 +315,14 @@ void SpellEntryDbcStore::MergeImmediateHealthFromSpellEffect(
         reader.ReadUInt32(rec, kSpellEffectFieldEffectIndex, offsets);
     candidates.push_back(CandidateRow{spellId, effectIndex, effect, basePoints,
                                       dieSides});
+  }
+
+  for (auto const &[spellId, healHarm] : polarityBySpell) {
+    auto it = m_byId.find(spellId);
+    if (it == m_byId.end())
+      continue;
+    it->second.spellEffectHasHealKind = healHarm.first;
+    it->second.spellEffectHasHarmKind = healHarm.second;
   }
 
   std::sort(candidates.begin(), candidates.end(),

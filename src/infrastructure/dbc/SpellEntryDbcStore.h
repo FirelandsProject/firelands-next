@@ -16,8 +16,9 @@ public:
   bool Load(std::string const &path);
 
   /// After `Load()` and optional `MergeSpellDbcRows()`, reads client `SpellEffect.dbc` and
-  /// fills `immediateHealthEffectDelta` for ids already in the store (lowest `EffectIndex`
-  /// among school damage / heal wins).
+  /// fills `immediateHealthEffectDelta` (lowest `EffectIndex` among school damage / heal with
+  /// non-zero derived magnitude) plus `spellEffectHasHealKind` / `spellEffectHasHarmKind`
+  /// from all effect rows (school damage, heal, health leech, environmental damage).
   void MergeImmediateHealthFromSpellEffect(std::string const &path);
 
   /// After `MergeImmediateHealthFromSpellEffect()` (or merge-only setups), sets `manaCost`
