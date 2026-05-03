@@ -16,18 +16,28 @@ public:
     uint32 startRecoveryMs = 0;
   };
 
+  /// Parsed row from `SpellRange.dbc` (`SpellRangefmt`); TCPP field order — hostile index 0,
+  /// friendly index 1 for both min and max.
+  struct SpellRangeRow {
+    float hostileMinYards = 0.f;
+    float hostileMaxYards = 0.f;
+    float friendlyMinYards = 0.f;
+    float friendlyMaxYards = 0.f;
+  };
+
   /// Each file is optional: missing file logs a warning and that table stays empty.
   bool Load(std::string const &spellCastTimesPath, std::string const &spellRangePath,
             std::string const &spellCooldownsPath, std::string const &spellPowerPath,
             std::string const &spellCategoriesPath);
 
   bool HasCastTimes() const { return !m_castBaseMs.empty(); }
-  bool HasRanges() const { return !m_rangeMaxYards.empty(); }
+  bool HasRanges() const { return !m_spellRangeRows.empty(); }
   bool HasCooldowns() const { return !m_cooldowns.empty(); }
   bool HasSpellCategories() const { return !m_spellCategoryGroupByCategoriesRowId.empty(); }
 
   uint32 GetCastTimeMs(uint32 castingTimeIndex) const override;
-  float GetHostileRangeMaxYards(uint32 rangeIndex) const override;
+  float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const override;
+  float GetSpellRangeMaxYards(uint32 rangeIndex, bool friendlyTarget) const override;
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override;
 
@@ -37,7 +47,7 @@ public:
 
 private:
   std::unordered_map<uint32, int32> m_castBaseMs;
-  std::unordered_map<uint32, float> m_rangeMaxYards;
+  std::unordered_map<uint32, SpellRangeRow> m_spellRangeRows;
   std::unordered_map<uint32, CooldownRow> m_cooldowns;
   std::unordered_map<uint32, uint32> m_spellPowerManaCost;
   /// `SpellCategories.dbc` row id → `Category` field (shared cooldown group key).

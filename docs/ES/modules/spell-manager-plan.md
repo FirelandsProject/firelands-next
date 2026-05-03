@@ -89,7 +89,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 ### Fase C — Validación de mundo
 
-1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` compara distancia 3D con `GetHostileRangeMaxYards` + tolerancia 3 yd (estilo TCPP) cuando caster **y** objetivo tienen coords. `WorldSession` rellena caster y, si el target es otro GUID, intenta `Map::TryGetObjectWorldPosition` sobre el mapa del jugador (jugadores/crías/objetos registrados en `Map`).
+1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` usa `ISpellCastTables::GetSpellRangeMinYards` / `GetSpellRangeMaxYards` eligiendo banda hostil vs amistoso (`SpellRange.dbc` índices 0/1): autocasts / self → amistoso; en otro objetivo, curación (`immediateHealthEffectDelta > 0`) → amistoso; daño (`< 0`) → hostil; si no hay delta HP, `SPELL_ATTR0_NEGATIVE_SPELL` (`Spell.dbc` `Attributes`) fuerza hostil, si no banda amistoso (buffs neutros). Falta pulir con más flags/`AttributesEx` como TCPP `IsPositiveSpell` completo. Tolerancias ~3 yd arriba del máximo y ~1.5 yd abajo del mínimo; por debajo del mínimo → `SPELL_FAILED_TOO_CLOSE` (128, referencia cmangos-wotlk / verificar UI 15595).
 2. LoS / colisión cuando exista datos; flag para desactivar en pruebas.
 
 **Rendimiento:** orden estricto cheap→caro; caché opcional de LoS documentada.

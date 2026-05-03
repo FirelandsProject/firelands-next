@@ -13,9 +13,11 @@ public:
   /// Milliseconds from `SpellCastTimes.dbc` for `castingTimeIndex`; 0 if unknown or index 0.
   virtual uint32 GetCastTimeMs(uint32 castingTimeIndex) const = 0;
 
-  /// `max(RangeMax[0], RangeMax[1])` yards from `SpellRange.dbc`; 0 if unknown / index 0.
-  /// Callers treat 0 as "not loaded or no limit yet" until range validation exists.
-  virtual float GetHostileRangeMaxYards(uint32 rangeIndex) const = 0;
+  /// TCPP `SpellRangeEntry`: fields 1–4 are `RangeMin[0]`, `RangeMin[1]`, `RangeMax[0]`,
+  /// `RangeMax[1]` (hostile vs friendly pairs). Returns 0 if unknown / index 0.
+  virtual float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const = 0;
+
+  virtual float GetSpellRangeMaxYards(uint32 rangeIndex, bool friendlyTarget) const = 0;
 
   /// `SpellCooldowns.dbc` row for `Spell.dbc` `CooldownsID` (0 = leave outputs zeroed).
   virtual void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,

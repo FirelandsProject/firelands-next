@@ -50,9 +50,10 @@ static bool LoadCastTimes(std::string const &path,
   return true;
 }
 
-static bool LoadSpellRange(std::string const &path,
-                           std::unordered_map<uint32, float> &outMaxYards) {
-  outMaxYards.clear();
+static bool LoadSpellRange(
+    std::string const &path,
+    std::unordered_map<uint32, SpellCastTablesDbc::SpellRangeRow> &outById) {
+  outById.clear();
   DbcReader reader;
   if (!reader.Load(path)) {
     LOG_WARN("SpellRange.dbc not found or unreadable: {}", path);
@@ -74,17 +75,19 @@ static bool LoadSpellRange(std::string const &path,
   }
 
   uint32_t const n = reader.GetRecordCount();
-  outMaxYards.reserve(static_cast<size_t>(n));
+  outById.reserve(static_cast<size_t>(n));
   for (uint32_t rec = 0; rec < n; ++rec) {
     uint32_t const id = reader.ReadUInt32(rec, 0, offsets);
     if (id == 0u)
       continue;
-    float const max0 = reader.ReadFloat(rec, 3, offsets);
-    float const max1 = reader.ReadFloat(rec, 4, offsets);
-    float const yards = std::max(0.0f, std::max(max0, max1));
-    outMaxYards.emplace(id, yards);
+    SpellCastTablesDbc::SpellRangeRow row{};
+    row.hostileMinYards = std::max(0.f, reader.ReadFloat(rec, 1, offsets));
+    row.friendlyMinYards = std::max(0.f, reader.ReadFloat(rec, 2, offsets));
+    row.hostileMaxYards = std::max(0.f, reader.ReadFloat(rec, 3, offsets));
+    row.friendlyMaxYards = std::max(0.f, reader.ReadFloat(rec, 4, offsets));
+    outById.emplace(id, row);
   }
-  LOG_DEBUG("SpellRange.dbc: {} rows from {}.", outMaxYards.size(), path);
+  LOG_DEBUG("SpellRange.dbc: {} rows from {}.", outById.size(), path);
   return true;
 }
 
@@ -178,7 +181,7 @@ bool SpellCastTablesDbc::Load(std::string const &spellCastTimesPath,
                               std::string const &spellPowerPath,
                               std::string const &spellCategoriesPath) {
   bool const ct = LoadCastTimes(spellCastTimesPath, m_castBaseMs);
-  bool const rg = LoadSpellRange(spellRangePath, m_rangeMaxYards);
+  bool const rg = LoadSpellRange(spellRangePath, m_spellRangeRows);
   bool cd = false;
   m_cooldowns.clear();
   if (!spellCooldownsPath.empty()) {
@@ -239,13 +242,26 @@ uint32 SpellCastTablesDbc::GetCastTimeMs(uint32 castingTimeIndex) const {
   return static_cast<uint32>(it->second);
 }
 
-float SpellCastTablesDbc::GetHostileRangeMaxYards(uint32 rangeIndex) const {
+float SpellCastTablesDbc::GetSpellRangeMinYards(uint32 rangeIndex,
+                                                bool friendlyTarget) const {
   if (rangeIndex == 0u)
     return 0.0f;
-  auto it = m_rangeMaxYards.find(rangeIndex);
-  if (it == m_rangeMaxYards.end())
+  auto it = m_spellRangeRows.find(rangeIndex);
+  if (it == m_spellRangeRows.end())
     return 0.0f;
-  return it->second;
+  SpellRangeRow const &r = it->second;
+  return friendlyTarget ? r.friendlyMinYards : r.hostileMinYards;
+}
+
+float SpellCastTablesDbc::GetSpellRangeMaxYards(uint32 rangeIndex,
+                                                bool friendlyTarget) const {
+  if (rangeIndex == 0u)
+    return 0.0f;
+  auto it = m_spellRangeRows.find(rangeIndex);
+  if (it == m_spellRangeRows.end())
+    return 0.0f;
+  SpellRangeRow const &r = it->second;
+  return friendlyTarget ? r.friendlyMaxYards : r.hostileMaxYards;
 }
 
 void SpellCastTablesDbc::GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,

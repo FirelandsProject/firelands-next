@@ -25,9 +25,8 @@ struct SpellCastRequest {
   std::chrono::steady_clock::time_point now{};
   std::chrono::steady_clock::time_point gcdReady{};
   std::vector<uint32> const *knownSpells = nullptr;
-  /// When both are set, `SpellManager` checks 3D distance vs `SpellRange` hostile max
-  /// (plus TCPP-style tolerance). Otherwise range is skipped until the map provides
-  /// target positions for non-self casts.
+  /// When both are set, `SpellManager` checks 3D distance vs `SpellRange.dbc` min/max for the
+  /// hostile or friendly column pair (plus slack). Otherwise range checks are skipped.
   bool hasCasterWorldPosition = false;
   float casterX = 0.f;
   float casterY = 0.f;

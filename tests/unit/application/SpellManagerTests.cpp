@@ -47,7 +47,11 @@ public:
     return castingTimeIndex == m_respondForIndex ? m_castTimeMs : 0u;
   }
 
-  float GetHostileRangeMaxYards(uint32 /*rangeIndex*/) const override {
+  float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+  }
+
+  float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.0f;
   }
 
@@ -74,7 +78,12 @@ private:
 
 class SpellDefinitionWithRange final : public ISpellDefinitionStore {
 public:
-  explicit SpellDefinitionWithRange(uint32 rangeIndex) : m_rangeIndex(rangeIndex) {}
+  explicit SpellDefinitionWithRange(uint32 rangeIndex,
+                                    int32 immediateHealthEffectDelta = 0,
+                                    uint32 attributes = 0)
+      : m_rangeIndex(rangeIndex),
+        m_immediateHealthEffectDelta(immediateHealthEffectDelta),
+        m_attributes(attributes) {}
 
   bool HasSpell(uint32 /*spellId*/) const override { return true; }
   std::optional<SpellDefinition> GetDefinition(uint32 spellId) const override {
@@ -82,11 +91,15 @@ public:
     d.id = spellId;
     d.rangeIndex = m_rangeIndex;
     d.castingTimeIndex = 1;
+    d.immediateHealthEffectDelta = m_immediateHealthEffectDelta;
+    d.attributes = m_attributes;
     return d;
   }
 
 private:
   uint32 m_rangeIndex;
+  int32 m_immediateHealthEffectDelta;
+  uint32 m_attributes;
 };
 
 class SpellDefinitionWithRangeAndAttr2 final : public ISpellDefinitionStore {
@@ -111,13 +124,27 @@ private:
 
 class MockHostileRangeTables final : public ISpellCastTables {
 public:
-  MockHostileRangeTables(float maxYards, uint32 rangeIndex)
-      : m_maxYards(maxYards), m_rangeIndex(rangeIndex) {}
+  MockHostileRangeTables(float hostileMaxYards, uint32 rangeIndex,
+                         float hostileMinYards = 0.f, float friendlyMaxYards = -1.f,
+                         float friendlyMinYards = -1.f)
+      : m_hostileMax(hostileMaxYards),
+        m_hostileMin(hostileMinYards),
+        m_friendlyMax(friendlyMaxYards >= 0.f ? friendlyMaxYards : hostileMaxYards),
+        m_friendlyMin(friendlyMinYards >= 0.f ? friendlyMinYards : hostileMinYards),
+        m_rangeIndex(rangeIndex) {}
 
   uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
 
-  float GetHostileRangeMaxYards(uint32 rangeIndex) const override {
-    return rangeIndex == m_rangeIndex ? m_maxYards : 0.f;
+  float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const override {
+    if (rangeIndex != m_rangeIndex)
+      return 0.f;
+    return friendlyTarget ? m_friendlyMin : m_hostileMin;
+  }
+
+  float GetSpellRangeMaxYards(uint32 rangeIndex, bool friendlyTarget) const override {
+    if (rangeIndex != m_rangeIndex)
+      return 0.f;
+    return friendlyTarget ? m_friendlyMax : m_hostileMax;
   }
 
   void GetCooldownTiming(uint32 /*cooldownsId*/, uint32 *categoryRecoveryMs,
@@ -137,7 +164,10 @@ public:
   }
 
 private:
-  float m_maxYards;
+  float m_hostileMax;
+  float m_hostileMin;
+  float m_friendlyMax;
+  float m_friendlyMin;
   uint32 m_rangeIndex;
 };
 
@@ -167,7 +197,13 @@ public:
 
   uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
 
-  float GetHostileRangeMaxYards(uint32 /*rangeIndex*/) const override { return 0.f; }
+  float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+  }
+
+  float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+  }
 
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -198,7 +234,13 @@ public:
 
   uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
 
-  float GetHostileRangeMaxYards(uint32 /*rangeIndex*/) const override { return 0.f; }
+  float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+  }
+
+  float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+  }
 
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -419,6 +461,106 @@ TEST(SpellManagerTests, RangeWithinMax_ReturnsStartAndGo) {
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
   ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+}
+
+TEST(SpellManagerTests, RangeBelowMin_ReturnsTooClose) {
+  uint32 constexpr kRi = 11;
+  auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
+  auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi, 10.f);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 5.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_EQ(ReadSpellFailureReason(out.failurePacket),
+            static_cast<uint8>(SpellCastWire::SPELL_FAILED_TOO_CLOSE));
+}
+
+TEST(SpellManagerTests, RangeAboveMin_ReturnsStartAndGo) {
+  uint32 constexpr kRi = 11;
+  auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
+  auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi, 10.f);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 15.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+}
+
+TEST(SpellManagerTests, FriendlySpellRangeUsesHigherMaxThanHostile) {
+  uint32 constexpr kRi = 11;
+  auto tables =
+      std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
+  req.client.unitTargetGuid = 0x20ULL;
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 10.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+
+  auto defsDamage = std::make_shared<SpellDefinitionWithRange>(kRi, -1);
+  SpellManager mgrDamage(defsDamage, tables);
+  SpellCastOutcome outHostile;
+  mgrDamage.ProcessCastRequest(req, &outHostile);
+  ASSERT_EQ(outHostile.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_EQ(ReadSpellFailureReason(outHostile.failurePacket),
+            static_cast<uint8>(SpellCastWire::SPELL_FAILED_OUT_OF_RANGE));
+
+  auto defsHeal = std::make_shared<SpellDefinitionWithRange>(kRi, 1);
+  SpellManager mgrHeal(defsHeal, tables);
+  SpellCastOutcome outFriendly;
+  mgrHeal.ProcessCastRequest(req, &outFriendly);
+  ASSERT_EQ(outFriendly.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+}
+
+TEST(SpellManagerTests, NegativeSpellAttrUsesHostileRangeOnOtherUnit) {
+  uint32 constexpr kRi = 11;
+  auto tables =
+      std::make_shared<MockHostileRangeTables>(5.f, kRi, 0.f, 40.f, 0.f);
+  auto defs = std::make_shared<SpellDefinitionWithRange>(
+      kRi, 0, SpellAttr0::kNegativeSpell);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
+  req.client.unitTargetGuid = 0x20ULL;
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 10.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_EQ(ReadSpellFailureReason(out.failurePacket),
+            static_cast<uint8>(SpellCastWire::SPELL_FAILED_OUT_OF_RANGE));
 }
 
 TEST(SpellManagerTests, SpellAttr2IgnoreLineOfSight_BypassesBlockedLos) {

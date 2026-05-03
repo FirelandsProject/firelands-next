@@ -42,6 +42,8 @@ enum SpellFailedReason : uint8 {
   SPELL_FAILED_SPELL_UNAVAILABLE = 109,
   /// `SpellCastResult` for 4.3.4.15595 — confirm vs client/DBC if UI text mismatches.
   SPELL_FAILED_OUT_OF_RANGE = 96,
+  /// Matches cmangos-wotlk `SpellDefines.h` / typical 4.x clients; verify vs 15595 if UI mismatches.
+  SPELL_FAILED_TOO_CLOSE = 128,
   /// TCPP Cataclysm `SharedDefines.h`; verify against build 15595 if mismatch.
   SPELL_FAILED_LINE_OF_SIGHT = 49,
   SPELL_FAILED_NO_POWER = 87,

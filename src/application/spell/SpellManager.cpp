@@ -10,6 +10,28 @@
 
 namespace Firelands {
 
+namespace {
+
+/// Picks `SpellRange.dbc` hostile vs friendly bands (index 0 vs 1). Self-casts always use friendly.
+/// Other targets: heal delta → friendly; damage delta → hostile; else `SPELL_ATTR0_NEGATIVE_SPELL`.
+bool SpellUsesFriendlySpellRangeColumns(SpellDefinition const *def,
+                                          SpellCastRequest const &req) {
+  bool const targetIsSelf =
+      req.client.unitTargetGuid == 0 ||
+      req.client.unitTargetGuid == req.casterGuid;
+  if (!def)
+    return targetIsSelf;
+  if (targetIsSelf)
+    return true;
+  if (def->immediateHealthEffectDelta > 0)
+    return true;
+  if (def->immediateHealthEffectDelta < 0)
+    return false;
+  return (def->attributes & SpellAttr0::kNegativeSpell) == 0u;
+}
+
+} // namespace
+
 SpellManager::SpellManager(std::shared_ptr<ISpellDefinitionStore const> spellDefinitions,
                            std::shared_ptr<ISpellCastTables const> spellCastTables)
     : m_spellDefinitions(std::move(spellDefinitions)),
@@ -114,19 +136,31 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   }
 
   if (def && m_spellCastTables) {
+    bool const friendlyCols = SpellUsesFriendlySpellRangeColumns(&*def, req);
     float const maxYards =
-        m_spellCastTables->GetHostileRangeMaxYards(def->rangeIndex);
-    if (maxYards > 0.f && req.hasCasterWorldPosition && req.hasTargetWorldPosition) {
+        m_spellCastTables->GetSpellRangeMaxYards(def->rangeIndex, friendlyCols);
+    float const minYards =
+        m_spellCastTables->GetSpellRangeMinYards(def->rangeIndex, friendlyCols);
+    if ((maxYards > 0.f || minYards > 0.f) && req.hasCasterWorldPosition &&
+        req.hasTargetWorldPosition) {
       float const dx = req.targetX - req.casterX;
       float const dy = req.targetY - req.casterY;
       float const dz = req.targetZ - req.casterZ;
       float const dist = std::sqrt(dx * dx + dy * dy + dz * dz);
       // TCPP `MAX_SPELL_RANGE_TOLERANCE` (yards) — small slack so borderline casts match client.
-      constexpr float kRangeToleranceYards = 3.0f;
-      if (dist > maxYards + kRangeToleranceYards) {
+      constexpr float kMaxRangeToleranceYards = 3.0f;
+      constexpr float kMinRangeToleranceYards = 1.5f;
+      if (maxYards > 0.f && dist > maxYards + kMaxRangeToleranceYards) {
         SpellCastWire::BuildSpellFailure(
             out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
             SpellCastWire::SPELL_FAILED_OUT_OF_RANGE);
+        out->kind = SpellCastOutcome::Kind::SpellFailure;
+        return;
+      }
+      if (minYards > 0.f && dist + kMinRangeToleranceYards < minYards) {
+        SpellCastWire::BuildSpellFailure(
+            out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+            SpellCastWire::SPELL_FAILED_TOO_CLOSE);
         out->kind = SpellCastOutcome::Kind::SpellFailure;
         return;
       }
