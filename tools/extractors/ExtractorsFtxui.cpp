@@ -235,8 +235,11 @@ int RunExtractorsFtxuiImpl() {
     std::cerr << "firelands-extractors TUI requires an interactive terminal "
                  "(TTY).\n"
                  "For scripts use:\n"
-                 "  firelands-dbc-extractor  --data <WoW/Data> --out <dir>\n"
-                 "  firelands-map-extractor  --data <WoW/Data> --out <dir>\n";
+                 "  firelands-dbc-extractor         --data <WoW/Data> --out <dir>\n"
+                 "  firelands-map-extractor        --data <WoW/Data> --out <dir>\n"
+                 "  firelands-map-extractor-vmap   -d <WoW> -o <dir>   (install root; adds Data/)\n"
+                 "  firelands-vmap4-extractor      -d <WoW-install> -o <collision-root>\n"
+                 "  firelands-vmap4-assembler      [Buildings-dir] [vmaps-dir]\n";
     return 2;
   }
 
@@ -261,6 +264,9 @@ int RunExtractorsFtxuiImpl() {
       "Extract DBFilesClient (*.dbc, *.db2)",
       "Extract map assets (World/maps …)",
       "List MPQ patch order only (no extraction)",
+      "Server maps for collision (.map / .tilelist / Cameras/)",
+      "VMAP4 extract (Buildings/ — firelands-vmap4-extractor)",
+      "VMAP4 assemble (Buildings/ → vmaps/ — firelands-vmap4-assembler)",
   };
 
   std::string data_path_input;
@@ -306,8 +312,14 @@ int RunExtractorsFtxuiImpl() {
         rc = RunListMpqsTask(data_dir, out_stream, err_stream);
       } else if (op_sel == 0) {
         rc = RunDbcExtractTask(data_dir, out_dir, out_stream, err_stream);
-      } else {
+      } else if (op_sel == 1) {
         rc = RunMapExtractTask(data_dir, out_dir, out_stream, err_stream);
+      } else if (op_sel == 3) {
+        rc = RunServerMapVmapExtractTask(data_dir, out_dir, out_stream, err_stream);
+      } else if (op_sel == 4) {
+        rc = RunVmap4ExtractorSubprocess(data_dir, out_dir, out_stream, err_stream);
+      } else {
+        rc = RunVmap4AssemblerSubprocess(out_dir, out_stream, err_stream);
       }
 
       out_stream.flush();

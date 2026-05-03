@@ -393,4 +393,88 @@ int RunMapExtractorTask(const MapExtractorOptions& opts) {
     return totalWritten;
 }
 
+int ExtractSingleServerMapTile(const MapExtractorOptions& opts, uint32_t mapId, int tileY,
+                               int tileX, const fs::path& outMapPath) {
+    std::string locale;
+    HANDLE localeMpq = OpenLocaleMpq(opts.dataDir, opts.build, locale);
+    if (!localeMpq) {
+        return -1;
+    }
+
+    HANDLE worldMpq = OpenWorldMpq(opts.dataDir, opts.build);
+    if (!worldMpq) {
+        SFileCloseArchive(localeMpq);
+        return -1;
+    }
+
+    LiquidDbcTables dbcTables;
+    ReadLiquidDbcs(localeMpq, dbcTables, false);
+
+    auto maps = ReadMapDbc(localeMpq, false);
+    if (maps.empty()) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return -1;
+    }
+
+    MapEntry const* chosen = nullptr;
+    for (auto const& m : maps) {
+        if (m.id == mapId) {
+            chosen = &m;
+            break;
+        }
+    }
+    if (!chosen) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return -1;
+    }
+
+    char wdtPath[256];
+    std::snprintf(wdtPath, sizeof(wdtPath), "World\\Maps\\%s\\%s.wdt", chosen->name, chosen->name);
+    MpqStream wdtStream(worldMpq, wdtPath, false);
+    if (!wdtStream.IsValid()) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return -1;
+    }
+
+    WdtTileGrid tileGrid;
+    if (!WdtReader::Parse(wdtStream.Data(), wdtStream.Size(), tileGrid)) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return -1;
+    }
+
+    if (!tileGrid.TileExists(tileY, tileX)) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return 0;
+    }
+
+    char adtPath[256];
+    std::snprintf(adtPath, sizeof(adtPath), "World\\Maps\\%s\\%s_%d_%d.adt", chosen->name,
+                  chosen->name, tileX, tileY);
+    MpqStream adtStream(worldMpq, adtPath, false);
+    if (!adtStream.IsValid()) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return 0;
+    }
+
+    bool const            ignoreDeepWater = IsDeepWaterIgnored(mapId, tileY, tileX);
+    AdtGridData           grid;
+    if (!AdtReader::Parse(adtStream.Data(), adtStream.Size(), dbcTables, ignoreDeepWater, grid)) {
+        SFileCloseArchive(worldMpq);
+        SFileCloseArchive(localeMpq);
+        return 0;
+    }
+
+    bool const ok =
+        MapFileWriter::Write(grid, outMapPath, opts.build, opts.writeOpts);
+    SFileCloseArchive(worldMpq);
+    SFileCloseArchive(localeMpq);
+    return ok ? 1 : -1;
+}
+
 } // namespace Firelands::VMap::MapExtractor

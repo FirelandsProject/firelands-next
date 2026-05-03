@@ -33,7 +33,11 @@ add_executable(FirelandsUnitTests
     unit/vmap/Vec3Mat3Tests.cpp
     unit/vmap/MapFileWriterTests.cpp
     unit/vmap/QuatMathTests.cpp
+    unit/vmap/TileAssemblerIntegrationTests.cpp
+    unit/vmap/Vmap4ExtractorCliTests.cpp
+    unit/vmap/MapExtractorParityTests.cpp
     ${CMAKE_SOURCE_DIR}/tools/vmap/vmap4_extractor/QuatMath.cpp
+    ${CMAKE_SOURCE_DIR}/tools/vmap/vmap4_extractor/Vmap4ExtractorCli.cpp
 )
 
 target_link_libraries(FirelandsUnitTests
@@ -42,6 +46,7 @@ target_link_libraries(FirelandsUnitTests
     FirelandsInfrastructure
     FirelandsExtractCommon
     FirelandsMapExtractorLib
+    FirelandsVmap4Assembler
 )
 target_compile_definitions(FirelandsUnitTests PRIVATE
     FIRELANDS_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}")

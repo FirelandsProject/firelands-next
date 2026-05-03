@@ -1,5 +1,6 @@
 add_executable(firelands-vmap4-extractor
     vmapexport.cpp
+    Vmap4ExtractorCli.cpp
     adtfile.cpp
     wdtfile.cpp
     wmo.cpp

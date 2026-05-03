@@ -396,12 +396,13 @@ Use this section as the **authoritative checklist**. Update checkboxes when merg
 - [x] `MapExtractorTask` — world + locale MPQ chain, `Map.dbc` + liquid DBCs.
 - [x] CLI `map_extractor_main.cpp`.
 - [x] **Cinematic cameras:** `CinematicCamera.dbc` → extract listed M2 into `Cameras/` (DBC field 1, `.mdx`→`.m2`, world MPQ read).
-- [ ] **Parity / integration:** hex or fixture diff of one tile (e.g. map 0, 32,32) vs reference extractor output; document acceptable deltas.
+- [x] **Parity / integration:** `MapExtractorParityTests` — deterministic 68-byte `MapFileWriter` golden; optional `0003232.golden.map` + `FIRELANDS_VMAP_PARITY_WOW_DATA` byte-compare for Azeroth tile (32,32). See `docs/EN/VMAP_MAP_TILE_PARITY.md` and `tests/fixtures/vmap/README.md`.
 - [ ] **Optional:** extra DB2 dump paths if runtime tooling requires them.
 
 ### Phase C — Tool 2: vmap4 extractor (`firelands-vmap4-extractor` → `Buildings/`)
 - [x] Executable + ref-derived sources (`vmapexport`, ADT/WDT/WMO/M2 paths).
-- [ ] **Hardening:** scripted `--help`, consistent `-d/-o` UX with Tool 1, deterministic error codes.
+- [x] **CLI parse:** `Vmap4ExtractorCli.{h,cpp}` + `Vmap4ExtractorCliTests.cpp` (`--help`, `-d/-o/-b/-q/-s/-l`, errors); `main` uses exit **0** (help), **1** (bad args / fatal extract).
+- [ ] **Hardening (optional):** subprocess smoke on built binary; document `-d` = install root (contains `Data/`) vs Tool 1 `-d` + `/Data` append — clarify in operator doc only if operators get confused.
 - [ ] **Integration test** (CI or manual recipe in doc): small map extract → non-empty `dir_bin` + at least one raw model with `RAW_VMAP_MAGIC`.
 
 ### Phase D — Tool 3: vmap4 assembler (`vmaps/`) — **blocking for mmap + runtime**
@@ -410,7 +411,7 @@ Use this section as the **authoritative checklist**. Update checkboxes when merg
 - [x] `WorldModelWrite.h/cpp` — `GroupModel`, `WorldModel`, `WmoLiquid`, `writeFile` (assembler write subset; no runtime ray queries).
 - [x] `TileAssembler.h/cpp` — `readMapSpawns`, `calculateTransformedBound`, `convertWorld2`, `convertRawFile`, `exportGameobjectModels`.
 - [x] `assembler_main.cpp` — CLI: `[Buildings] [vmaps]` (defaults match ref).
-- [ ] **Integration test:** `.vmtree` / `.vmtile` / `.vmo` magic and structural checks per §9.
+- [x] **Integration test:** `.vmtree` / `.vmtile` / `.vmo` magic and structural checks per §9 (synthetic `Buildings/` in `TileAssemblerIntegrationTests.cpp`).
 
 ### Phase E — Runtime wiring (server) — **collision “done” for gameplay**
 - [ ] Port `VMapManager2` + `StaticMapTree` + related collision types into `src/infrastructure/` (dedicated `collision/` subdir recommended).
@@ -426,7 +427,7 @@ Use this section as the **authoritative checklist**. Update checkboxes when merg
 - [ ] Extend runtime (Phase E) with **Detour navmesh load** where `IMapCollisionQueries::IsNavMeshDataAvailable` becomes true.
 
 ### Phase G — Launcher, CLI ergonomics, operator docs — **“extractores cerrados” UX**
-- [ ] `firelands-extractors` TUI: tasks for **DBC**, **raw maps**, **map-extractor-vmap**, **vmap4-extractor**, **vmap4-assembler**, **mmap-generator** (invoke binaries or shared libs with captured logs).
+- [x] `firelands-extractors` TUI: **DBC**, **raw maps**, **list MPQs**, **map-extractor-vmap** (in-process), **vmap4-extractor** + **vmap4-assembler** (subprocess to `build/bin` tools). **mmap-generator** still pending (Phase F).
 - [ ] Single **documented recipe** in `docs/EN/extractors.md`: paths, order, disk layout, troubleshooting (MPQ not found, locale, build id).
 - [ ] Align `docs/EN/STORM_LIB_ROADMAP.md` §7 with this checklist (or add “see master plan §6” and avoid duplicate schedules).
 

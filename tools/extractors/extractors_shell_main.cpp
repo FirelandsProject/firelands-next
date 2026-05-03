@@ -13,8 +13,11 @@ int main(int argc, char **argv) {
              "Run with no arguments to open the interactive launcher (banner + console).\n"
              "\n"
              "Non-interactive / CI (no TTY):\n"
-             "  firelands-dbc-extractor   --data <WoW/Data> --out <dir> [--list-mpqs]\n"
-             "  firelands-map-extractor   --data <WoW/Data> --out <dir> [--list-mpqs]\n";
+             "  firelands-dbc-extractor          --data <WoW/Data> --out <dir> [--list-mpqs]\n"
+             "  firelands-map-extractor          --data <WoW/Data> --out <dir> [--list-mpqs]\n"
+             "  firelands-map-extractor-vmap     -d <WoW-dir> -o <dir>   (WoW dir contains Data/)\n"
+             "  firelands-vmap4-extractor        -d <WoW-dir> -o <collision-root>\n"
+             "  firelands-vmap4-assembler        [Buildings-dir] [vmaps-dir]\n";
       return 0;
     }
     std::cerr << "Unknown argument. Use --help.\n";

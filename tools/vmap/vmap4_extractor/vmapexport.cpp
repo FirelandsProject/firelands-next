@@ -16,6 +16,7 @@
  */
 
 #include "adtfile.h"
+#include "Vmap4ExtractorCli.h"
 #include "wdtfile.h"
 #include "wmo.h"
 #include "vmapexport.h"
@@ -455,23 +456,6 @@ void ParsMapFiles()
     }
 }
 
-static void PrintUsage(const char* prog) {
-    std::printf(
-        "Firelands VMAP4 extractor (WoW 4.3.x — buildings + ADT dir binaries)\n"
-        "Usage:\n"
-        "  %s -d <WoW-dir> -o <output-dir> [-b <build>] [-s|-l] [-q]\n"
-        "\n"
-        "Options:\n"
-        "  -d  Path to the WoW install directory (must contain Data/). Required.\n"
-        "  -o  Output root directory. Writes <output-dir>/Buildings/ and dir files. Required.\n"
-        "  -b  Target client build (default %u).\n"
-        "  -s  Smaller collision payloads (default).\n"
-        "  -l  Larger payloads (more detail; roughly +500 MB).\n"
-        "  -q  Quiet — suppress MPQ loading and per-map progress output.\n"
-        "  -h  --help  Show this message.\n",
-        prog, static_cast<unsigned>(Firelands::VMap::kTargetBuild));
-}
-
 static bool ApplyPathsFromWowAndOutput(fs::path const& wowInstall, fs::path const& outputRoot,
                                        std::string& err) {
     fs::path dataDir = wowInstall / "Data";
@@ -482,46 +466,6 @@ static bool ApplyPathsFromWowAndOutput(fs::path const& wowInstall, fs::path cons
     g_inputDataPath = PathWithTrailingSep(dataDir);
     g_workDirWmo    = (outputRoot / "Buildings").lexically_normal().string();
     return true;
-}
-
-static bool ParseCli(int argc, char** argv, fs::path& wowInstall, fs::path& outputRoot, bool* printHelp) {
-    *printHelp = false;
-    wowInstall.clear();
-    outputRoot.clear();
-    preciseVectorData = false;
-    g_vmap4Quiet      = false;
-    CONF_TargetBuild  = Firelands::VMap::kTargetBuild;
-
-    bool has_d = false;
-    bool has_o = false;
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg(argv[i]);
-        if (arg == "-h" || arg == "--help" || arg == "-?") {
-            *printHelp = true;
-            return false;
-        }
-        if (arg == "-d" && i + 1 < argc) {
-            wowInstall = argv[++i];
-            has_d      = true;
-        } else if (arg == "-o" && i + 1 < argc) {
-            outputRoot = argv[++i];
-            has_o      = true;
-        } else if (arg == "-b") {
-            if (i + 1 >= argc)
-                return false;
-            CONF_TargetBuild = static_cast<uint32>(std::atoi(argv[++i]));
-        } else if (arg == "-s") {
-            preciseVectorData = false;
-        } else if (arg == "-l") {
-            preciseVectorData = true;
-        } else if (arg == "-q") {
-            g_vmap4Quiet = true;
-        } else {
-            return false;
-        }
-    }
-    return has_d && has_o;
 }
 
 int main(int argc, char** argv) {
@@ -552,16 +496,27 @@ int main(int argc, char** argv) {
         g_vmap4Quiet        = false;
         CONF_TargetBuild    = Firelands::VMap::kTargetBuild;
     } else {
-        bool wantHelp = false;
-        if (!ParseCli(argc, argv, wowInstall, outputRoot, &wantHelp)) {
-            if (wantHelp) {
-                PrintUsage(argv[0]);
-                return 0;
-            }
+        using Firelands::VMap::Vmap4Extractor::CliOptions;
+        using Firelands::VMap::Vmap4Extractor::CliParseResult;
+        using Firelands::VMap::Vmap4Extractor::ParseCli;
+        using Firelands::VMap::Vmap4Extractor::PrintUsage;
+
+        CliOptions cli{};
+        CliParseResult const pr = ParseCli(argc, argv, cli);
+        if (pr == CliParseResult::Help) {
+            PrintUsage(argv[0]);
+            return 0;
+        }
+        if (pr != CliParseResult::Ok) {
             std::fprintf(stderr, "Invalid arguments.\n\n");
             PrintUsage(argv[0]);
             return 1;
         }
+        wowInstall          = cli.wowInstall;
+        outputRoot          = cli.outputRoot;
+        CONF_TargetBuild    = cli.build;
+        preciseVectorData   = cli.preciseLargePayload;
+        g_vmap4Quiet        = cli.quiet;
     }
 
     std::string pathErr;

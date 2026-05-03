@@ -182,9 +182,9 @@ add_subdirectory(src/shared)
 add_subdirectory(src/domain)
 add_subdirectory(src/application)
 add_subdirectory(src/infrastructure)
+add_subdirectory(tools/vmap)
 add_subdirectory(tools/extractors)
 add_subdirectory(tools/config_tui)
-add_subdirectory(tools/vmap)
 add_subdirectory(tests)
 
 # Main Executables
