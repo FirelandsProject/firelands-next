@@ -12,8 +12,22 @@ namespace Firelands {
 
 namespace {
 
+/// After self-target handling: infer helpful vs harmful spell for `SpellRange.dbc` band selection.
+static bool SpellTreatAsBeneficialForFriendlySpellRange(SpellDefinition const &def) {
+  if (def.immediateHealthEffectDelta > 0)
+    return true;
+  if (def.immediateHealthEffectDelta < 0)
+    return false;
+  if ((def.attributes & SpellAttr0::kNegativeSpell) != 0u)
+    return false;
+  if ((def.attributes & SpellAttr0::kAuraIsDebuff) != 0u)
+    return false;
+  if ((def.attributesEx & SpellAttrEx::kInitiatesCombat) != 0u)
+    return false;
+  return true;
+}
+
 /// Picks `SpellRange.dbc` hostile vs friendly bands (index 0 vs 1). Self-casts always use friendly.
-/// Other targets: heal delta → friendly; damage delta → hostile; else `SPELL_ATTR0_NEGATIVE_SPELL`.
 bool SpellUsesFriendlySpellRangeColumns(SpellDefinition const *def,
                                           SpellCastRequest const &req) {
   bool const targetIsSelf =
@@ -23,11 +37,7 @@ bool SpellUsesFriendlySpellRangeColumns(SpellDefinition const *def,
     return targetIsSelf;
   if (targetIsSelf)
     return true;
-  if (def->immediateHealthEffectDelta > 0)
-    return true;
-  if (def->immediateHealthEffectDelta < 0)
-    return false;
-  return (def->attributes & SpellAttr0::kNegativeSpell) == 0u;
+  return SpellTreatAsBeneficialForFriendlySpellRange(*def);
 }
 
 } // namespace

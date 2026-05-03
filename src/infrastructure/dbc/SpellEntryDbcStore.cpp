@@ -35,6 +35,7 @@ constexpr std::string_view kSpellEntryFmt =
 // Field indices = character index in `kSpellEntryFmt` (TCPP `SpellEntry` order).
 constexpr uint32_t kFieldId = 0;
 constexpr uint32_t kFieldAttributes = 1;
+constexpr uint32_t kFieldAttributesEx = 2;
 constexpr uint32_t kFieldAttributesEx2 = 3;
 constexpr uint32_t kFieldCastingTimeIndex = 12;
 constexpr uint32_t kFieldDurationIndex = 13;
@@ -63,13 +64,15 @@ static bool ExpectedRecordLayout(DbcReader const &reader, std::string_view fmt,
 }
 
 static char const* const kSpellDbcMergeQueryFull =
-    "SELECT `Id`, `Attributes`, `AttributesEx2`, `CastingTimeIndex`, `DurationIndex`, "
+    "SELECT `Id`, `Attributes`, `AttributesEx`, `AttributesEx2`, `CastingTimeIndex`, "
+    "`DurationIndex`, "
     "`RangeIndex`, "
     "`SchoolMask`, `PowerType`, `OvAttributes`, `OvCastingTimeIndex`, `OvDurationIndex`, "
     "`OvRangeIndex`, `OvSchoolMask` FROM `firelands_world`.`spell_dbc`";
 
 static char const* const kSpellDbcMergeQueryLegacy =
-    "SELECT `Id`, `Attributes`, `AttributesEx2`, `CastingTimeIndex`, `DurationIndex`, "
+    "SELECT `Id`, `Attributes`, `AttributesEx`, `AttributesEx2`, `CastingTimeIndex`, "
+    "`DurationIndex`, "
     "`RangeIndex`, "
     "`SchoolMask`, `PowerType` FROM `firelands_world`.`spell_dbc`";
 
@@ -109,10 +112,12 @@ static void ApplySpellDbcMergeRow(sql::ResultSet& rs, bool hasOvColumns,
     return;
   }
 
+  uint32 const attributesEx = static_cast<uint32>(rs.getUInt("AttributesEx"));
   uint32 const attributesEx2 = static_cast<uint32>(rs.getUInt("AttributesEx2"));
   SpellDefinition d{};
   d.id = id;
   d.attributes = attributes;
+  d.attributesEx = attributesEx;
   d.attributesEx2 = attributesEx2;
   d.castingTimeIndex = castingTimeIndex;
   d.durationIndex = durationIndex;
@@ -182,6 +187,7 @@ bool SpellEntryDbcStore::Load(std::string const &path) {
     SpellDefinition def;
     def.id = id;
     def.attributes = reader.ReadUInt32(rec, kFieldAttributes, offsets);
+    def.attributesEx = reader.ReadUInt32(rec, kFieldAttributesEx, offsets);
     def.attributesEx2 = reader.ReadUInt32(rec, kFieldAttributesEx2, offsets);
     def.castingTimeIndex = reader.ReadUInt32(rec, kFieldCastingTimeIndex, offsets);
     def.durationIndex = reader.ReadUInt32(rec, kFieldDurationIndex, offsets);

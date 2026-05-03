@@ -9,6 +9,8 @@ namespace Firelands {
 struct SpellDefinition {
   uint32 id = 0;
   uint32 attributes = 0;
+  /// `Spell.dbc` `AttributesEx` (SPELL_ATTR_EX_* / wowdev first extended attribute dword).
+  uint32 attributesEx = 0;
   /// `Spell.dbc` `AttributesEx2` (SPELL_ATTR2_* / wowdev AttributesExB).
   uint32 attributesEx2 = 0;
   uint32 castingTimeIndex = 0;
