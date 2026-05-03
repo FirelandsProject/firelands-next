@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS `spell_dbc` (
   `SpellInterruptsId` int unsigned NOT NULL DEFAULT 0,
   `SpellLevelsId` int unsigned NOT NULL DEFAULT 0,
   `SpellTargetRestrictionsId` int unsigned NOT NULL DEFAULT 0,
+  `PowerType` int unsigned DEFAULT NULL COMMENT 'Optional power type override, NULL uses DBC',
   `SpellName` varchar(128) NOT NULL,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Custom spell.dbc entries';

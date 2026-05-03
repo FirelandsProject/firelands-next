@@ -1,5 +1,5 @@
 -- Merged world migrations (Firelands Next)
--- Execution order: 2 -> 4 -> 5 -> 8 -> 9 -> 10 -> 13 -> 14 -> 15 -> 16 -> 17 -> z_ensure
+-- Execution order: lexicographic in DatabaseMigrator; this bundle mirrors 2..16 + 17 + z_ensure
 
 -- === 2_playercreateinfo.sql + 4 + 5 + backfill ===
 CREATE DATABASE IF NOT EXISTS `firelands_world`;
@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS `spell_dbc` (
   `SpellInterruptsId` int unsigned NOT NULL DEFAULT 0,
   `SpellLevelsId` int unsigned NOT NULL DEFAULT 0,
   `SpellTargetRestrictionsId` int unsigned NOT NULL DEFAULT 0,
+  `PowerType` int unsigned DEFAULT NULL COMMENT 'Optional power type override, NULL uses DBC',
   `SpellName` varchar(128) NOT NULL,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Custom spell.dbc entries';
@@ -557,6 +558,8 @@ CREATE TABLE IF NOT EXISTS `spelleffect_dbc` (
   `Comment` varchar(128) NOT NULL,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- spell_dbc PowerType: see sql/migrations/17_world_spell_dbc_merge.sql (ALTER only for DBs missing the column; not repeated here so docker init does not hit 1060 after CREATE).
 
 -- === z_ensure_player_classlevelstats_seed.sql (idempotent seed) ===
 INSERT IGNORE INTO `player_classlevelstats` (`class`, `level`, `str`, `agi`, `sta`, `inte`, `spi`) VALUES

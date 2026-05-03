@@ -71,7 +71,7 @@ docker-compose up -d db
 ### Migrations
 - Location: `sql/*.sql`
 - Execution order: Run by filename prefix (0_, 1_, 2_, etc.)
-- Auto-loaded by docker-compose in order: 0_init_permissions.sql, auth_schema.sql, characters_schema.sql, world_schema.sql
+- Auto-loaded by docker-compose in order: `0_init_permissions.sql`, `auth_schema.sql`, `characters_schema.sql`, then **`sql/migrations/5_world_schema_merged.sql`** as world init (includes `spell_dbc` and related tables; see `sql/migrations/16_world_spell_tables.sql` + `17_world_spell_dbc_merge.sql`).
 - Merged output: `sql/merged/<database>.sql`
 
 ## Testing

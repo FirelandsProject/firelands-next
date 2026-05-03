@@ -16,7 +16,7 @@ services:
       - ./sql/0_init_permissions.sql:/docker-entrypoint-initdb.d/0.sql
       - ./sql/auth_schema.sql:/docker-entrypoint-initdb.d/1.sql
       - ./sql/characters_schema.sql:/docker-entrypoint-initdb.d/2.sql
-      - ./sql/world_schema.sql:/docker-entrypoint-initdb.d/3.sql
+      - ./sql/migrations/5_world_schema_merged.sql:/docker-entrypoint-initdb.d/3.sql
 
 volumes:
   db_data:
