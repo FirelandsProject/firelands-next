@@ -5,7 +5,7 @@
 // as a contiguous byte buffer.  Designed for random-access parsing of ADT,
 // WDT, WMO, M2, DBC, and similar formats.
 //
-// Ported from firelands-cata-ref/src/tools/vmap4_extractor/mpqfile.h/.cpp.
+// Originally ported from reference implementation mpqfile.h/.cpp.
 
 #include <cstdint>
 #include <cstdio>

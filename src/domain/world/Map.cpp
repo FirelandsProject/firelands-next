@@ -27,7 +27,7 @@ void Map::AddObject(std::shared_ptr<WorldObject> obj) {
   m_grid[coord.x][coord.y].objects[obj->GetGuid()] = obj;
   m_objectCoords[obj->GetGuid()] = coord;
 
-  LOG_DEBUG("Object {} added to Map {} at Cell [{}, {}]", obj->GetGuid(), m_id,
+  LOG_TRACE("Object {} added to Map {} at Cell [{}, {}]", obj->GetGuid(), m_id,
             coord.x, coord.y);
 }
 
@@ -41,7 +41,7 @@ void Map::RemoveObject(uint64 guid) {
   }
 
   m_objects.erase(guid);
-  LOG_DEBUG("Object {} removed from Map {}", guid, m_id);
+  LOG_TRACE("Object {} removed from Map {}", guid, m_id);
 }
 
 void Map::UpdateObjectPosition(uint64 guid, const MovementInfo &pos) {

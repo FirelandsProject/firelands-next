@@ -1,7 +1,7 @@
 #pragma once
 
 // Minimal math types for the vmap pipeline.
-// Ported from firelands-cata-ref/src/tools/vmap4_extractor/vec3d.h
+// Originally ported from reference implementation vec3d.h
 // and from G3D::AABox layout expected by the binary format.
 // Intentionally stand-alone — no G3D or Boost dependency.
 

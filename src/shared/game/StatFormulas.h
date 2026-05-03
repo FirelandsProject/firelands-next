@@ -8,7 +8,7 @@ class GtPlayerStatGameTables;
 
 namespace StatFormulas {
 
-/// Diminishing returns on avoidance (dodge / parry) from TrinityCore
+/// Diminishing returns on avoidance (dodge / parry) from reference implementation
 /// `StatSystem.cpp::CalculateDiminishingReturns`: \(x' = \frac{c x}{x + c k} + x_{nd}\).
 float AvoidanceAfterDiminishingReturns(float cap, float k, float nondiminishingPct,
                                        float diminishingPct);

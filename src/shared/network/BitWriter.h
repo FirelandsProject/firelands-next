@@ -10,7 +10,7 @@ namespace Firelands {
  * Core for Cataclysm 4.3.4 network protocol.
  *
  * Bits are packed MSB-first (bit 7 down to bit 0) within each byte,
- * matching the TrinityCore/TCPP reference implementation.
+ * matching the reference implementation.
  */
 class BitWriter {
 public:

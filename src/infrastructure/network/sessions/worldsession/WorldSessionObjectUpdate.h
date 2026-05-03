@@ -7,6 +7,7 @@
 #include <shared/network/MovementInfo.h>
 #include <shared/network/WorldPacket.h>
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -19,7 +20,7 @@ namespace Firelands {
 
 class GtPlayerStatGameTables;
 
-/// SMSG_QUERY_PLAYER_NAME_RESPONSE result byte (TCPP / 4.3.4).
+/// SMSG_QUERY_PLAYER_NAME_RESPONSE result byte (4.3.4).
 enum QueryNameResponseCode : uint8 {
   kQueryNameResponseSuccess = 0,
   kQueryNameResponseFailure = 1,
@@ -72,6 +73,13 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 maxHealth,
                                                          uint8 level,
                                                          uint32 npcFlags = 0);
+
+/// `SMSG_CREATURE_QUERY_RESPONSE` (Trinity `QueryCreatureResponse::Write`, 4.3.4).
+/// If `nameTitle` is empty, sends entry with high bit set (client shows no template).
+void BuildCreatureQueryResponse(
+    WorldPacket &out, uint32 creatureEntry,
+    std::optional<std::pair<std::string, std::string>> const &nameTitle,
+    std::array<uint32, 4> const &creatureDisplayIds = {});
 
 } // namespace WorldSessionObjectUpdate
 

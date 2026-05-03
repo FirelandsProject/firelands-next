@@ -15,7 +15,7 @@ namespace Firelands {
 
 namespace {
 
-// TCPP `SpellEffectEntryfmt[] = "nifiiiffiiiiiifiifiiiiiiiix"`
+// SpellEffectEntryfmt[] = "nifiiiffiiiiiifiifiiiiiiiix"
 constexpr std::string_view kSpellEffectFmt =
     "nifiiiffiiiiiifiifiiiiiiiix";
 
@@ -30,11 +30,11 @@ constexpr uint32_t SPELL_EFFECT_HEALTH_LEECH = 9;
 constexpr uint32_t SPELL_EFFECT_HEAL = 10;
 constexpr uint32_t SPELL_EFFECT_ENVIRONMENTAL_DAMAGE = 13;
 
-// TCPP `src/server/game/DataStores/DBCfmt.h` — must match client `Spell.dbc` for 15595.
+// DBCfmt.h — must match client `Spell.dbc` for 15595.
 constexpr std::string_view kSpellEntryFmt =
     "niiiiiiiiiiiiiiifiiiissxxiixxifiiiiiiixiiiiiiiii";
 
-// Field indices = character index in `kSpellEntryFmt` (TCPP `SpellEntry` order).
+// Field indices = character index in `kSpellEntryFmt` (SpellEntry order).
 constexpr uint32_t kFieldId = 0;
 constexpr uint32_t kFieldAttributes = 1;
 constexpr uint32_t kFieldAttributesEx = 2;
@@ -46,7 +46,7 @@ constexpr uint32_t kFieldRangeIndex = 15;
 constexpr uint32_t kFieldSchoolMask = 25;
 constexpr uint32_t kFieldCategoriesId = 35;
 constexpr uint32_t kFieldCooldownsId = 37;
-/// TCPP `SpellEntry::PowerDisplayID` — row id in `SpellPower.dbc` (`SpellInfo::SpellPowerId`).
+/// SpellEntry::PowerDisplayID — row id in `SpellPower.dbc` (SpellInfo::SpellPowerId).
 constexpr uint32_t kFieldSpellPowerId = 42;
 
 static size_t LastFieldSizeBytes(char lastFmt) {

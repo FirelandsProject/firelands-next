@@ -20,7 +20,7 @@ public:
   UpdateData() : _count(0), _mapId(0) {}
   explicit UpdateData(uint16 mapId) : _count(0), _mapId(mapId) {}
 
-  // Update flags (Cataclysm 4.3.4 / build 15595) aligned with FirelandsCore reference.
+  // Update flags (Cataclysm 4.3.4 / build 15595) aligned with reference.
   // We only define the ones we currently emit.
   static constexpr uint32 UPDATEFLAG_SELF = 0x00001;
   static constexpr uint32 UPDATEFLAG_LIVING = 0x00020;
@@ -40,7 +40,7 @@ public:
     _data.Append<uint8>(static_cast<uint8>(typeId));
 
     // Cataclysm 4.3.4 (15595) movement update block.
-    // We currently build the minimal "self living unit" movement update matching FirelandsCore.
+    // We currently build the minimal "self living unit" movement update matching reference.
     uint32 flags = 0;
     if (typeId == TYPEID_PLAYER)
       flags = UPDATEFLAG_SELF | UPDATEFLAG_LIVING;
@@ -91,7 +91,7 @@ public:
       bw.WriteBit(hasFallData);
       bw.WriteBit(!hasSplineElevation); // !Has spline elevation
       bw.WriteBit(guidBytes[5] != 0);
-      // Reference (FirelandsCore): this bit is true only when transport guid is present.
+      // Reference: this bit is true only when transport guid is present.
       bw.WriteBit(hasTransport); // Has transport data
       bw.WriteBit(false);         // !HasTime (always send time in bytes)
 
@@ -164,7 +164,7 @@ public:
    */
   void Build(WorldPacket &packet) {
     packet.SetOpcode(SMSG_UPDATE_OBJECT);
-    // FirelandsCore (Cataclysm 4.3.4): [2] mapId + [4] blockCount, then blocks.
+    // Reference (Cataclysm 4.3.4): [2] mapId + [4] blockCount, then blocks.
     packet.Append<uint16>(_mapId);
     packet.Append<uint32>(_count);
     packet.Append(_data.GetBuffer(), _data.Size());

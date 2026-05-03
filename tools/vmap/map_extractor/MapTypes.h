@@ -2,9 +2,9 @@
 
 // On-disk and in-memory layouts for WoW 4.3.4 map files consumed by the
 // map extractor.  Ported byte-for-byte from:
-//   firelands-cata-ref/src/tools/map_extractor/adt.h
-//   firelands-cata-ref/src/tools/map_extractor/wdt.h
-//   firelands-cata-ref/src/tools/map_extractor/loadlib.h (System.cpp constants)
+//   reference implementation adt.h
+//   reference implementation wdt.h
+//   reference implementation loadlib.h (System.cpp constants)
 //
 // All structs are #pragma pack(1) to match the binary format exactly.
 

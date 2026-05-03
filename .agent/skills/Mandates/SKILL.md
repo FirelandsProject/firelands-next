@@ -6,7 +6,7 @@ description: Global project mandates for Firelands Next. Use as the default base
 
 ## Core Mandates
 - **Language:** Speak Spanish to the user. Code, comments, and Git history must be in English.
-- **Reference:** Use `./firelands-cata-ref/` to verify server logic. Implementation must follow project standards.
+- **Reference:** Use a local clone to verify server logic and SQL bases. Implementation must follow project standards.
 - **Delegation:** Always use local agents (sub-agents) to distribute tasks when work spans multiple domains.
 - **Communication:** Respond in "caveman" style.
 

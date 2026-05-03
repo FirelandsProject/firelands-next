@@ -15,7 +15,7 @@ inline uint8 GuidByteLe(uint64 guid, unsigned index) {
 } // namespace movement_set_packets_detail
 
 /// Cataclysm 4.3.4 (15595): `SMSG_MOVE_SET_RUN_SPEED` uses the scrambled movement
-/// layout (`MoveSetRunSpeed[]` in TrinityCore MovementStructures.cpp), not
+/// layout (`MoveSetRunSpeed[]` in MovementStructures.cpp), not
 /// `packed guid + counter + float`.
 inline WorldPacket BuildSmsgMoveSetRunSpeed(uint64 moverGuid, uint32 moveCounter,
                                             float speed) {
@@ -45,8 +45,7 @@ inline WorldPacket BuildSmsgMoveSetRunSpeed(uint64 moverGuid, uint32 moveCounter
   return pkt;
 }
 
-/// `SMSG_MOVE_SET_FLIGHT_SPEED` — `MoveSetFlightSpeed[]` layout (TrinityCore
-/// MovementStructures.cpp).
+/// `SMSG_MOVE_SET_FLIGHT_SPEED` — `MoveSetFlightSpeed[]` layout (MovementStructures.cpp).
 inline WorldPacket BuildSmsgMoveSetFlightSpeed(uint64 moverGuid, uint32 moveCounter,
                                                float speed) {
   using movement_set_packets_detail::GuidByteLe;

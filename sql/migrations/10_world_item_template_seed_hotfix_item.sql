@@ -1,4 +1,4 @@
--- Seed `item_template` from firelands-cata-ref `data/sql/base/db_hotfixes/item.sql` (DB2 Item hotfix subset).
+-- Seed `item_template` from reference implementation `data/sql/base/db_hotfixes/item.sql` (DB2 Item hotfix subset).
 -- Idempotent: upserts on primary key `entry`.
 
 CREATE DATABASE IF NOT EXISTS `firelands_world`;

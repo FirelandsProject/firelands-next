@@ -11,7 +11,7 @@ bool FiniteVec(float x, float y, float z, float o) {
   return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(o);
 }
 
-// Derived from firelands-cata-ref MovementStructures.cpp MovementHeartBeat[]
+// Originally derived from reference implementation MovementStructures.cpp MovementHeartBeat[]
 // and Player::ReadMovementInfo (Player.cpp ~28170).
 //
 // Key layout (different from all other movement opcodes):

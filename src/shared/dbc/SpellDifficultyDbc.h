@@ -7,7 +7,7 @@
 
 namespace Firelands {
 
-/// `SpellDifficulty.dbc` (client 4.3.4): TCPP `SpellDifficultyfmt[] = "niiii"`
+/// `SpellDifficulty.dbc` (client 4.3.4): SpellDifficultyfmt[] = "niiii"
 /// — Id plus four spell ids (10N, 25N, 10H, 25H style difficulty variants).
 /// Pairs with world table `spelldifficulty_dbc` for DB-driven overrides.
 class SpellDifficultyDbc {

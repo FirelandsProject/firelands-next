@@ -15,6 +15,8 @@ public:
       std::string const &sanitizedQuery, uint32_t limit,
       uint32_t offset) const override;
 
+  std::optional<NpcTemplateSearchRow> TryGetByEntry(uint32_t entry) const override;
+
 private:
   std::shared_ptr<sql::Connection> m_connection;
 };

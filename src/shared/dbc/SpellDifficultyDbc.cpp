@@ -15,7 +15,7 @@ bool SpellDifficultyDbc::Load(std::string const &path) {
   uint32_t const recordCount = reader.GetRecordCount();
   uint32_t const fieldCount = reader.GetFieldCount();
   uint32_t const recordSize = reader.GetRecordSize();
-  // "niiii": five 32-bit fields (TCPP DBCfmt.h).
+  // "niiii": five 32-bit fields (DBCfmt.h).
   if (recordCount == 0u || fieldCount < 5u || recordSize < 5u * sizeof(uint32_t)) {
     LOG_WARN("SpellDifficulty.dbc: unexpected layout (records={}, fields={}, "
              "recordSize={}) in {}",

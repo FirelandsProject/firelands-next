@@ -97,7 +97,7 @@ bool AddonLangAllowedForType(uint32 type) {
   }
 }
 
-/// Cataclysm 4.3.4 layout aligned with TCPP `ChatHandler::BuildChatPacket` (default
+/// Cataclysm 4.3.4 layout aligned with `ChatHandler::BuildChatPacket` (default
 /// branch): optional GM sender name only for `SMSG_GM_MESSAGECHAT`, then optional
 /// channel name, target GUID, message, `ChatTag` byte (not a second null).
 void AppendSmsgMessageChatPayload(WorldPacket &data, uint32 chatType, uint32 lang,

@@ -13,7 +13,7 @@ public:
   /// Milliseconds from `SpellCastTimes.dbc` for `castingTimeIndex`; 0 if unknown or index 0.
   virtual uint32 GetCastTimeMs(uint32 castingTimeIndex) const = 0;
 
-  /// TCPP `SpellRangeEntry`: fields 1–4 are `RangeMin[0]`, `RangeMin[1]`, `RangeMax[0]`,
+  /// SpellRangeEntry: fields 1–4 are `RangeMin[0]`, `RangeMin[1]`, `RangeMax[0]`,
   /// `RangeMax[1]` (hostile vs friendly pairs). Returns 0 if unknown / index 0.
   virtual float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const = 0;
 

@@ -18,6 +18,7 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
     std::unique_ptr<sql::ResultSet> res(stmt->executeQuery(
         "SELECT c.`guid`, c.`id`, c.`map`, c.`position_x`, c.`position_y`, "
         "c.`position_z`, c.`orientation`, c.`modelid`, "
+        "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4`, "
         "ct.`unit_class`, ct.`minlevel`, ct.`maxlevel` "
         "FROM `creature` c "
         "INNER JOIN `creature_template` ct ON ct.`entry` = c.`id`"));
@@ -31,6 +32,10 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
       row.z = res->getDouble("position_z");
       row.orientation = static_cast<float>(res->getDouble("orientation"));
       row.modelId = res->getUInt("modelid");
+      row.templateModelId1 = res->getUInt("modelid1");
+      row.templateModelId2 = res->getUInt("modelid2");
+      row.templateModelId3 = res->getUInt("modelid3");
+      row.templateModelId4 = res->getUInt("modelid4");
       row.unitClass = static_cast<uint8>(res->getUInt("unit_class"));
       row.minLevel = static_cast<uint8>(res->getUInt("minlevel"));
       row.maxLevel = static_cast<uint8>(res->getUInt("maxlevel"));

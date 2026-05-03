@@ -167,7 +167,7 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
       float const dy = req.targetY - req.casterY;
       float const dz = req.targetZ - req.casterZ;
       float const dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-      // TCPP `MAX_SPELL_RANGE_TOLERANCE` (yards) — small slack so borderline casts match client.
+      // MAX_SPELL_RANGE_TOLERANCE (yards) — small slack so borderline casts match client.
       constexpr float kMaxRangeToleranceYards = 3.0f;
       constexpr float kMinRangeToleranceYards = 1.5f;
       if (maxYards > 0.f && dist > maxYards + kMaxRangeToleranceYards) {

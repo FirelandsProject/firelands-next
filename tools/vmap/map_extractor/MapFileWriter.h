@@ -4,7 +4,7 @@
 // Takes the fully populated AdtGridData from AdtReader and serialises it to
 // the binary .map format consumed by the server's MapManager.
 //
-// Output format matches firelands-cata-ref/src/tools/map_extractor/System.cpp
+// Output format matches reference implementation System.cpp
 // ConvertADT() exactly:
 //
 //   map_fileheader  (44 bytes)

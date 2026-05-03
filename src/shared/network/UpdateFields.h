@@ -1,6 +1,6 @@
 #pragma once
 
-// Cataclysm 4.3.4 (15595) update field indices: aligned with firelands-cata-ref UpdateFields.h
+// Cataclysm 4.3.4 (15595) update field indices: aligned with reference implementation UpdateFields.h
 
 #include <shared/Common.h>
 

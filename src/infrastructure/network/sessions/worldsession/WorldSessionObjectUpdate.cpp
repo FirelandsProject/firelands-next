@@ -7,8 +7,10 @@
 #include <shared/game/StatFormulas.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
+#include <shared/network/WorldOpcodes.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <optional>
 #include <utility>
@@ -630,6 +632,56 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[UNIT_FIELD_HOVERHEIGHT] = packF(1.0f);
 
   return fields;
+}
+
+void BuildCreatureQueryResponse(
+    WorldPacket &out, uint32 creatureEntry,
+    std::optional<std::pair<std::string, std::string>> const &nameTitle,
+    std::array<uint32, 4> const &creatureDisplayIds) {
+  // Sizes match Trinity `CreatureStats` / `QueryPackets.cpp`.
+  static constexpr uint32 kKillCredits = 2;
+  static constexpr uint32 kCreatureModels = 4;
+  static constexpr uint32 kCreatureQuestItems = 6;
+
+  bool const allow = nameTitle.has_value();
+  out.Clear();
+  out.SetOpcode(SMSG_CREATURE_QUERY_RESPONSE);
+  out.Append<uint32>(creatureEntry | (allow ? 0u : 0x80000000u));
+  if (!allow)
+    return;
+
+  std::string const &creatureName = nameTitle->first;
+  std::string const &subname = nameTitle->second;
+
+  for (int i = 0; i < 4; ++i)
+    out.WriteString(i == 0 ? creatureName : std::string());
+  for (int i = 0; i < 4; ++i)
+    out.WriteString(std::string());
+  out.WriteString(subname);
+  out.WriteString(std::string());
+
+  out.Append<uint32>(0);
+  out.Append<uint32>(0);
+
+  out.Append<uint32>(0);
+  out.Append<uint32>(0);
+  out.Append<uint32>(0);
+
+  for (uint32 i = 0; i < kKillCredits; ++i)
+    out.Append<uint32>(0);
+
+  for (uint32 i = 0; i < kCreatureModels; ++i)
+    out.Append<uint32>(creatureDisplayIds[i]);
+
+  out.Append<float>(1.0f);
+  out.Append<float>(1.0f);
+  out.Append<uint8>(0);
+
+  for (uint32 i = 0; i < kCreatureQuestItems; ++i)
+    out.Append<uint32>(0);
+
+  out.Append<uint32>(0);
+  out.Append<uint32>(0);
 }
 
 } // namespace WorldSessionObjectUpdate

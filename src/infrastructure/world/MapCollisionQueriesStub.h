@@ -6,7 +6,7 @@
 
 namespace Firelands {
 
-/// Placeholder until vmap/mmap from `firelands-cata-ref` extractors are integrated.
+/// Placeholder until vmap/mmap from reference implementation extractors are integrated.
 class MapCollisionQueriesStub final : public IMapCollisionQueries {
 public:
   explicit MapCollisionQueriesStub(std::string dataRoot = {});

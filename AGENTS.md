@@ -155,7 +155,7 @@ target_precompile_headers(<target_name> PRIVATE ${PROJECT_PCH_HEADERS})
 
 - Documentation: `docs/EN/README.md`
 - Module guides: `docs/EN/modules/README.md`
-- Reference implementation: `firelands-cata-ref/`
+- Reference implementation (local clone, not vendored): `firelands-cata-ref/` or `firelands-core-ref/` (local clone names)
 
 ## Logs
 

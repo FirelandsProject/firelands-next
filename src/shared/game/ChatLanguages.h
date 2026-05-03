@@ -9,7 +9,7 @@ namespace Firelands {
 
 /// Passive "Language *" spells (build 15595 / 4.3.4) so the client spell book
 /// matches retail and chat uses the correct `Language` ids.
-/// Reference: ChrRaces trade language + racial language; TrinityCore
+/// Reference: ChrRaces trade language + racial language
 /// `HandleMessagechatOpcode` language skill checks (`LanguageDesc::skill_id`).
 void AppendRacialLanguageSpells(uint8 race, std::vector<uint32> &knownSpells);
 

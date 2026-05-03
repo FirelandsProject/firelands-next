@@ -8,7 +8,7 @@
 
 namespace Firelands {
 
-/// Cataclysm 4.3.4 GM ticket wire helpers (aligned with TCPP `GmTicket::WritePacket` /
+/// Cataclysm 4.3.4 GM ticket wire helpers (aligned with `GmTicket::WritePacket` /
 /// `TicketMgr::SendTicket` and opcode names in `WorldOpcodes.h`).
 namespace gm_ticket {
 

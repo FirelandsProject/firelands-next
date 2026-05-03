@@ -21,7 +21,7 @@ bool EndsWithMpqExtension(const std::string &lowerName) {
 }
 
 // Cataclysm 4.3.4 MPQ priority tiers (lower rank = opened first / lower overlay).
-// Reference: TrinityCore / AzerothCore 4.3.4 extractor load order.
+// Reference: reference implementation 4.3.4 extractor load order.
 
 // Tier 0: base game data archives (opened first as lowest priority).
 constexpr const char *kTier0[] = {

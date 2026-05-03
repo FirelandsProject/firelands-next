@@ -10,7 +10,7 @@ namespace Firelands {
 
 class ISpellCastTables;
 
-/// Loads `Spell.dbc` (4.3.4 / build 15595) using TCPP `SpellEntryfmt` layout.
+/// Loads `Spell.dbc` (4.3.4 / build 15595) using `SpellEntryfmt` layout.
 class SpellEntryDbcStore final : public ISpellDefinitionStore {
 public:
   bool Load(std::string const &path);

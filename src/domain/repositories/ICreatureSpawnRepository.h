@@ -15,6 +15,10 @@ struct CreatureSpawnRow {
   float z = 0.f;
   float orientation = 0.f;
   uint32 modelId = 0;
+  uint32 templateModelId1 = 0;
+  uint32 templateModelId2 = 0;
+  uint32 templateModelId3 = 0;
+  uint32 templateModelId4 = 0;
   uint8 unitClass = 0;
   uint8 minLevel = 1;
   uint8 maxLevel = 1;

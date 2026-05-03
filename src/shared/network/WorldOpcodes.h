@@ -5,9 +5,7 @@
 
 namespace Firelands {
 
-// Opcodes aligned with build 15595 (Cataclysm 4.3.4):
-// The-Cataclysm-Preservation-Project/TrinityCore Opcodes.h (OpcodeClient ~L385,
-// OpcodeServer for SMSG_*), and firelands-cata-ref.
+// Opcodes aligned with build 15595 (Cataclysm 4.3.4).
 enum WorldOpcode : uint32 {
   SMSG_AUTH_CHALLENGE = 0x4542,
   CMSG_AUTH_SESSION = 0x0449,
@@ -38,7 +36,7 @@ enum WorldOpcode : uint32 {
   /// Reference: SMSG_STOP_MIRROR_TIMER (not used for spell book in 4.3.4).
   SMSG_STOP_MIRROR_TIMER = 0x0B06,
   SMSG_SEND_KNOWN_SPELLS = 0x0104,
-  /// Reference: TCPP `Player::LearnSpell` — `SMSG_LEARNED_SPELL` (two uint32).
+  /// Reference: Player::LearnSpell → SMSG_LEARNED_SPELL (two uint32).
   SMSG_LEARNED_SPELL = 0x58A2,
   SMSG_SEND_UNLEARN_SPELLS = 0x4E25,
   /// Reference: SMSG_UPDATE_ACTION_BUTTONS
@@ -82,8 +80,10 @@ enum WorldOpcode : uint32 {
   SMSG_ALL_ACHIEVEMENT_DATA = 0x58B1,
   SMSG_EQUIPMENT_SET_LIST = 0x2E04,
   SMSG_GUILD_BANK_MONEY_WITHDRAWN = 0x5DB4,
-  /// Reference: TCPP OpcodeServer SMSG_QUERY_PLAYER_NAME_RESPONSE
+  /// Reference: OpcodeServer SMSG_QUERY_PLAYER_NAME_RESPONSE
   SMSG_QUERY_PLAYER_NAME_RESPONSE = 0x6E04,
+  /// Trinity Cataclysm `QueryCreatureResponse` (template names / tooltip cache).
+  SMSG_CREATURE_QUERY_RESPONSE = 0x6024,
   SMSG_QUERY_TIME_RESPONSE = 0x2124,
   SMSG_PLAYED_TIME = 0x6037,
   SMSG_CALENDAR_SEND_NUM_PENDING = 0x0C17,
@@ -93,8 +93,10 @@ enum WorldOpcode : uint32 {
   SMSG_REQUEST_CEMETERY_LIST_RESPONSE = 0x30A7,
 
   CMSG_PING = 0x444D,
-  /// Reference: TCPP OpcodeClient CMSG_NAME_QUERY (Opcodes.h ~L385)
+  /// Reference: OpcodeClient CMSG_NAME_QUERY
   CMSG_NAME_QUERY = 0x2224,
+  /// Trinity Cataclysm `QueryCreature` (client asks `creature_template` by entry).
+  CMSG_CREATURE_QUERY = 0x2706,
   CMSG_QUERY_TIME = 0x0A36,
   CMSG_PLAYED_TIME = 0x0804,
 
@@ -154,14 +156,14 @@ enum WorldOpcode : uint32 {
   MSG_MOVE_STOP_SWIM = 0x3802,
   MSG_MOVE_JUMP = 0x7A06,
   MSG_MOVE_SET_FACING = 0x7914,
-  /// Reference: TrinityCore `Opcodes.h` OpcodeServer / OpcodeClient (build 15595).
+  /// Reference: OpcodeServer / OpcodeClient (build 15595).
   MSG_MOVE_TELEPORT = 0x55A0,
   MSG_MOVE_TELEPORT_ACK = 0x390C,
   SMSG_MOVE_UPDATE_TELEPORT = 0x50B2,
 
   /// Channel join request (e.g. General/Trade on login).
   CMSG_JOIN_CHANNEL = 0x0156,
-  /// Reference: TrinityCore `Opcodes.h` OpcodeClient (build 15595) — one opcode
+  /// Reference: OpcodeClient (build 15595) — one opcode
   /// per chat kind; payload is bit-packed (`ChatHandler::HandleMessagechatOpcode`).
   CMSG_MESSAGECHAT_ADDON_BATTLEGROUND = 0x0D46,
   CMSG_MESSAGECHAT_ADDON_GUILD = 0x0544,
@@ -210,7 +212,7 @@ enum WorldOpcode : uint32 {
   /// Reference: Opcodes.h (NPC gossip)
   CMSG_GOSSIP_HELLO = 0x4525,
   CMSG_GOSSIP_SELECT_OPTION = 0x0216,
-  /// TCPP Cataclysm `SMSG_GOSSIP_MESSAGE` / `SMSG_GOSSIP_COMPLETE`.
+  /// Reference: OpcodeServer for SMSG_GOSSIP_MESSAGE
   SMSG_GOSSIP_MESSAGE = 0x2035,
   SMSG_GOSSIP_COMPLETE = 0x0806,
 
@@ -222,7 +224,7 @@ enum WorldOpcode : uint32 {
   SMSG_UPDATE_ACCOUNT_DATA_COMPLETE = 0x2015,
   CMSG_LOG_DISCONNECT = 0x446D,
   CMSG_CANCEL_TRADE = 0x731E,
-  /// Reference: Trinity TCPP `Opcodes.h` (swap within bag 0 — equipment / backpack grid).
+  /// Reference: Opcodes.h (swap within bag 0 — equipment / backpack grid).
   CMSG_SWAP_INV_ITEM = 0x2614,
   CMSG_SWAP_ITEM = 0x6326,
   /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs` (clears client pending inventory ops).

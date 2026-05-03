@@ -72,7 +72,7 @@ public:
   }
 
   /// Applies `player_classlevelstats` + `player_racestats` and optional `gtOCT*.dbc`
-  /// (same sources as TrinityCore / `firelands-cata-ref`). Returns false if no class row.
+  /// (same sources as reference implementations). Returns false if no class row.
   bool TryApplyTemplateCombatState(Character &character);
 
   GtPlayerStatGameTables const &GetStatGameTables() const {

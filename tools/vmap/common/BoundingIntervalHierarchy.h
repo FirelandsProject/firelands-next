@@ -3,7 +3,7 @@
 // Bounding Interval Hierarchy (BIH) — spatial acceleration structure for
 // ray-casting and point queries over triangle meshes and spawn instances.
 //
-// Ported from firelands-cata-ref/src/common/Collision/BoundingIntervalHierarchy.h
+// Originally ported from reference implementation BoundingIntervalHierarchy.h
 // Replaces G3D::AABox / G3D::Vector3 / G3D::Ray with our Vec3 / AaBox3 types.
 // The binary serialization format (writeToFile / readFromFile) is bit-identical
 // to the reference so that vmap files produced here can be read by the runtime.

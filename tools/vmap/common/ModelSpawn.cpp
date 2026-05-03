@@ -7,7 +7,7 @@
 namespace Firelands::VMap {
 
 // ─── ReadFromFile ─────────────────────────────────────────────────────────────
-// Mirrors ModelSpawn::readFromFile in firelands-cata-ref/ModelInstance.cpp
+// Mirrors ModelSpawn::readFromFile in reference implementation ModelInstance.cpp
 // exactly, replacing G3D::Vector3 / G3D::AABox with our Vec3 / AaBox3.
 
 bool ModelSpawn::ReadFromFile(FILE* rf, ModelSpawn& spawn) {
@@ -59,7 +59,7 @@ bool ModelSpawn::ReadFromFile(FILE* rf, ModelSpawn& spawn) {
 }
 
 // ─── WriteToFile ─────────────────────────────────────────────────────────────
-// Mirrors ModelSpawn::writeToFile in firelands-cata-ref/ModelInstance.cpp.
+// Mirrors ModelSpawn::writeToFile in reference implementation ModelInstance.cpp.
 
 bool ModelSpawn::WriteToFile(FILE* wf, const ModelSpawn& spawn) {
     uint32_t check = 0;

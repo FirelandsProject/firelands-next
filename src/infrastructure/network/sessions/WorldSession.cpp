@@ -29,6 +29,7 @@
 #include <domain/repositories/ICharacterRepository.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <map>
@@ -81,9 +82,10 @@ void RebuildKnownSpellIdSet(std::vector<uint32> const &ordered,
 
 std::atomic<uint32_t> g_nextGmSpawnCreatureLow{0x70000000u};
 
-uint64_t AllocateGmSpawnCreatureGuid() {
-  return static_cast<uint64_t>(
-      g_nextGmSpawnCreatureLow.fetch_add(1u, std::memory_order_relaxed));
+uint64_t AllocateGmSpawnCreatureGuid(uint32_t creatureEntry) {
+  uint32_t const low =
+      g_nextGmSpawnCreatureLow.fetch_add(1u, std::memory_order_relaxed);
+  return MakeCreatureObjectGuid(creatureEntry, low);
 }
 
 void BroadcastGmCreatureCreate(uint32 mapId, uint64 creatureGuid,
@@ -337,8 +339,7 @@ void WorldSession::SendAuthChallenge() {
 
   WorldPacket data(SMSG_AUTH_CHALLENGE);
 
-  // Cata 4.3.4 (15595) SMSG_AUTH_CHALLENGE (37 bytes):
-  // Estructura exacta de firelands-cata-ref:
+// Cataclysm 4.3.4 (15595) SMSG_AUTH_CHALLENGE (37 bytes):
   // [32] DosChallenge (con sobreescritura parcial)
   // [4]  Server Seed (uint32)
   // [1]  DosZeroBits (uint8)
@@ -616,8 +617,7 @@ void WorldSession::LoginReadPackedPlayerGuid(WorldPacket &packet,
 
 void WorldSession::LoginSendAccountDataAndPreMapPackets(
     uint64 guid, Character const &character) {
-  // Login SMSG order aligned with firelands-cata-ref CharacterHandler::HandlePlayerLogin
-  // and Player::SendInitialPacketsBeforeAddToMap (see Player.cpp ~23604).
+  // Login SMSG order aligned with Cataclysm 4.3.4 reference and Player::SendInitialPacketsBeforeAddToMap.
   SendDungeonDifficulty(false);
 
   _activeCharacterGuid = character.GetGuid();
@@ -811,6 +811,45 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
 }
 
+void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
+  auto map = WorldService::Instance().GetMap(_mapId);
+  if (!map)
+    return;
+
+  // Login log showed a single SMSG_UPDATE_OBJECT ~400KiB+ with full-ref spawns; the 4.3.4
+  // client handles visibility poorly / shows nothing when one update blob is huge.
+  constexpr uint32_t kMaxCreatureCreatesPerPacket = 48;
+  uint16 const mapIdU16 = static_cast<uint16>(_mapId);
+  UpdateData batch(mapIdU16);
+  uint32_t inBatch = 0;
+
+  auto flushBatch = [this, mapIdU16, &batch, &inBatch]() {
+    if (batch.GetBlockCount() == 0)
+      return;
+    WorldPacket pkt;
+    batch.Build(pkt);
+    SendPacket(pkt);
+    batch = UpdateData(mapIdU16);
+    inBatch = 0;
+  };
+
+  map->ForEachCreatureNear(x, y, 1, [&](std::shared_ptr<Creature> const &cr) {
+    auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
+        cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
+        cr->GetLiveMaxHealth(), cr->GetLevel(), 0u);
+    batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
+                          npcFields);
+    ++inBatch;
+    if (inBatch >= kMaxCreatureCreatesPerPacket)
+      flushBatch();
+  });
+  flushBatch();
+}
+
+void WorldSession::SendNearbyCreatureCreatesToSelf(float x, float y) {
+  SendNearbyCreatureCreatesInChunks(x, y);
+}
+
 void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
     uint64 guid, Character const &character, MovementInfo const &move) {
   GtPlayerStatGameTables const *const statGt = _charService->GetStatGameTables();
@@ -850,19 +889,10 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
                               character.GetPackItemStackCount(pi)));
   }
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
-    map->ForEachCreatureNear(move.x, move.y, 1, [&](std::shared_ptr<Creature> const &cr) {
-      auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
-          cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
-          cr->GetLiveMaxHealth(), cr->GetLevel(), 0u);
-      update.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
-                             npcFields);
-    });
-  }
-
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
   update.Build(updatePacket);
   SendPacket(updatePacket);
+  SendNearbyCreatureCreatesInChunks(move.x, move.y);
 
   // Other logged-in players see this client; this client sees them (same map).
   if (auto map = WorldService::Instance().GetMap(_mapId)) {
@@ -1125,7 +1155,7 @@ void WorldSession::HandleLogoutRequest(WorldPacket & /*packet*/) {
     return;
   }
 
-  // Trinity TCPP order: uint32 reason (0 = OK), uint8 instantLogout.
+  // Cataclysm 4.3.4 order: uint32 reason (0 = OK), uint8 instantLogout.
   // We always allow instant logout (no combat/rest model yet); client returns to
   // character selection after SMSG_LOGOUT_COMPLETE.
   WorldPacket response(SMSG_LOGOUT_RESPONSE, 5);
@@ -1212,14 +1242,14 @@ void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
 }
 
 void WorldSession::HandleCalendarGetNumPending(WorldPacket & /*packet*/) {
-  // Reference: firelands-cata-ref CalendarHandler.cpp HandleCalendarGetNumPending
+  // Reference: WorldSession implementation
   WorldPacket data(SMSG_CALENDAR_SEND_NUM_PENDING, 4);
   data.Append<uint32>(0);
   SendPacket(data);
 }
 
 void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
-  // Reference: firelands-cata-ref MiscHandler.cpp HandleZoneUpdateOpcode
+  // Reference: HandleZoneUpdateOpcode implementation
   uint32 newZone = 0;
   if (packet.Size() - packet.GetReadPos() >= sizeof(uint32))
     newZone = packet.Read<uint32>();
@@ -1229,7 +1259,7 @@ void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
 }
 
 void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*packet*/) {
-  // Reference: firelands-cata-ref GuildHandler.cpp HandleGuildBankMoneyWithdrawn
+  // Reference: HandleGuildBankMoneyWithdrawn implementation
   // and Guild.cpp Guild::SendMoneyInfo → SMSG_GUILD_BANK_MONEY_WITHDRAWN(int64).
   //
   // We don't implement guilds yet → respond with 0 so the UI doesn't hang.
@@ -1239,14 +1269,14 @@ void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*pa
 }
 
 void WorldSession::HandleLfgGetStatus(WorldPacket & /*packet*/) {
-  // Reference: firelands-cata-ref LFGHandler.cpp HandleLfgGetStatus
+  // Reference: HandleLfgGetStatus implementation
   // Minimal "not queued / not using LFG" response.
   WorldPacket data(SMSG_LFG_UPDATE_STATUS_NONE, 0);
   SendPacket(data);
 }
 
 void WorldSession::HandleLfgLockInfoRequest(WorldPacket &packet) {
-  // Reference: firelands-cata-ref LFGHandler.cpp HandleLfgGetLockInfoOpcode
+  // Reference: HandleLfgGetLockInfoOpcode implementation
   // Client payload: one bit ("player" vs "party"). We parse it, but respond with
   // empty data either way for now.
   bool forPlayer = true;
@@ -1277,7 +1307,7 @@ void WorldSession::HandleLfgLockInfoRequest(WorldPacket &packet) {
 }
 
 void WorldSession::HandleRequestCemeteryList(WorldPacket & /*packet*/) {
-  // Reference: firelands-cata-ref MiscPackets.cpp RequestCemeteryListResponse::Write
+  // Reference: MiscPackets.cpp RequestCemeteryListResponse::Write
   // Layout (bit-packed):
   // - 1 bit  IsGossipTriggered
   // - 24 bits CemeteryID.size()
@@ -1441,7 +1471,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
 }
 
 void WorldSession::HandleNameQuery(WorldPacket &packet) {
-  // CMSG_NAME_QUERY: TCPP HandleNameQueryOpcode reads ObjectGuid as raw uint64 LE
+  // CMSG_NAME_QUERY: HandleNameQueryOpcode reads ObjectGuid as raw uint64 LE
   // (recvData >> guid), i.e. 8 bytes. Shorter payloads use packed GUID.
   uint64 guid = 0;
   size_t const rem = packet.Size() - packet.GetReadPos();
@@ -1469,6 +1499,28 @@ void WorldSession::HandleNameQuery(WorldPacket &packet) {
   SendPacket(response);
 }
 
+void WorldSession::HandleCreatureQuery(WorldPacket &packet) {
+  if (packet.Size() - packet.GetReadPos() < sizeof(uint32))
+    return;
+  uint32 const entry = packet.Read<uint32>();
+  if (packet.GetReadPos() < packet.Size())
+    (void)packet.ReadPackedGuid();
+
+  std::optional<std::pair<std::string, std::string>> nameTitle;
+  std::array<uint32, 4> creatureModels{};
+  if (_npcTemplateSearch) {
+    if (auto row =
+            _npcTemplateSearch->TryGetByEntry(static_cast<uint32_t>(entry))) {
+      nameTitle = std::make_pair(std::move(row->name), std::move(row->subname));
+      creatureModels = row->displayIds;
+    }
+  }
+
+  WorldPacket response;
+  ws_obj::BuildCreatureQueryResponse(response, entry, nameTitle, creatureModels);
+  SendPacket(response);
+}
+
 void WorldSession::SendQueryTimeResponse() {
   WorldPacket response(SMSG_QUERY_TIME_RESPONSE);
   response.Append<uint32>(static_cast<uint32>(std::time(nullptr)));
@@ -1488,7 +1540,7 @@ void WorldSession::HandlePlayedTime(WorldPacket &packet) {
     trigger = packet.Read<uint8>();
 
   WorldPacket response(SMSG_PLAYED_TIME);
-  // TCPP WorldPackets::Character::PlayedTime::Write() uses int32 for both times.
+  // WorldPackets::Character::PlayedTime::Write() uses int32 for both times.
   response.Append<int32>(0); // total played seconds (not persisted yet)
   response.Append<int32>(0); // level played seconds (not persisted yet)
   response.Append<uint8>(trigger ? 1 : 0);
@@ -2024,7 +2076,7 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
   if (_playerGuid == 0 || creatureEntry == 0 || displayId == 0)
     return false;
 
-  uint64 const guid = AllocateGmSpawnCreatureGuid();
+  uint64 const guid = AllocateGmSpawnCreatureGuid(creatureEntry);
   constexpr uint32_t kSeedHp = 100u;
   auto spawned = std::make_shared<Creature>(guid, creatureEntry, displayId, kSeedHp);
   spawned->SetPosition(_position);

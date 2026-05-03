@@ -12,7 +12,7 @@ using movement_set_packets_detail::GuidByteLe;
 } // namespace movement_teleport_packets_detail
 
 /// Cataclysm 4.3.4 (15595): `MSG_MOVE_TELEPORT` — `WorldPackets::Movement::MoveTeleport`
-/// (TrinityCore `MovementPackets.cpp`), no vehicle / transport payload.
+/// no vehicle / transport payload.
 inline WorldPacket BuildMsgMoveTeleport(uint64 moverGuid, uint32 sequenceIndex, float x,
                                         float y, float z, float facing) {
   using movement_teleport_packets_detail::GuidByteLe;

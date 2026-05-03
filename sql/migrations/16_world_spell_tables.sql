@@ -1,5 +1,5 @@
--- Spell-related world tables (Cataclysm 4.3.4 / TCPP parity).
--- Source: The-Cataclysm-Preservation-Project/TrinityCore sql/base/dev/world_database.sql
+-- Spell-related world tables (Cataclysm 4.3.4 parity).
+-- Source: reference implementation sql/base/dev/world_database.sql
 -- (spell_area through spelleffect_dbc). Empty at install; gameplay can INSERT as needed.
 CREATE DATABASE IF NOT EXISTS `firelands_world`;
 USE `firelands_world`;

@@ -1,4 +1,4 @@
--- TrinityCore-aligned creature schema for Firelands Next (world DB).
+-- Creature schema for Firelands Next (world DB).
 -- Behaviour is Lua-driven; `smart_scripts` is intentionally omitted.
 -- JDBC-safe: no DELIMITER / stored procedures (DatabaseMigrator splits on ';').
 --

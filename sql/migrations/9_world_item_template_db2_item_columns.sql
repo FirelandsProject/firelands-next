@@ -1,4 +1,4 @@
--- Align `item_template` with firelands-cata-ref `data/sql/base/db_hotfixes/item.sql`
+-- Align `item_template` with reference implementation `data/sql/base/db_hotfixes/item.sql`
 -- (DB2 Item.db2 column semantics). Idempotent: safe if columns already exist.
 -- Note: `DatabaseMigrator` skips `USE` lines; use explicit `firelands_world` in checks.
 

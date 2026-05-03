@@ -3,7 +3,7 @@
 // ModelSpawn — the per-instance record written into the tile directory files
 // by vmap4_extractor and read by vmap4_assembler.
 //
-// Binary layout (matches firelands-cata-ref ModelInstance.cpp exactly):
+// Binary layout (matches reference implementation ModelInstance.cpp exactly):
 //   uint8   flags
 //   uint8   adtId
 //   uint32  ID

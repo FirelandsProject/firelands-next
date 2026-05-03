@@ -7,7 +7,7 @@
 namespace Firelands {
 
 namespace {
-// Must match `firelands-cata-ref/src/server/game/DataStores/DBCfmt.h`
+// Must match reference implementation DBCfmt.h
 constexpr char kCharStartOutfitFmt[] =
     "dbbbXiiiiiiiiiiiiiiiiiiiiiiiixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxii";
 }

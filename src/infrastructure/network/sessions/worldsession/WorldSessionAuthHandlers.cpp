@@ -15,7 +15,7 @@ namespace Firelands {
 
 namespace {
 
-// TrinityCore / TCPP WorldSession.cpp — public key sent when client HasKey is false
+// Reference implementation WorldSession.cpp — public key sent when client HasKey is false
 // (SMSG_ADDON_INFO secure addon block).
 static uint8 const kAddonPublicKey[256] = {
     0xC3, 0x5B, 0x50, 0x84, 0xB9, 0x3E, 0x32, 0x42, 0x8C, 0xD0, 0xC7, 0x48, 0xFA, 0x0E, 0x5D, 0x54,
@@ -47,7 +47,7 @@ static bool ReadAddonCString(std::vector<uint8> const &buf, size_t &pos,
   return true;
 }
 
-/// Parses the wire blob from CMSG_AUTH_SESSION (zlib + addon list). See TCPP
+/// Parses the wire blob from CMSG_AUTH_SESSION (zlib + addon list). See reference
 /// `WorldSession::ReadAddonsInfo`.
 static void TryPopulateAuthAddonsFromWire(std::vector<uint8> const &wire,
                                           std::vector<AuthSecureAddonEntry> &out) {
@@ -290,7 +290,7 @@ void WorldSession::SendAuthResponse() {
 }
 
 void WorldSession::SendAddonInfo() {
-  // TCPP WorldSession::SendAddonsInfo — one block per entry from CMSG_AUTH_SESSION,
+  // Reference WorldSession::SendAddonsInfo — one block per entry from CMSG_AUTH_SESSION,
   // then uint32 bannedAddonCount (always last in this layout).
   WorldPacket data(SMSG_ADDON_INFO);
   constexpr uint8 kAddonSecureHidden = 2; // Addons::SecureAddonInfo::SECURE_HIDDEN

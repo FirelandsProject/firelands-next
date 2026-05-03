@@ -4,8 +4,24 @@
 
 namespace Firelands {
 
-/// Cataclysm `HighGuid::Item` (Trinity TCPP `ObjectGuid.h`): 0x400, shifted by 52 for low GUID.
+/// Cataclysm `HighGuid::Item`: 0x400, shifted by 52 for low GUID.
 inline constexpr uint64_t kHighGuidItem = 0x400ULL;
+
+/// Trinity Cataclysm preservation `HighGuid::Unit` (Blizz-style **F130** creature GUID).
+/// Raw `creature.guid` from the DB is only the low counter; it must be combined with the
+/// template entry and this high prefix or the 4.3.4 client treats the object as a player
+/// GUID and will not render creatures correctly.
+inline constexpr uint64_t kHighGuidUnit = 0xF13ULL;
+
+/// Wire-format creature `ObjectGuid` (`ObjectGuid(HighGuid::Unit, entry, counter)`).
+inline uint64_t MakeCreatureObjectGuid(uint32_t creatureEntry,
+                                       uint32_t spawnCounterLow) noexcept {
+  if (spawnCounterLow == 0)
+    return 0;
+  return static_cast<uint64_t>(spawnCounterLow) |
+         (static_cast<uint64_t>(creatureEntry) << 32) |
+         (kHighGuidUnit << 52);
+}
 
 /// Player `ObjectGuid` on the wire (`HighGuid::Player == 0` in Trinity 4.3.4): raw uint64 counter.
 inline uint64_t MakePlayerObjectGuid(uint32_t playerLowGuid) noexcept {

@@ -66,7 +66,7 @@ public:
     if (length == 0)
       return res;
 
-    // Strings follow bit-length fields on a byte boundary (TCPP `ReadBits` +
+    // Strings follow bit-length fields on a byte boundary (ReadBits +
     // `ReadString`); align before consuming raw bytes from `ByteBuffer`.
     AlignToByteBoundary();
 

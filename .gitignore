@@ -1,6 +1,7 @@
 build/
 logs/
 firelands-cata-ref/
+firelands-core-ref/
 # Output of tools/merge_migrations.py / cmake target merge-migrations
 sql/merged/
 /data/

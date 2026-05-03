@@ -1,8 +1,8 @@
 # Firelands Next — Roadmap & Tracking (single source of truth)
 
-Este documento es el **único lugar** para hacer seguimiento del progreso: roadmap general, estabilidad del cliente, y paridad vs `firelands-cata-ref` (incluyendo Lua).
+Este documento es el **único lugar** para hacer seguimiento del progreso: roadmap general, estabilidad del cliente, y paridad vs referencia (incluyendo Lua).
 
-**Referencia:** `firelands-cata-ref/` (FirelandsCore 4.3.4 / build 15595).
+**Referencia:** clone local de la implementación de referencia (mismo árbol clonado junto al repo; build 15595).
 
 ---
 
@@ -88,7 +88,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 
 ---
 
-## Paridad vs `firelands-cata-ref` + Lua
+## Paridad vs referencia + Lua
 
 ### Hitos “paridad + Lua”
 

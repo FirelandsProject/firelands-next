@@ -123,6 +123,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_NAME_QUERY:
     HandleNameQuery(packet);
     break;
+  case CMSG_CREATURE_QUERY:
+    HandleCreatureQuery(packet);
+    break;
   case CMSG_QUERY_TIME:
     HandleQueryTime(packet);
     break;

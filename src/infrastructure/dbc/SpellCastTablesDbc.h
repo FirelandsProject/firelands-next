@@ -7,7 +7,7 @@
 namespace Firelands {
 
 /// Loads `SpellCastTimes.dbc`, `SpellRange.dbc`, optional `SpellCooldowns.dbc`, optional
-/// `SpellPower.dbc`, and optional `SpellCategories.dbc` (Cataclysm 4.3.4 / TCPP `DBCfmt.h`).
+/// `SpellPower.dbc`, and optional `SpellCategories.dbc` (Cataclysm 4.3.4 / DBCfmt.h).
 class SpellCastTablesDbc final : public ISpellCastTables {
 public:
   struct CooldownRow {
@@ -16,7 +16,7 @@ public:
     uint32 startRecoveryMs = 0;
   };
 
-  /// Parsed row from `SpellRange.dbc` (`SpellRangefmt`); TCPP field order — hostile index 0,
+  /// Parsed row from `SpellRange.dbc` (`SpellRangefmt`); field order — hostile index 0,
   /// friendly index 1 for both min and max.
   struct SpellRangeRow {
     float hostileMinYards = 0.f;

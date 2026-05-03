@@ -185,7 +185,7 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
     slot = packet.Read<uint8_t>();
     parsed = true;
   } else {
-    // TCPP format: InvUpdate prefix then PackSlot + Slot.
+    // Format: InvUpdate prefix then PackSlot + Slot.
     packet.SetReadPos(payloadStart);
     invItems = ReadItemInvUpdatePrefix(packet);
     if (invItems >= 0 && (packet.Size() - packet.GetReadPos()) >= 2) {
@@ -407,7 +407,7 @@ void WorldSession::HandleUseItem(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
   int32_t constexpr kEquipErrCantEquipOther = 15;
-  // TCPP `WorldPackets::Spells::UseItem::Read()` — first fields used for inventory use.
+  // WorldPackets::Spells::UseItem::Read() — first fields used for inventory use.
   if (packet.Size() - packet.GetReadPos() < sizeof(uint8_t) * 3 + sizeof(int32_t)) {
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
@@ -417,7 +417,7 @@ void WorldSession::HandleUseItem(WorldPacket &packet) {
   uint8_t const slot = packet.Read<uint8_t>();
   uint8_t const normalizedSlot = NormalizeBag0ItemSlot(packSlot, slot);
   (void)packet.Read<uint8_t>(); // Cast.CastID
-  (void)packet.Read<int32_t>(); // Cast.SpellID (non-zero for many equippables; TCPP uses spellmgr)
+  (void)packet.Read<int32_t>(); // Cast.SpellID (non-zero for many equippables; uses spellmgr)
   packet.SetReadPos(packet.Size());
   LOG_DEBUG("HandleUseItem: account={} guid={} packSlot={} slot={} normalized={}",
             _accountId, _playerGuid, packSlot, slot, normalizedSlot);

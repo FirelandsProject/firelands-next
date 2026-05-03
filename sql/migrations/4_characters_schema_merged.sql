@@ -1,5 +1,5 @@
 -- Merged characters migrations (Firelands Next)
--- Execution order: 4 -> 6 -> 7 -> 11 -> 16 -> 18 -> z_ensure
+-- Execution order: 4 -> 6 -> 7 -> 11 -> 16 -> 18 -> z_ensure -> 27
 
 -- === 6_characters_add_outfitid.sql ===
 CREATE DATABASE IF NOT EXISTS `firelands_characters`;
@@ -157,3 +157,59 @@ CREATE TABLE IF NOT EXISTS `character_account_data` (
   PRIMARY KEY (`guid`, `type`),
   CONSTRAINT `fk_character_account_data_guid` FOREIGN KEY (`guid`) REFERENCES `characters` (`guid`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- === 27_characters_instance_tables.sql ===
+-- Same DDL as standalone migration (Docker/init bundle).
+
+CREATE TABLE IF NOT EXISTS `instance` (
+  `id` int unsigned NOT NULL DEFAULT '0',
+  `map` smallint unsigned NOT NULL DEFAULT '0',
+  `resettime` bigint unsigned NOT NULL DEFAULT '0',
+  `difficulty` tinyint unsigned NOT NULL DEFAULT '0',
+  `completedEncounters` int unsigned NOT NULL DEFAULT '0',
+  `data` tinytext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `map` (`map`),
+  KEY `resettime` (`resettime`),
+  KEY `difficulty` (`difficulty`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `instance_reset` (
+  `mapid` smallint unsigned NOT NULL DEFAULT '0',
+  `difficulty` tinyint unsigned NOT NULL DEFAULT '0',
+  `resettime` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`mapid`,`difficulty`),
+  KEY `difficulty` (`difficulty`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `character_instance` (
+  `guid` int unsigned NOT NULL DEFAULT '0',
+  `instance` int unsigned NOT NULL DEFAULT '0',
+  `permanent` tinyint unsigned NOT NULL DEFAULT '0',
+  `extendState` tinyint unsigned NOT NULL DEFAULT '1',
+  PRIMARY KEY (`guid`,`instance`),
+  KEY `instance` (`instance`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `group_instance` (
+  `guid` int unsigned NOT NULL DEFAULT '0',
+  `instance` int unsigned NOT NULL DEFAULT '0',
+  `permanent` tinyint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`guid`,`instance`),
+  KEY `instance` (`instance`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `account_instance_times` (
+  `accountId` int unsigned NOT NULL,
+  `instanceId` int unsigned NOT NULL DEFAULT '0',
+  `releaseTime` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`accountId`,`instanceId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `item_refund_instance` (
+  `item_guid` int unsigned NOT NULL COMMENT 'Item GUID',
+  `player_guid` int unsigned NOT NULL COMMENT 'Player GUID',
+  `paidMoney` int unsigned NOT NULL DEFAULT '0',
+  `paidExtendedCost` smallint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`item_guid`,`player_guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Item Refund System';

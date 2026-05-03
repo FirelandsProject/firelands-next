@@ -4,34 +4,13 @@
 #include <domain/repositories/ICreatureClassLevelStatsRepository.h>
 #include <domain/repositories/ICreatureSpawnRepository.h>
 #include <domain/world/Creature.h>
-#include <domain/world/Map.h>
-#include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/Logger.h>
+#include <shared/game/WowGuid.h>
 #include <shared/network/MovementInfo.h>
-#include <shared/network/UpdateData.h>
 #include <random>
 #include <vector>
 
 namespace Firelands {
-
-namespace {
-
-constexpr uint32 kFallbackDisplayIfModelMissing = 169u;
-
-void BroadcastCreatureCreateFullMap(uint32 mapId, uint64 creatureGuid,
-                                    MovementInfo const &move, uint32 entry,
-                                    uint32 displayId, uint32 hp, uint32 maxHp,
-                                    uint8 level) {
-  auto fields = WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
-      creatureGuid, entry, displayId, hp, maxHp, level, 0u);
-  UpdateData update(static_cast<uint16>(mapId));
-  update.AddCreateObject(creatureGuid, TYPEID_UNIT, move, fields);
-  WorldPacket pkt(SMSG_UPDATE_OBJECT);
-  update.Build(pkt);
-  WorldService::Instance().GetMap(mapId)->BroadcastPacket(creatureGuid, pkt, false);
-}
-
-} // namespace
 
 std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo,
                                        ICreatureClassLevelStatsRepository const &statsRepo) {
@@ -48,8 +27,9 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
     uint8 const level =
         PickCreatureLevelInclusive(row.minLevel, row.maxLevel, rng);
     uint32 const maxHp = statsRepo.BaseHealthFor(level, unitClass);
-    uint32 const display =
-        row.modelId != 0 ? row.modelId : kFallbackDisplayIfModelMissing;
+    uint32 const display = ResolveCreatureDisplayId(
+        row.modelId, row.templateModelId1, row.templateModelId2,
+        row.templateModelId3, row.templateModelId4);
 
     MovementInfo mi{};
     mi.x = row.x;
@@ -57,13 +37,13 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
     mi.z = row.z;
     mi.orientation = row.orientation;
 
+    uint32 const spawnLow =
+        static_cast<uint32>(row.guid & 0xFFFFFFFFu);
+    uint64 const objectGuid = MakeCreatureObjectGuid(row.entry, spawnLow);
     auto spawned =
-        std::make_shared<Creature>(row.guid, row.entry, display, maxHp, level);
+        std::make_shared<Creature>(objectGuid, row.entry, display, maxHp, level);
     spawned->SetPosition(mi);
     WorldService::Instance().AddCreatureToMap(row.mapId, std::move(spawned));
-
-    BroadcastCreatureCreateFullMap(row.mapId, row.guid, mi, row.entry, display,
-                                   maxHp, maxHp, level);
     ++count;
   }
 

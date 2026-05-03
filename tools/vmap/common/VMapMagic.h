@@ -7,7 +7,7 @@
 // Values must never change — any deviation breaks binary compatibility
 // between extractors and the runtime VMapManager.
 //
-// Reference: firelands-cata-ref/src/common/Collision/VMapDefinitions.h
+// Reference: reference implementation VMapDefinitions.h
 
 namespace Firelands::VMap {
 

@@ -36,6 +36,7 @@
 namespace Firelands {
 
 class Character;
+class UpdateData;
 
 using boost::asio::ip::tcp;
 
@@ -158,6 +159,7 @@ public:
   void HandleLogoutRequest(WorldPacket &packet);
   void HandleLogoutCancel(WorldPacket &packet);
   void HandleNameQuery(WorldPacket &packet);
+  void HandleCreatureQuery(WorldPacket &packet);
   void HandleQueryTime(WorldPacket &packet);
   void HandlePlayedTime(WorldPacket &packet);
   void HandleMovement(WorldPacket &packet);
@@ -211,7 +213,7 @@ public:
   void SendLearnedDanceMoves();
   void SendMotd();
   void SendInitialObjectUpdate(uint64 guid);
-  /// Matches WorldPackets::Spells::SendKnownSpells (FirelandsCore / TCPP 4.3.4).
+  /// Matches WorldPackets::Spells::SendKnownSpells (Cataclysm 4.3.4).
   void SendKnownSpells(bool initialLogin, std::vector<uint32> const &spellIds);
   /// Same payload as Trinity `Player::LearnSpell` → `SMSG_LEARNED_SPELL`.
   void SendLearnedSpell(uint32 spellId);
@@ -253,6 +255,11 @@ public:
                          MovementInfo const &move);
   void LoginSendCreateUpdatesAndMutualVisibility(uint64 guid, Character const &character,
                                                  MovementInfo const &move);
+  /// Sends UNIT CREATE blocks for creatures in the 3×3 grid neighbourhood using multiple
+  /// `SMSG_UPDATE_OBJECT` packets (dense zones exceed safe single-packet sizes on 4.3.4).
+  void SendNearbyCreatureCreatesInChunks(float x, float y);
+  /// After same-map teleport ACK: client needs CREATE for units near the new cell.
+  void SendNearbyCreatureCreatesToSelf(float x, float y);
   void LoginFinalizeWorldEntry(uint64 guid);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
   /// Persists position, `player_logout`, removes from map and online registry, clears

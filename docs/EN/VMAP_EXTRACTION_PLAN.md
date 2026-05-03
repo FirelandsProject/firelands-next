@@ -1,8 +1,8 @@
 # VMap Extraction & Build Pipeline — Port Plan (WoW 4.3.4 / build 15595)
 
-**Strategy:** Full C++ port from `firelands-cata-ref` reference source — zero wrapped binaries.  
+**Strategy:** Full C++ port from reference implementation source — zero wrapped binaries.  
 **Goal:** Byte-identical output to the reference so the existing `IMapCollisionQueries` / VMapManager2 runtime can consume our files without modification.  
-**Reference:** `firelands-cata-ref/src/tools/{map_extractor,vmap4_extractor,vmap4_assembler}/` and `src/common/Collision/`.
+**Reference:** use a local clone of reference implementation for the tools and Collision code.
 
 ---
 

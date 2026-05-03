@@ -10,7 +10,7 @@ namespace Firelands {
 
 namespace {
 
-// TCPP `DBCfmt.h`
+// DBCfmt.h
 constexpr std::string_view kSpellCastTimeFmt = "nixx";
 constexpr std::string_view kSpellRangeFmt = "nffffixx";
 
@@ -91,7 +91,7 @@ static bool LoadSpellRange(
   return true;
 }
 
-// TCPP `SpellPowerEntryfmt[] = "diiiixxf";`
+// SpellPowerEntryfmt[] = "diiiixxf";
 static bool LoadSpellPower(std::string const &path,
                             std::unordered_map<uint32, uint32> &outManaById) {
   outManaById.clear();
@@ -131,7 +131,7 @@ static bool LoadSpellPower(std::string const &path,
   return true;
 }
 
-// TCPP `SpellCategoriesEntryfmt[] = "diiiiii";`
+// SpellCategoriesEntryfmt[] = "diiiiii";
 static bool LoadSpellCategories(
     std::string const &path,
     std::unordered_map<uint32, uint32> &outCategoriesRowIdToCategoryGroup) {

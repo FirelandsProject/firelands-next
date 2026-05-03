@@ -12,7 +12,7 @@
 //   flight_box_max/min[3][3]  (only when MFBO present)
 //
 // Ported from ConvertADT() in
-//   firelands-cata-ref/src/tools/map_extractor/System.cpp
+//   reference implementation System.cpp
 
 #include "MapTypes.h"
 #include "../common/ChunkReader.h"

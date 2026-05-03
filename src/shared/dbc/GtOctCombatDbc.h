@@ -7,7 +7,7 @@
 namespace Firelands {
 
 /// Loads 4.3.4 `gtOCT*.dbc` float tables used for player base HP/MP and per-point scaling.
-/// Indexing matches TrinityCore `GT_MAX_LEVEL` = 100 rows per class block for class tables.
+/// Indexing matches reference `GT_MAX_LEVEL` = 100 rows per class block for class tables.
 class GtOctCombatDbc {
 public:
   bool Load(std::string const &dbcDirectory);

@@ -1,4 +1,5 @@
 #include "MySqlNpcTemplateSearchRepository.h"
+#include <application/logic/CreatureSpawnLogic.h>
 #include <shared/Logger.h>
 
 namespace Firelands {
@@ -36,6 +37,38 @@ std::vector<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::SearchNameSu
     LOG_WARN("NpcTemplateSearch query failed: {}", e.what());
   }
   return out;
+}
+
+std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEntry(
+    uint32_t entry) const {
+  if (!m_connection || entry == 0)
+    return std::nullopt;
+  try {
+    std::unique_ptr<sql::PreparedStatement> pstmt(m_connection->prepareStatement(
+        "SELECT ct.`entry`, ct.`name`, ct.`subname`, "
+        "(SELECT MIN(NULLIF(c.`modelid`, 0)) FROM `creature` c WHERE c.`id` = "
+        "ct.`entry`) AS `spawn_modelid`, "
+        "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4` "
+        "FROM `creature_template` ct WHERE ct.`entry` = ? LIMIT 1"));
+    pstmt->setUInt(1, entry);
+    std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+    if (!res->next())
+      return std::nullopt;
+    NpcTemplateSearchRow row;
+    row.entry = res->getUInt("entry");
+    row.name = res->getString("name");
+    row.subname = res->getString("subname");
+    uint32_t spawnModel = 0;
+    if (!res->isNull("spawn_modelid"))
+      spawnModel = res->getUInt("spawn_modelid");
+    row.displayIds[0] = ResolveCreatureDisplayId(
+        spawnModel, res->getUInt("modelid1"), res->getUInt("modelid2"),
+        res->getUInt("modelid3"), res->getUInt("modelid4"));
+    return row;
+  } catch (sql::SQLException &e) {
+    LOG_WARN("NpcTemplateSearch TryGetByEntry failed: {}", e.what());
+  }
+  return std::nullopt;
 }
 
 } // namespace Firelands

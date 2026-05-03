@@ -6,6 +6,28 @@
 
 namespace Firelands {
 
+/// Placeholder `CreatureDisplayInfo` id when spawn + template models are missing (client
+/// still expects a non-zero display for many creature creates).
+inline constexpr uint32 kFallbackCreatureDisplayId = 169u;
+
+/// Spawn `creature.modelid` overrides template when non-zero; otherwise first non-zero
+/// `modelid1`..`modelid4` from `creature_template` (Trinity layout).
+inline uint32 ResolveCreatureDisplayId(uint32 spawnModelId, uint32 templateModelId1,
+                                       uint32 templateModelId2, uint32 templateModelId3,
+                                       uint32 templateModelId4) noexcept {
+  if (spawnModelId != 0)
+    return spawnModelId;
+  if (templateModelId1 != 0)
+    return templateModelId1;
+  if (templateModelId2 != 0)
+    return templateModelId2;
+  if (templateModelId3 != 0)
+    return templateModelId3;
+  if (templateModelId4 != 0)
+    return templateModelId4;
+  return kFallbackCreatureDisplayId;
+}
+
 inline uint8 NormalizeCreatureUnitClass(uint8 unitClass) noexcept {
   return unitClass == 0 ? 1 : unitClass;
 }

@@ -1,6 +1,6 @@
 # StormLib roadmap — DBC & map extractors (WoW 4.3.4 Cataclysm, build 15595)
 
-This document is the **implementation plan** for game data extractors in **firelands-next**, aligned with **MPQ-based** Cataclysm clients (not CASC). Parity reference: **`firelands-cata-ref`** (FirelandsCore 4.3.4) when available locally.
+This document is the **implementation plan** for game data extractors in **firelands-next**, aligned with **MPQ-based** Cataclysm clients (not CASC). Parity reference: **reference implementation** when available locally.
 
 ---
 
@@ -100,7 +100,7 @@ This document is the **implementation plan** for game data extractors in **firel
 2. MPQ wrapper + minimal open/find test (synthetic or small MPQ).
 3. **DBC extractor** + override-order test (two fixture MPQs, same internal path).
 4. **Map extractor phase 1** (WDT/ADT extract).
-5. Manual validation vs `firelands-cata-ref` with a real 4.3.4 `Data` folder.
+5. Manual validation vs reference implementation with a real 4.3.4 `Data` folder.
 6. (Optional) Phase 2 server map / vmap / mmap.
 
 ---

@@ -1,7 +1,7 @@
 #pragma once
 
 // In-memory MPQ file reader (StormLib).
-// API-compatible with firelands-cata-ref/src/tools/vmap4_extractor/mpqfile.h
+// API-compatible with reference implementation mpqfile.h
 
 #include <cstddef>
 #include <cstdint>

@@ -114,6 +114,10 @@ void WorldSession::HandleMoveTeleportAck(WorldPacket &packet) {
         _position.flags, _position.flags2, _position.time);
     map->BroadcastPacketToNearby(_playerGuid, nearbyUpdate, false);
   }
+
+  // Login merges nearby creatures into the initial SMSG_UPDATE_OBJECT; teleport does not,
+  // so the client would see an empty cell until we send CREATE for units here.
+  SendNearbyCreatureCreatesToSelf(_teleportPendingX, _teleportPendingY);
 }
 
 void WorldSession::HandleMovement(WorldPacket &packet) {

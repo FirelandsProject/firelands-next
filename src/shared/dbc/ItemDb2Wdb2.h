@@ -8,7 +8,7 @@
 namespace Firelands {
 
 /// Client `Item.db2` (WDB2, build > 12880) — same logical row as `ItemEntry` in
-/// `firelands-cata-ref/src/server/game/DataStores/DB2Structure.h`:
+/// reference implementation DB2Structure.h:
 /// ID, ClassID, SubclassID, SoundOverrideSubclass, Material, DisplayInfoID,
 /// InventoryType, SheatheType (all 4-byte fields in the on-disk record).
 ///

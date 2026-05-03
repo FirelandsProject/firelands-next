@@ -5,7 +5,7 @@
 namespace Firelands {
 
 /// Subset of client `Spell.dbc` (4.3.4) fields loaded for server-side spell logic.
-/// Field indices follow TCPP `SpellEntryfmt` / `SpellEntry` in `DBCStructure.h`.
+/// Field indices follow SpellEntryfmt / SpellEntry in DBCStructure.h.
 struct SpellDefinition {
   uint32 id = 0;
   uint32 attributes = 0;
@@ -18,11 +18,11 @@ struct SpellDefinition {
   uint32 powerType = 0;
   uint32 rangeIndex = 0;
   uint32 schoolMask = 0;
-  /// `Spell.dbc` → `SpellCategories.dbc` row id (TCPP `CategoriesID`).
+  /// `Spell.dbc` → `SpellCategories.dbc` row id (CategoriesID).
   uint32 categoriesId = 0;
-  /// `Spell.dbc` → `SpellCooldowns.dbc` (TCPP field `CooldownsID`).
+  /// `Spell.dbc` → `SpellCooldowns.dbc` (CooldownsID field).
   uint32 cooldownsId = 0;
-  /// `Spell.dbc` field 42 (TCPP `PowerDisplayID`): row id in `SpellPower.dbc` for base mana.
+  /// `Spell.dbc` field 42 (PowerDisplayID): row id in `SpellPower.dbc` for base mana.
   uint32 spellPowerId = 0;
   /// Resource1 cost from `SpellPower.dbc` via `spellPowerId` (after merge loads ids).
   uint32 manaCost = 0;
