@@ -31,28 +31,36 @@ public:
 
     std::vector<std::string> sqlFiles;
 
+    std::filesystem::path bundledPath = std::filesystem::path(dirPath) / "bundled";
     std::filesystem::path initPath = std::filesystem::path(dirPath) / "init";
     std::filesystem::path migrationsPath = std::filesystem::path(dirPath) / "migrations";
 
-    if (std::filesystem::exists(initPath)) {
-      for (const auto &entry : std::filesystem::directory_iterator(initPath)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".sql") {
-          sqlFiles.push_back(entry.path().string());
-        }
+    auto appendSortedSql = [](std::vector<std::string> &out,
+                              const std::filesystem::path &dir,
+                              bool skipZzPrefix) {
+      if (!std::filesystem::exists(dir))
+        return;
+      std::vector<std::string> chunk;
+      for (const auto &entry : std::filesystem::directory_iterator(dir)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".sql")
+          continue;
+        const std::string name = entry.path().filename().string();
+        if (skipZzPrefix && name.size() >= 3 && name.compare(0, 3, "zz_") == 0)
+          continue;
+        chunk.push_back(entry.path().string());
       }
-    }
+      std::sort(chunk.begin(), chunk.end());
+      out.insert(out.end(), chunk.begin(), chunk.end());
+    };
 
-    if (std::filesystem::exists(migrationsPath)) {
-      for (const auto &entry : std::filesystem::directory_iterator(migrationsPath)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".sql") {
-          sqlFiles.push_back(entry.path().string());
-        }
-      }
-    }
+    appendSortedSql(sqlFiles, bundledPath, true);
+    appendSortedSql(sqlFiles, initPath, false);
+    appendSortedSql(sqlFiles, migrationsPath, false);
 
-    std::sort(sqlFiles.begin(), sqlFiles.end());
-
-    LOG_DEBUG("Starting database migrations from directory: {} (init + migrations)", dirPath);
+    LOG_DEBUG(
+        "Starting database migrations from directory: {} (bundled, then init, "
+        "then migrations; bundled zz_*.sql skipped)",
+        dirPath);
 
     try {
       sql::Driver *driver = sql::mariadb::get_driver_instance();

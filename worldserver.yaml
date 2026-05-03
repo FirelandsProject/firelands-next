@@ -53,7 +53,7 @@ Motd:
 # SpellCastTimes.dbc, SpellRange.dbc, SpellDifficulty.dbc (raid/dungeon spell
 # id variants), Languages.dbc, etc.
 # XP-to-next-level for the experience bar comes from the world DB table
-# `player_xp_for_level` (see sql/migrations/15_world_player_xp_for_level.sql), not
+# `player_xp_for_level` (bundled in sql/bundled/firelands_world.sql), not
 # from a loose client file.
 Data:
   DbcPath: "data/dbc"

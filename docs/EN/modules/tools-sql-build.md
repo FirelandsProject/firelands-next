@@ -5,14 +5,14 @@
 - **C++17** project **Firelands** with FetchContent for googletest, spdlog, MariaDB C/C++, nlohmann_json, yaml-cpp, Lua, StormLib.
 - **Libraries:** `FirelandsShared` → `FirelandsDomain` → `FirelandsApplication` → `FirelandsInfrastructure`.
 - **Executables:** `auth`, `world`, `FirelandsDevTools`.
-- **Optional target** `merge-migrations` runs `tools/merge_migrations.py` to produce condensed SQL under `sql/merged/` (requires `python3`).
+- **Optional target** `merge-migrations` runs `tools/merge_migrations.py` to refresh **`sql/bundled/`** (requires `python3`; optional scratch `sql/merged/`).
 - **Includes:** `${PROJECT_SOURCE_DIR}/src` so headers use `#include <application/...>` style.
 
 ## SQL (`sql/`)
 
 - Schema and incremental `.sql` files; **`DatabaseMigrator`** executes them in **lexicographic order** (prefix files with `0_`, `1_`, …).
 - Typical split: auth schema, characters schema, world data fixes—URI in YAML selects which database receives statements (scripts often `CREATE DATABASE` / `USE`).
-- See repository SQL files and `sql/merged/` output for deployment bundles.
+- Docker/deploy bundles: **`sql/bundled/*.sql`** (see `docker-compose.yml`).
 
 ## Tools (`src/tools/`, `tools/`)
 

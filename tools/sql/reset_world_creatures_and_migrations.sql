@@ -5,9 +5,9 @@
 -- Docker example (repo root):
 --   docker compose exec -T db mysql -uroot -proot < tools/sql/reset_world_creatures_and_migrations.sql
 --
--- After this: restart `world` (or `auth`; either runs the same migrator on `sql/`).
--- If you use `import_ref_creature_data.py`, output `30_world_creature_ref_import.sql`
--- before restarting so templates include `modelid1`..`modelid4` (migration 29 adds columns).
+-- After this: restart `world` (or `auth`; either runs migrator on `sql/init` + optional `sql/migrations`).
+-- Creature bulk import: `python3 tools/sql/import_ref_creature_data.py` → `sql/bundled/creature_ref_import.sql`;
+-- apply that file or merge into `sql/bundled/firelands_world.sql`, then refresh DB (e.g. docker volume reset).
 
 USE `firelands_world`;
 

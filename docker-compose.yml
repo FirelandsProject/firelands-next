@@ -13,10 +13,11 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
-      - ./sql/0_init_permissions.sql:/docker-entrypoint-initdb.d/0.sql
-      - ./sql/auth_schema.sql:/docker-entrypoint-initdb.d/1.sql
-      - ./sql/characters_schema.sql:/docker-entrypoint-initdb.d/2.sql
-      - ./sql/migrations/5_world_schema_merged.sql:/docker-entrypoint-initdb.d/3.sql
+      - ./docker/mysql-init/docker_grants_firelands_user.sql:/docker-entrypoint-initdb.d/00-grants.sql
+      - ./sql/bundled/firelands_auth.sql:/docker-entrypoint-initdb.d/01-auth.sql
+      - ./sql/bundled/firelands_characters.sql:/docker-entrypoint-initdb.d/02-characters.sql
+      - ./sql/bundled/firelands_world.sql:/docker-entrypoint-initdb.d/03-world.sql
+      - ./sql/bundled/zz_seed_schema_migrations.sql:/docker-entrypoint-initdb.d/99-seed-schema-migrations.sql
 
 volumes:
   db_data:

@@ -264,7 +264,8 @@ void MySqlPlayerCreateInfoRepository::ensureXpForLevelLoaded() const {
     if (IsMissingTableError(e))
       LOG_WARN(
           "player_xp_for_level missing in firelands_world; XP bar uses fallback "
-          "until sql/migrations/15_world_player_xp_for_level.sql is applied.");
+          "until firelands_world includes `player_xp_for_level` "
+          "(deploy bundle: sql/bundled/firelands_world.sql).");
     else
       LOG_ERROR("ensureXpForLevelLoaded failed: {}", e.what());
     m_xpExperienceByLevel.clear();

@@ -213,4 +213,16 @@ target_link_libraries(FirelandsDevTools
     PRIVATE FirelandsInfrastructure
 )
 
+find_program(FIRELANDS_PYTHON3 python3)
+if(FIRELANDS_PYTHON3)
+  add_custom_target(
+    merge-migrations
+    COMMAND "${FIRELANDS_PYTHON3}" "${CMAKE_SOURCE_DIR}/tools/merge_migrations.py"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Refresh sql/bundled/ via tools/merge_migrations.py"
+    VERBATIM)
+else()
+  message(STATUS "python3 not found: merge-migrations target unavailable")
+endif()
+
 message(STATUS "Firelands WoW Emulator (4.3.4.15595) project initialized.")

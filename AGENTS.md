@@ -68,11 +68,10 @@ docker-compose up -d db
 - **Credentials**: root/root, firelands/firelands
 - **Databases**: auth, characters, world
 
-### Migrations
-- Location: `sql/*.sql`
-- Execution order: Run by filename prefix (0_, 1_, 2_, etc.)
-- Auto-loaded by docker-compose in order: `0_init_permissions.sql`, `auth_schema.sql`, `characters_schema.sql`, then **`sql/migrations/5_world_schema_merged.sql`** as world init (includes `spell_dbc` and related tables; see `sql/migrations/16_world_spell_tables.sql` + `17_world_spell_dbc_merge.sql`).
-- Merged output: `sql/merged/<database>.sql`
+### Migrations / bundled schema
+- Runtime migrator: `sql/init/*.sql` plus optional `sql/migrations/*.sql` (see `DatabaseMigrator`).
+- Docker first boot: `docker/mysql-init/docker_grants_firelands_user.sql` then **`sql/bundled/firelands_auth.sql`**, **`firelands_characters.sql`**, **`firelands_world.sql`**, **`zz_seed_schema_migrations.sql`**.
+- Regenerate bundles when split migrations exist: `python3 tools/merge_migrations.py` or `cmake --build build --target merge-migrations`. Optional scratch: `sql/merged/`.
 
 ## Testing
 
