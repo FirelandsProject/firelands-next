@@ -31,6 +31,7 @@
 #include <ctime>
 #include <cmath>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 namespace Firelands {
@@ -50,7 +51,8 @@ void AppendOneMailListEntry(WorldPacket &data, MailInboxRow const &row,
 
   data.Append<uint32>(static_cast<uint32>(row.mailId));
   data.Append<uint8>(kMailMessageTypeNormal);
-  data.WritePackedGuid(static_cast<uint64>(row.senderGuidLow));
+  // Trinity `HandleGetMailList`: MAIL_NORMAL uses raw 8-byte `ObjectGuid`, not packed.
+  data.Append<uint64>(MakePlayerObjectGuid(row.senderGuidLow));
   data.Append<uint64>(0u);       // COD
   data.Append<uint32>(0u);       // package
   data.Append<uint32>(41u);     // stationery (matches common TC defaults)
@@ -896,11 +898,63 @@ void WorldSession::HandleLogoutCancel(WorldPacket & /*packet*/) {
 }
 
 void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
-  // Reference: firelands-cata-ref MailHandler.cpp WorldSession::HandleQueryNextMailTime
-  // Sends MSG_QUERY_NEXT_MAIL_TIME back to client.
-  WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 8);
-  data.Append<float>(0.0f);  // next mail time (0 = none)
-  data.Append<uint32>(0);    // count
+  // Trinity `MailHandler.cpp::HandleQueryNextMailTime`: float is negative (e.g. -DAY)
+  // when there is no pending notification; float 0 + non-zero count when unread mail
+  // exists. A plain `0` float makes the client treat it as "new mail" while count 0
+  // confuses the UI (minimap icon vs empty mailbox).
+  constexpr float kNoMailNotificationFloat = -static_cast<float>(86400);
+
+  if (_playerGuid == 0) {
+    WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 8);
+    data.Append<float>(kNoMailNotificationFloat);
+    data.Append<uint32>(0);
+    SendPacket(data);
+    return;
+  }
+
+  std::time_t const now = std::time(nullptr);
+  std::vector<MailInboxRow> rows =
+      _charService->LoadMailInbox(static_cast<uint32_t>(_playerGuid));
+
+  std::vector<MailInboxRow const *> unread;
+  unread.reserve(rows.size());
+  for (MailInboxRow const &row : rows) {
+    if (row.deliverTime != 0 && static_cast<uint32_t>(now) < row.deliverTime)
+      continue;
+    if ((row.checked & 1u) != 0)
+      continue;
+    unread.push_back(&row);
+  }
+
+  if (unread.empty()) {
+    WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 8);
+    data.Append<float>(kNoMailNotificationFloat);
+    data.Append<uint32>(0);
+    SendPacket(data);
+    return;
+  }
+
+  WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 256);
+  data.Append<float>(0.0f);
+  data.Append<uint32>(0);
+
+  uint32_t count = 0;
+  std::unordered_set<uint32_t> seenSenders;
+  for (MailInboxRow const *p : unread) {
+    if (!seenSenders.insert(p->senderGuidLow).second)
+      continue;
+
+    data.Append<uint64>(MakePlayerObjectGuid(p->senderGuidLow));
+    data.Append<uint32>(0u);
+    data.Append<uint32>(static_cast<uint32>(kMailMessageTypeNormal));
+    data.Append<uint32>(41u); // stationery (DB column not present yet)
+    data.Append<float>(static_cast<float>(static_cast<int64_t>(p->deliverTime) -
+                                          static_cast<int64_t>(now)));
+    ++count;
+    if (count == 2)
+      break;
+  }
+  data.PatchUInt32(4, count);
   SendPacket(data);
 }
 

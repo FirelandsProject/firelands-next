@@ -7,6 +7,11 @@ namespace Firelands {
 /// Cataclysm `HighGuid::Item` (Trinity TCPP `ObjectGuid.h`): 0x400, shifted by 52 for low GUID.
 inline constexpr uint64_t kHighGuidItem = 0x400ULL;
 
+/// Player `ObjectGuid` on the wire (`HighGuid::Player == 0` in Trinity 4.3.4): raw uint64 counter.
+inline uint64_t MakePlayerObjectGuid(uint32_t playerLowGuid) noexcept {
+  return playerLowGuid != 0 ? static_cast<uint64_t>(playerLowGuid) : 0u;
+}
+
 /// Client-visible item ObjectGuid from `item_instance.guid` (low part only in DB).
 inline uint64_t MakeItemObjectGuid(uint32_t itemLowGuid) noexcept {
   if (itemLowGuid == 0)
