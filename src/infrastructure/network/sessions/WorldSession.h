@@ -17,6 +17,7 @@
 #include <shared/network/ServerPacket.h>
 #include <shared/network/WorldCrypt.h>
 #include <shared/network/AccountDataTypes.h>
+#include <shared/dbc/ItemDbHotfixStore.h>
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PlayerGmAppearance.h>
@@ -61,7 +62,8 @@ public:
       std::shared_ptr<IRealmRepository> realmRepo = nullptr,
       std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharRegistry =
           nullptr,
-      std::shared_ptr<GmTicketService> gmTicketService = nullptr);
+      std::shared_ptr<GmTicketService> gmTicketService = nullptr,
+      std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix = nullptr);
 
   ~WorldSession();
 
@@ -244,6 +246,7 @@ private:
   std::shared_ptr<IRealmRepository> _realmRepo;
   std::shared_ptr<OnlineCharacterSessionRegistry> _onlineCharRegistry;
   std::shared_ptr<GmTicketService> _gmTicketService;
+  std::shared_ptr<ItemDbHotfixStore const> _itemDbHotfix;
   /// Filled when the character is registered for console targeting; empty at
   /// character select / disconnected.
   std::string _activeCharacterName;

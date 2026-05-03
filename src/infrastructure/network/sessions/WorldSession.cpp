@@ -44,7 +44,8 @@ WorldSession::WorldSession(
     std::shared_ptr<SpellDbc const> spellDbc,
     std::shared_ptr<IRealmRepository> realmRepo,
     std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharRegistry,
-    std::shared_ptr<GmTicketService> gmTicketService)
+    std::shared_ptr<GmTicketService> gmTicketService,
+    std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix)
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
       _commandService(std::move(commandService)),
@@ -53,7 +54,8 @@ WorldSession::WorldSession(
       _spellDbc(std::move(spellDbc)),
       _realmRepo(std::move(realmRepo)),
       _onlineCharRegistry(std::move(onlineCharRegistry)),
-      _gmTicketService(std::move(gmTicketService)), _serverSeed(0),
+      _gmTicketService(std::move(gmTicketService)),
+      _itemDbHotfix(std::move(itemDbHotfix)), _serverSeed(0),
       _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()) {}
 
 WorldSession::~WorldSession() {

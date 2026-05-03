@@ -14,7 +14,8 @@ namespace Firelands {
 namespace {
 
 bool IsItemDbTableHash(uint32_t tableHash) {
-  // `SStrHash("Item")`, `SStrHash("Item-sparse")`, `SStrHash("ItemSparse")` — see wowdev SStrHash / WoWDBDefs manifest.
+  // Legacy / reference hashes; real clients use the `table_hash` inside each WDB2
+  // file — `ItemDbHotfixStore` matches those after loading from disk.
   return tableHash == 0x50238EC2u || tableHash == 0x6A7C6E76u ||
          tableHash == 0x919BE54Eu;
 }
@@ -135,7 +136,10 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
     skipMaskByte(i, 2);
   }
 
-  if (!IsItemDbTableHash(tableHash)) {
+  bool const itemDbQuery =
+      IsItemDbTableHash(tableHash) ||
+      (_itemDbHotfix && _itemDbHotfix->handlesTableHash(tableHash));
+  if (!itemDbQuery) {
     static uint32_t s_lastUnknownHash = 0;
     if (tableHash != s_lastUnknownHash) {
       s_lastUnknownHash = tableHash;
@@ -146,8 +150,15 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
     return;
   }
 
-  for (uint32_t entry : recordIds)
+  for (uint32_t entry : recordIds) {
+    if (_itemDbHotfix) {
+      if (auto hotfix = _itemDbHotfix->tryBuildDbReply(tableHash, entry)) {
+        SendPacket(*hotfix);
+        continue;
+      }
+    }
     SendDbReplyUseClientDb2(*this, tableHash, entry);
+  }
 }
 
 void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {

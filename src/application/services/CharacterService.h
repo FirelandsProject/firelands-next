@@ -56,7 +56,8 @@ inline std::optional<PlayerCreateInfo> FallbackStartPosition(uint8 race) {
 }
 
 inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
-  // Canonical GM outfit + "light" GM sword used by many private-server staffs.
+  // GM visual outfit only (no weapon — avoids class weapon restrictions and sparse/tooltip
+  // mismatches for hotfix-only item entries).
   struct GmStarterItem {
     uint32_t itemId;
     uint8_t invType;
@@ -65,7 +66,6 @@ inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
       {12064u, INVTYPE_HEAD},   // Gamemaster Hood
       {2586u, INVTYPE_ROBE},    // Gamemaster's Robe (chest slot)
       {11508u, INVTYPE_FEET},   // Gamemaster's Slippers
-      {12063u, INVTYPE_2HWEAPON}, // Monster - Trident, Wicked (two-hand polearm)
   };
   std::unordered_set<uint32_t> existing;
   existing.reserve(grants.size());

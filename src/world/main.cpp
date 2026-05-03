@@ -24,6 +24,7 @@
 #include <shared/Config.h>
 #include "WorldFtxuiConsole.h"
 #include "WorldInteractiveConsole.h"
+#include <shared/dbc/ItemDbHotfixStore.h>
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/dbc/SpellDbc.h>
 #include <shared/Logger.h>
@@ -186,14 +187,18 @@ int main(int argc, char **argv) {
       spellDbc.reset();
     }
 
+    auto itemDbHotfix = std::make_shared<ItemDbHotfixStore>();
+    itemDbHotfix->load(dbcBasePath);
+
     auto sessionFactory = [authService, charService, commandService,
                            accountDataRepo, languagesDbc, spellDbc, realmRepo,
-                           onlineCharRegistry,
-                           gmTicketService](boost::asio::ip::tcp::socket socket) {
+                           onlineCharRegistry, gmTicketService,
+                           itemDbHotfix](boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
                                      commandService, accountDataRepo,
                                      languagesDbc, spellDbc, realmRepo,
-                                     onlineCharRegistry, gmTicketService)
+                                     onlineCharRegistry, gmTicketService,
+                                     itemDbHotfix)
           ->Start();
     };
 
