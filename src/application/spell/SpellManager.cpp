@@ -1,6 +1,7 @@
 #include <application/spell/SpellManager.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Firelands {
 
@@ -48,6 +49,29 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
                                      SpellCastWire::SPELL_FAILED_NOT_READY);
     out->kind = SpellCastOutcome::Kind::SpellFailure;
     return;
+  }
+
+  if (m_spellDefinitions && m_spellCastTables) {
+    if (auto const def = m_spellDefinitions->GetDefinition(spellId)) {
+      float const maxYards =
+          m_spellCastTables->GetHostileRangeMaxYards(def->rangeIndex);
+      if (maxYards > 0.f && req.hasCasterWorldPosition && req.hasTargetWorldPosition) {
+        float const dx = req.targetX - req.casterX;
+        float const dy = req.targetY - req.casterY;
+        float const dz = req.targetZ - req.casterZ;
+        float const dist =
+            std::sqrt(dx * dx + dy * dy + dz * dz);
+        // TCPP `MAX_SPELL_RANGE_TOLERANCE` (yards) — small slack so borderline casts match client.
+        constexpr float kRangeToleranceYards = 3.0f;
+        if (dist > maxYards + kRangeToleranceYards) {
+          SpellCastWire::BuildSpellFailure(
+              out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+              SpellCastWire::SPELL_FAILED_OUT_OF_RANGE);
+          out->kind = SpellCastOutcome::Kind::SpellFailure;
+          return;
+        }
+      }
+    }
   }
 
   uint32 castTimeStart = 0;

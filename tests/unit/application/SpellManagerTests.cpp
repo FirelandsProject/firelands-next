@@ -52,6 +52,39 @@ private:
   uint32 m_respondForIndex;
 };
 
+class SpellDefinitionWithRange final : public ISpellDefinitionStore {
+public:
+  explicit SpellDefinitionWithRange(uint32 rangeIndex) : m_rangeIndex(rangeIndex) {}
+
+  bool HasSpell(uint32 /*spellId*/) const override { return true; }
+  std::optional<SpellDefinition> GetDefinition(uint32 spellId) const override {
+    SpellDefinition d{};
+    d.id = spellId;
+    d.rangeIndex = m_rangeIndex;
+    d.castingTimeIndex = 1;
+    return d;
+  }
+
+private:
+  uint32 m_rangeIndex;
+};
+
+class MockHostileRangeTables final : public ISpellCastTables {
+public:
+  MockHostileRangeTables(float maxYards, uint32 rangeIndex)
+      : m_maxYards(maxYards), m_rangeIndex(rangeIndex) {}
+
+  uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
+
+  float GetHostileRangeMaxYards(uint32 rangeIndex) const override {
+    return rangeIndex == m_rangeIndex ? m_maxYards : 0.f;
+  }
+
+private:
+  float m_maxYards;
+  uint32 m_rangeIndex;
+};
+
 /// Reads `castTimeMs` from `SMSG_SPELL_START` built by `SpellCastWire::BuildSpellStart`
 /// (two packed caster GUIDs, then core fields — no trajectory payload in our wire).
 static uint32 ReadSpellStartCastTimeMs(WorldPacket &p) {
@@ -63,6 +96,14 @@ static uint32 ReadSpellStartCastTimeMs(WorldPacket &p) {
   (void)p.Read<uint32>();
   (void)p.Read<uint32>();
   return p.Read<uint32>();
+}
+
+static uint8 ReadSpellFailureReason(WorldPacket &p) {
+  p.SetReadPos(0);
+  (void)p.ReadPackedGuid();
+  (void)p.Read<uint8>();
+  (void)p.Read<int32>();
+  return p.Read<uint8>();
 }
 
 } // namespace
@@ -145,4 +186,46 @@ TEST(SpellManagerTests, CastTablesFillSpellStartCastTime) {
   mgr.ProcessCastRequest(req, &out);
   ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
   EXPECT_EQ(ReadSpellStartCastTimeMs(out.spellStart), 3200u);
+}
+
+TEST(SpellManagerTests, RangeExceeded_ReturnsOutOfRange) {
+  uint32 constexpr kRi = 11;
+  auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
+  auto tables = std::make_shared<MockHostileRangeTables>(5.f, kRi);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 200.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
+  EXPECT_EQ(ReadSpellFailureReason(out.failurePacket),
+            static_cast<uint8>(SpellCastWire::SPELL_FAILED_OUT_OF_RANGE));
+}
+
+TEST(SpellManagerTests, RangeWithinMax_ReturnsStartAndGo) {
+  uint32 constexpr kRi = 11;
+  auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);
+  auto tables = std::make_shared<MockHostileRangeTables>(40.f, kRi);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.hasCasterWorldPosition = true;
+  req.casterX = 0.f;
+  req.casterY = 0.f;
+  req.casterZ = 0.f;
+  req.hasTargetWorldPosition = true;
+  req.targetX = 10.f;
+  req.targetY = 0.f;
+  req.targetZ = 0.f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
 }

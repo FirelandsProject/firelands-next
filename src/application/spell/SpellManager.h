@@ -21,6 +21,17 @@ struct SpellCastRequest {
   std::chrono::steady_clock::time_point now{};
   std::chrono::steady_clock::time_point gcdReady{};
   std::vector<uint32> const *knownSpells = nullptr;
+  /// When both are set, `SpellManager` checks 3D distance vs `SpellRange` hostile max
+  /// (plus TCPP-style tolerance). Otherwise range is skipped until the map provides
+  /// target positions for non-self casts.
+  bool hasCasterWorldPosition = false;
+  float casterX = 0.f;
+  float casterY = 0.f;
+  float casterZ = 0.f;
+  bool hasTargetWorldPosition = false;
+  float targetX = 0.f;
+  float targetY = 0.f;
+  float targetZ = 0.f;
 };
 
 /// Result of `SpellManager::ProcessCastRequest`: packets to send and new GCD time.

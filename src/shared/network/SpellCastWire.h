@@ -40,6 +40,8 @@ enum SpellFailedReason : uint8 {
   SPELL_FAILED_NOT_READY = 69,
   /// Not in spellbook / disabled for this emulated realm (4.3.4 SharedDefines).
   SPELL_FAILED_SPELL_UNAVAILABLE = 109,
+  /// `SpellCastResult` for 4.3.4.15595 — confirm vs client/DBC if UI text mismatches.
+  SPELL_FAILED_OUT_OF_RANGE = 96,
 };
 
 struct ClientCastSpellData {

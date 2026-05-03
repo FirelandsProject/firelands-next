@@ -1079,6 +1079,17 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   req.now = now;
   req.gcdReady = _gcdReady;
   req.knownSpells = &_knownSpells;
+  MovementInfo const &pos = GetPosition();
+  req.hasCasterWorldPosition = true;
+  req.casterX = pos.x;
+  req.casterY = pos.y;
+  req.casterZ = pos.z;
+  if (c.unitTargetGuid != 0 && c.unitTargetGuid == _playerGuid) {
+    req.hasTargetWorldPosition = true;
+    req.targetX = pos.x;
+    req.targetY = pos.y;
+    req.targetZ = pos.z;
+  }
 
   SpellCastOutcome out;
   _spellManager->ProcessCastRequest(req, &out);
