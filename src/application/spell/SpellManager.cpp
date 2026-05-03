@@ -27,6 +27,9 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   if (!out)
     return;
   out->kind = SpellCastOutcome::Kind::None;
+  out->hasDirectHealthEffect = false;
+  out->directHealthTargetGuid = 0;
+  out->directHealthDelta = 0;
 
   uint32 const spellId = static_cast<uint32>(req.client.spellId);
   if (!IsSpellKnown(spellId, req.knownSpells)) {
@@ -113,6 +116,16 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   if ((req.client.targetFlags & SpellCastWire::ClientTargetPrimaryGuidMask) != 0 &&
       req.client.unitTargetGuid != 0)
     hitGuid = req.client.unitTargetGuid;
+
+  if (m_spellDefinitions) {
+    if (auto const def = m_spellDefinitions->GetDefinition(spellId)) {
+      if (def->directHealthEffectBasePoints != 0) {
+        out->hasDirectHealthEffect = true;
+        out->directHealthTargetGuid = hitGuid;
+        out->directHealthDelta = def->directHealthEffectBasePoints;
+      }
+    }
+  }
 
   uint32 const castFlagsStart = SpellCastWire::CAST_FLAG_HAS_TRAJECTORY;
   uint32 const castFlagsGo = SpellCastWire::CAST_FLAG_UNKNOWN_9;

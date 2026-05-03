@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -50,9 +51,15 @@ struct SpellCastOutcome {
   WorldPacket spellStart;
   WorldPacket spellGo;
   std::chrono::steady_clock::time_point newGcdReady{};
+  /// Phase D: single direct health change on spell hit (see `SpellDefinition`).
+  bool hasDirectHealthEffect = false;
+  uint64 directHealthTargetGuid = 0;
+  int32 directHealthDelta = 0;
 };
 
-/// Centralizes spell cast validation and server-side spell wire output (Phase A).
+/// Centralizes spell cast validation and server-side spell wire output (Phase A+).
+/// Phase D MVP effects (e.g. direct health) are encoded in `SpellCastOutcome`; a future
+/// `IEffectHandler` chain can split this without changing the wire contract.
 /// Thread-safety: const methods only; per-session mutable state stays on `WorldSession`
 /// (`_gcdReady`, `_knownSpells`) passed in/out via `SpellCastRequest` / `SpellCastOutcome`.
 class SpellManager {

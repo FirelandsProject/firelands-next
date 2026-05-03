@@ -14,6 +14,9 @@ struct SpellDefinition {
   uint32 powerType = 0;
   uint32 rangeIndex = 0;
   uint32 schoolMask = 0;
+  /// Phase D MVP: applied to primary hit target when non-zero (negative = damage).
+  /// Populated from optional `spell_dbc.MvpDirectHealthDelta` merge when present.
+  int32 directHealthEffectBasePoints = 0;
 };
 
 } // namespace Firelands

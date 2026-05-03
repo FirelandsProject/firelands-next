@@ -86,6 +86,25 @@ private:
   uint32 m_rangeIndex;
 };
 
+class SpellDefinitionWithDirectHealth final : public ISpellDefinitionStore {
+public:
+  explicit SpellDefinitionWithDirectHealth(int32 healthDelta)
+      : m_healthDelta(healthDelta) {}
+
+  bool HasSpell(uint32 /*spellId*/) const override { return true; }
+  std::optional<SpellDefinition> GetDefinition(uint32 spellId) const override {
+    SpellDefinition d{};
+    d.id = spellId;
+    d.castingTimeIndex = 1;
+    d.rangeIndex = 0;
+    d.directHealthEffectBasePoints = m_healthDelta;
+    return d;
+  }
+
+private:
+  int32 m_healthDelta;
+};
+
 class MockCollisionLineOfSight final : public IMapCollisionQueries {
 public:
   explicit MockCollisionLineOfSight(bool lineOpen) : m_lineOpen(lineOpen) {}
@@ -297,6 +316,21 @@ TEST(SpellManagerTests, LineOfSightSkipFlag_IgnoresBlockedLos) {
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
   ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+}
+
+TEST(SpellManagerTests, DirectHealthEffect_FilledOnSuccess) {
+  auto defs = std::make_shared<SpellDefinitionWithDirectHealth>(-42);
+  SpellManager mgr(defs, nullptr);
+  std::vector<uint32> known = {555};
+  SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
+  req.client.targetFlags = SpellCastWire::TARGET_FLAG_UNIT;
+  req.client.unitTargetGuid = 0x99ULL;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+  EXPECT_TRUE(out.hasDirectHealthEffect);
+  EXPECT_EQ(out.directHealthTargetGuid, 0x99ULL);
+  EXPECT_EQ(out.directHealthDelta, -42);
 }
 
 TEST(SpellManagerTests, LineOfSightNotCheckedForSelfTarget) {

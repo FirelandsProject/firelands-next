@@ -20,6 +20,7 @@ add_executable(FirelandsUnitTests
     unit/application/PlayerCreateInfoServiceStatsTests.cpp
     unit/application/WorldServiceCreatureScriptTests.cpp
     unit/domain/MapTests.cpp
+    unit/domain/PlayerCombatTests.cpp
     unit/infrastructure/LuaGameScriptHostTests.cpp
     unit/infrastructure/MapCollisionQueriesStubTests.cpp
     unit/tools/WowDataMpqListTests.cpp

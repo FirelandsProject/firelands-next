@@ -100,6 +100,8 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 2. Un solo tipo: daño o curación directa a unidad con update de vida vía update fields existentes.
 3. Sin persistir cada tick de DoT en esta fase.
 
+**Estado (MVP inicial):** `SpellDefinition.directHealthEffectBasePoints` + merge opcional `spell_dbc.MvpDirectHealthDelta` (migración `19_world_spell_dbc_mvp_direct_health.sql`). Tras un cast válido, `SpellCastOutcome` indica el objetivo y el delta; `WorldSession` aplica el cambio en `Player` (vida en runtime) y emite `SMSG_UPDATE_OBJECT` (`UPDATETYPE_VALUES`) vía `BuildPlayerHealthValuesUpdate`. Criaturas / persistencia de vida en logout: pendiente.
+
 **Rendimiento:** evitar virtual calls profundos en cadena caliente si el profiler lo pide: switch por “family” de efecto o tabla estática por `Effect` id acotado.
 
 ### Fase E — GCD real, cooldowns, poder

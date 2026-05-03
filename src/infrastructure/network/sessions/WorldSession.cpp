@@ -33,12 +33,27 @@
 #include <ctime>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace Firelands {
 
 namespace {
+
+std::optional<std::pair<uint32, uint32>> TryLivePlayerHealth(uint32 mapId,
+                                                             uint64 guid) {
+  if (guid == 0ull)
+    return std::nullopt;
+  auto map = WorldService::Instance().GetMap(mapId);
+  if (!map)
+    return std::nullopt;
+  auto pl = map->TryGetPlayer(guid);
+  if (!pl)
+    return std::nullopt;
+  return std::make_pair(pl->GetLiveHealth(), pl->GetLiveMaxHealth());
+}
 
 constexpr uint8_t kMailMessageTypeNormal = 0;
 constexpr int kMailItemEnchantSlots = 10;
@@ -482,7 +497,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   MovementInfo move{};
   LoginResolveMapPosition(guid, character, move);
 
-  LoginSpawnInWorld(guid, move);
+  LoginSpawnInWorld(guid, character, move);
   LoginSendCreateUpdatesAndMutualVisibility(guid, character, move);
   LoginFinalizeWorldEntry(guid);
 
@@ -700,9 +715,11 @@ void WorldSession::LoginResolveMapPosition(uint64 guid, Character const &charact
   _position = outMove;
 }
 
-void WorldSession::LoginSpawnInWorld(uint64 guid, MovementInfo const &move) {
+void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
+                                     MovementInfo const &move) {
   auto player = std::make_shared<Player>(guid, shared_from_this());
   player->SetPosition(move);
+  player->InitCombatResources(character.GetHealth(), character.GetMaxHealth());
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
@@ -717,8 +734,8 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
           : 0u;
   // Now that the player is on the map, send create/update data and "after add" packets
   UpdateData update(_mapId);
-  auto selfFields =
-      ws_obj::BuildPlayerUpdateFields(guid, character, statGt, selfNextXp);
+  auto selfFields = ws_obj::BuildPlayerUpdateFields(
+      guid, character, statGt, selfNextXp, TryLivePlayerHealth(_mapId, guid));
   MergeGmAppearanceIntoPlayerFields(selfFields, GetGmAppearanceForPlayerUpdates());
   update.AddCreateObject(guid, TYPEID_PLAYER, move, selfFields);
 
@@ -759,8 +776,9 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
       PlayerGmAppearanceForUpdates const newPlayerGm =
           GetGmAppearanceForPlayerUpdates();
       if (auto n = other->GetNotifier()) {
-        ws_obj::SendPlayerCreateToNotifier(n, _mapId, guid, character, move,
-                                           newPlayerGm, statGt, selfNextXp);
+        ws_obj::SendPlayerCreateToNotifier(
+            n, _mapId, guid, character, move, newPlayerGm, statGt, selfNextXp,
+            TryLivePlayerHealth(_mapId, guid));
       }
       if (auto otherCh = _charService->GetCharacterByGuid(other->GetGuid())) {
         PlayerGmAppearanceForUpdates otherGm{};
@@ -775,7 +793,7 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
         ws_obj::SendPlayerCreateToNotifier(
             std::static_pointer_cast<IMapNotifier>(shared_from_this()), _mapId,
             other->GetGuid(), *otherCh, other->GetPosition(), otherGm, statGt,
-            otherNext);
+            otherNext, TryLivePlayerHealth(_mapId, other->GetGuid()));
       }
     });
   }
@@ -1119,6 +1137,17 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
     if (auto map = WorldService::Instance().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
       map->BroadcastPacketToNearby(_playerGuid, out.spellGo, true);
+      if (out.hasDirectHealthEffect && out.directHealthDelta != 0) {
+        if (auto target = map->TryGetPlayer(out.directHealthTargetGuid)) {
+          target->ApplyHealthDelta(out.directHealthDelta);
+          WorldPacket hpUpdate;
+          ws_obj::BuildPlayerHealthValuesUpdate(
+              static_cast<uint16>(_mapId), out.directHealthTargetGuid,
+              target->GetLiveHealth(), target->GetLiveMaxHealth(), hpUpdate);
+          map->BroadcastPacketToNearby(out.directHealthTargetGuid, hpUpdate,
+                                       true);
+        }
+      }
     } else {
       SendPacket(out.spellStart);
       SendPacket(out.spellGo);

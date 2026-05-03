@@ -86,6 +86,14 @@ void Map::ForEachPlayer(
   }
 }
 
+std::shared_ptr<Player> Map::TryGetPlayer(uint64 guid) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  auto it = m_objects.find(guid);
+  if (it == m_objects.end())
+    return nullptr;
+  return std::dynamic_pointer_cast<Player>(it->second);
+}
+
 void Map::BroadcastPacket(uint64 senderGuid, WorldPacket &packet,
                           bool includeSelf) {
   std::lock_guard<std::mutex> lock(m_mapMutex);

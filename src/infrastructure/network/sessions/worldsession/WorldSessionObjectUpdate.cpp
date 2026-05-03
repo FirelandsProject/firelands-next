@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <utility>
 
 namespace Firelands {
 namespace WorldSessionObjectUpdate {
@@ -365,7 +367,8 @@ std::map<uint16, uint32> BuildPlayerBag0InventoryValues(Character const &charact
 std::map<uint16, uint32> BuildPlayerUpdateFields(
     uint64 guid, Character const &character,
     GtPlayerStatGameTables const *statGameTables,
-    uint32_t nextLevelXpFromWorld) {
+    uint32_t nextLevelXpFromWorld,
+    std::optional<std::pair<uint32, uint32>> const &healthOverride) {
   std::map<uint16, uint32> fields;
   fields[OBJECT_FIELD_GUID] = (uint32)(guid & 0xFFFFFFFF);
   fields[OBJECT_FIELD_GUID + 1] = (uint32)(guid >> 32);
@@ -377,8 +380,13 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
                      character.GetGender(), character.GetPowerType()};
   std::memcpy(&fields[UNIT_FIELD_BYTES_0], bytes0, 4);
 
-  fields[UNIT_FIELD_HEALTH] = character.GetHealth();
-  fields[UNIT_FIELD_MAXHEALTH] = character.GetMaxHealth();
+  if (healthOverride) {
+    fields[UNIT_FIELD_HEALTH] = healthOverride->first;
+    fields[UNIT_FIELD_MAXHEALTH] = healthOverride->second;
+  } else {
+    fields[UNIT_FIELD_HEALTH] = character.GetHealth();
+    fields[UNIT_FIELD_MAXHEALTH] = character.GetMaxHealth();
+  }
   fields[UNIT_FIELD_POWER1] = character.GetPower1();
   fields[UNIT_FIELD_MAXPOWER1] = character.GetMaxPower1();
   fields[UNIT_FIELD_LEVEL] = character.GetLevel();
@@ -466,6 +474,16 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
   return fields;
 }
 
+void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
+                                   uint32 maxHealth, WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  fields[UNIT_FIELD_HEALTH] = health;
+  fields[UNIT_FIELD_MAXHEALTH] = maxHealth;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
+}
+
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName) {
   dst.WriteString(ch.GetName());
@@ -492,11 +510,12 @@ void SendPlayerCreateToNotifier(
     Character const &character, MovementInfo const &move,
     PlayerGmAppearanceForUpdates const &gmAppearance,
     GtPlayerStatGameTables const *statGameTables,
-    uint32_t nextLevelXpFromWorld) {
+    uint32_t nextLevelXpFromWorld,
+    std::optional<std::pair<uint32, uint32>> const &healthOverride) {
   if (!target)
     return;
   auto fields = BuildPlayerUpdateFields(objectGuid, character, statGameTables,
-                                        nextLevelXpFromWorld);
+                                        nextLevelXpFromWorld, healthOverride);
   MergeGmAppearanceIntoPlayerFields(fields, gmAppearance);
   UpdateData update(mapId);
   update.AddCreateObject(objectGuid, TYPEID_PLAYER, move, fields);

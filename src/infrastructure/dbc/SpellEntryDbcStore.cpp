@@ -46,11 +46,18 @@ static char const* const kSpellDbcMergeQueryFull =
     "`SchoolMask`, `PowerType`, `OvAttributes`, `OvCastingTimeIndex`, `OvDurationIndex`, "
     "`OvRangeIndex`, `OvSchoolMask` FROM `firelands_world`.`spell_dbc`";
 
+static char const* const kSpellDbcMergeQueryFullWithMvp =
+    "SELECT `Id`, `Attributes`, `CastingTimeIndex`, `DurationIndex`, `RangeIndex`, "
+    "`SchoolMask`, `PowerType`, `OvAttributes`, `OvCastingTimeIndex`, `OvDurationIndex`, "
+    "`OvRangeIndex`, `OvSchoolMask`, `MvpDirectHealthDelta` FROM "
+    "`firelands_world`.`spell_dbc`";
+
 static char const* const kSpellDbcMergeQueryLegacy =
     "SELECT `Id`, `Attributes`, `CastingTimeIndex`, `DurationIndex`, `RangeIndex`, "
     "`SchoolMask`, `PowerType` FROM `firelands_world`.`spell_dbc`";
 
 static void ApplySpellDbcMergeRow(sql::ResultSet& rs, bool hasOvColumns,
+                                  bool hasMvpHealthColumn,
                                   std::unordered_map<uint32, SpellDefinition>& byId) {
   uint32 const id = static_cast<uint32>(rs.getUInt("Id"));
   if (id == 0u)
@@ -83,6 +90,9 @@ static void ApplySpellDbcMergeRow(sql::ResultSet& rs, bool hasOvColumns,
       if (!rs.isNull("OvSchoolMask"))
         d.schoolMask = static_cast<uint32>(rs.getUInt("OvSchoolMask"));
     }
+    if (hasMvpHealthColumn && !rs.isNull("MvpDirectHealthDelta"))
+      d.directHealthEffectBasePoints =
+          static_cast<int32>(rs.getInt("MvpDirectHealthDelta"));
     return;
   }
 
@@ -106,6 +116,9 @@ static void ApplySpellDbcMergeRow(sql::ResultSet& rs, bool hasOvColumns,
     if (!rs.isNull("OvSchoolMask"))
       d.schoolMask = static_cast<uint32>(rs.getUInt("OvSchoolMask"));
   }
+  if (hasMvpHealthColumn && !rs.isNull("MvpDirectHealthDelta"))
+    d.directHealthEffectBasePoints =
+        static_cast<int32>(rs.getInt("MvpDirectHealthDelta"));
   byId.emplace(id, d);
 }
 
@@ -161,22 +174,31 @@ void SpellEntryDbcStore::MergeSpellDbcRows(std::shared_ptr<sql::Connection> worl
     std::unique_ptr<sql::Statement> st(worldConn->createStatement());
     std::unique_ptr<sql::ResultSet> rs;
     bool hasOvColumns = true;
+    bool hasMvpHealthColumn = false;
     try {
-      rs.reset(st->executeQuery(kSpellDbcMergeQueryFull));
+      rs.reset(st->executeQuery(kSpellDbcMergeQueryFullWithMvp));
+      hasMvpHealthColumn = true;
     } catch (sql::SQLException& e) {
       if (e.getErrorCode() != 1054) {
         throw;
       }
-      hasOvColumns = false;
-      LOG_DEBUG(
-          "spell_dbc: Ov* columns missing (apply migration 18); merge uses PowerType "
-          "and full-row custom spells only.");
-      rs.reset(st->executeQuery(kSpellDbcMergeQueryLegacy));
+      try {
+        rs.reset(st->executeQuery(kSpellDbcMergeQueryFull));
+      } catch (sql::SQLException& e2) {
+        if (e2.getErrorCode() != 1054) {
+          throw;
+        }
+        hasOvColumns = false;
+        LOG_DEBUG(
+            "spell_dbc: Ov* columns missing (apply migration 18); merge uses PowerType "
+            "and full-row custom spells only.");
+        rs.reset(st->executeQuery(kSpellDbcMergeQueryLegacy));
+      }
     }
 
     size_t merged = 0;
     while (rs->next()) {
-      ApplySpellDbcMergeRow(*rs, hasOvColumns, m_byId);
+      ApplySpellDbcMergeRow(*rs, hasOvColumns, hasMvpHealthColumn, m_byId);
       ++merged;
     }
     if (merged > 0u)

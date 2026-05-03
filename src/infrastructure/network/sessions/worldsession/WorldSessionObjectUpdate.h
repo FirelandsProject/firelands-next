@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Firelands {
@@ -36,7 +38,12 @@ std::map<uint16, uint32> BuildPlayerBag0InventoryValues(Character const &charact
 std::map<uint16, uint32> BuildPlayerUpdateFields(
     uint64 guid, Character const &character,
     GtPlayerStatGameTables const *statGameTables = nullptr,
-    uint32_t nextLevelXpFromWorld = 0);
+    uint32_t nextLevelXpFromWorld = 0,
+    std::optional<std::pair<uint32, uint32>> const &healthOverride = std::nullopt);
+
+/// `SMSG_UPDATE_OBJECT` with `UPDATETYPE_VALUES` for `UNIT_FIELD_HEALTH` / max only.
+void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
+                                   uint32 maxHealth, WorldPacket &outPacket);
 
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName);
@@ -48,7 +55,8 @@ void SendPlayerCreateToNotifier(
     Character const &character, MovementInfo const &move,
     PlayerGmAppearanceForUpdates const &gmAppearance = {},
     GtPlayerStatGameTables const *statGameTables = nullptr,
-    uint32_t nextLevelXpFromWorld = 0);
+    uint32_t nextLevelXpFromWorld = 0,
+    std::optional<std::pair<uint32, uint32>> const &healthOverride = std::nullopt);
 
 } // namespace WorldSessionObjectUpdate
 

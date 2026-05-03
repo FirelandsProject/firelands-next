@@ -35,6 +35,9 @@ public:
   void ForEachPlayer(
       std::function<void(std::shared_ptr<Player> const &)> const &fn);
 
+  /// Returns the player on this map, or nullptr if missing or not a player.
+  std::shared_ptr<Player> TryGetPlayer(uint64 guid);
+
 private:
   struct GridCoord {
     int x, y;

@@ -238,7 +238,8 @@ private:
   void LoginSendMotdAndMetaPackets();
   void LoginResolveMapPosition(uint64 guid, Character const &character,
                                 MovementInfo &outMove);
-  void LoginSpawnInWorld(uint64 guid, MovementInfo const &move);
+  void LoginSpawnInWorld(uint64 guid, Character const &character,
+                         MovementInfo const &move);
   void LoginSendCreateUpdatesAndMutualVisibility(uint64 guid, Character const &character,
                                                  MovementInfo const &move);
   void LoginFinalizeWorldEntry(uint64 guid);
