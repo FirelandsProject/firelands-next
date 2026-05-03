@@ -222,6 +222,8 @@ enum WorldOpcode : uint32 {
   CMSG_AUTO_EQUIP_ITEM_SLOT = 0x4A17,
   /// Item use / spell-from-item; we only handle equip when `SpellID == 0`.
   CMSG_USE_ITEM = 0x2C06,
+  /// Trinity `WorldPackets::Item::DestroyItem` — discard / destroy from inventory.
+  CMSG_DESTROY_ITEM = 0x4A27,
   /// Hotfix / DB2 row reply (4.3.4 item tooltips use this after `CMSG_DB_QUERY_BULK`).
   SMSG_DB_REPLY = 0x38A4,
   CMSG_TIME_SYNC_RESP = 0x3B0C,

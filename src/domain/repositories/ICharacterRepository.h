@@ -49,6 +49,10 @@ public:
   virtual bool AutoEquipFromBag0Slot(
       uint32_t characterGuid, uint8_t srcSlot,
       std::optional<uint8_t> fallbackInventoryType = std::nullopt) = 0;
+  /// Main backpack grid only (`INVENTORY_SLOT_ITEM_START`..`END`). `clientCount` 0 =
+  /// remove entire stack; otherwise reduce stack by `min(clientCount, stack)`.
+  virtual bool DestroyBag0BackpackItem(uint32_t characterGuid, uint8_t slot,
+                                       uint32_t clientCount) = 0;
   virtual bool SaveInventory(uint32_t characterGuid,
                           Bag0InventoryData const &invData) = 0;
 };

@@ -1061,6 +1061,104 @@ bool MySqlCharacterRepository::AutoEquipFromBag0Slot(
   return swapped;
 }
 
+bool MySqlCharacterRepository::DestroyBag0BackpackItem(uint32_t characterGuid,
+                                                        uint8_t slot,
+                                                        uint32_t clientCount) {
+  if (slot < INVENTORY_SLOT_ITEM_START || slot >= INVENTORY_SLOT_ITEM_END) {
+    LOG_INFO("DestroyBag0BackpackItem: guid={} invalid slot={}", characterGuid,
+             slot);
+    return false;
+  }
+  if (!EnsureStarterInventoryTables(_connection))
+    return false;
+
+  try {
+    _connection->setAutoCommit(false);
+
+    uint32_t itemGuid = 0;
+    uint32_t stack = 0;
+    {
+      std::shared_ptr<sql::PreparedStatement> q(_connection->prepareStatement(
+          "SELECT ci.item, ii.count FROM character_inventory ci "
+          "INNER JOIN item_instance ii ON ii.guid = ci.item "
+          "WHERE ci.guid = ? AND ci.bag = 0 AND ci.slot = ? LIMIT 1"));
+      q->setUInt(1, characterGuid);
+      q->setUInt(2, slot);
+      std::unique_ptr<sql::ResultSet> rs(q->executeQuery());
+      if (!rs->next()) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+      itemGuid = rs->getUInt("item");
+      stack = std::max(1u, static_cast<uint32_t>(rs->getUInt("count")));
+    }
+
+    uint32_t const remove =
+        (clientCount == 0) ? stack : std::min(clientCount, stack);
+    if (remove == 0) {
+      _connection->rollback();
+      _connection->setAutoCommit(true);
+      return false;
+    }
+
+    if (remove >= stack) {
+      {
+        std::shared_ptr<sql::PreparedStatement> delInv(
+            _connection->prepareStatement(
+                "DELETE FROM character_inventory WHERE guid = ? AND bag = 0 "
+                "AND slot = ?"));
+        delInv->setUInt(1, characterGuid);
+        delInv->setUInt(2, slot);
+        if (delInv->executeUpdate() != 1) {
+          _connection->rollback();
+          _connection->setAutoCommit(true);
+          return false;
+        }
+      }
+      {
+        std::shared_ptr<sql::PreparedStatement> delItem(
+            _connection->prepareStatement(
+                "DELETE FROM item_instance WHERE guid = ? AND owner_guid = ?"));
+        delItem->setUInt(1, itemGuid);
+        delItem->setUInt(2, characterGuid);
+        if (delItem->executeUpdate() != 1) {
+          _connection->rollback();
+          _connection->setAutoCommit(true);
+          return false;
+        }
+      }
+    } else {
+      uint32_t const newCount = stack - remove;
+      std::shared_ptr<sql::PreparedStatement> upd(
+          _connection->prepareStatement(
+              "UPDATE item_instance SET count = ? WHERE guid = ? AND owner_guid = ?"));
+      upd->setUInt(1, newCount);
+      upd->setUInt(2, itemGuid);
+      upd->setUInt(3, characterGuid);
+      if (upd->executeUpdate() != 1) {
+        _connection->rollback();
+        _connection->setAutoCommit(true);
+        return false;
+      }
+    }
+
+    _connection->commit();
+    _connection->setAutoCommit(true);
+    LOG_INFO("DestroyBag0BackpackItem: guid={} slot={} removed={} of stack={}",
+             characterGuid, slot, remove, stack);
+    return true;
+  } catch (sql::SQLException &e) {
+    try {
+      _connection->rollback();
+      _connection->setAutoCommit(true);
+    } catch (...) {
+    }
+    LOG_ERROR("DestroyBag0BackpackItem failed: {}", e.what());
+    return false;
+  }
+}
+
 bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t srcSlot,
                                                uint8_t dstSlot) {
   if (srcSlot == dstSlot)

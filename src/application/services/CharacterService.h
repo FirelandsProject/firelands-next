@@ -266,6 +266,29 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
                                                fallbackInventoryType);
   }
 
+  /// Destroy or split-stack in the main backpack (bag 0 slots 23..38). `packSlot` 255 = backpack.
+  bool DestroyBag0BackpackItem(uint32_t accountId, uint32_t characterGuid,
+                               uint8_t packSlot, uint8_t slot,
+                               uint32_t clientCount) {
+    uint8_t const normalizedBag =
+        (packSlot == CLIENT_INVENTORY_SLOT_DEFAULT_BACKPACK) ? 0 : packSlot;
+    if (normalizedBag != 0)
+      return false;
+    uint8_t normalizedSlot = slot;
+    if (normalizedBag == 0 && slot < kPackSlotCount) {
+      normalizedSlot = static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + slot);
+    }
+    if (normalizedSlot < INVENTORY_SLOT_ITEM_START ||
+        normalizedSlot >= INVENTORY_SLOT_ITEM_END) {
+      return false;
+    }
+    auto ch = m_repository->GetCharacterByGuid(characterGuid);
+    if (!ch || ch->GetAccount() != accountId)
+      return false;
+    return m_repository->DestroyBag0BackpackItem(characterGuid, normalizedSlot,
+                                                 clientCount);
+  }
+
   /// Client `gtCombatRatings` / `gtChanceTo*Crit*` tables (may be unloaded if DBC path empty).
   GtPlayerStatGameTables const *GetStatGameTables() const {
     return m_playerCreateInfoService ? &m_playerCreateInfoService->GetStatGameTables()

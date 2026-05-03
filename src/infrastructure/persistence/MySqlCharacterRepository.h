@@ -43,6 +43,8 @@ namespace Firelands {
         bool AutoEquipFromBag0Slot(
             uint32_t characterGuid, uint8_t srcSlot,
             std::optional<uint8_t> fallbackInventoryType = std::nullopt) override;
+        bool DestroyBag0BackpackItem(uint32_t characterGuid, uint8_t slot,
+                                     uint32_t clientCount) override;
         bool SaveInventory(uint32_t characterGuid,
                            Bag0InventoryData const &invData) override;
     private:

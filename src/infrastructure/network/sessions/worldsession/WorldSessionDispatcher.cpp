@@ -180,6 +180,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_USE_ITEM:
     HandleUseItem(packet);
     break;
+  case CMSG_DESTROY_ITEM:
+    HandleDestroyItem(packet);
+    break;
   case CMSG_CANCEL_TRADE:
     // Client sends this opportunistically (e.g. UI cleanup on login). Safe no-op.
     break;

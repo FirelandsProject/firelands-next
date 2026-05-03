@@ -168,6 +168,7 @@ private:
   void HandleAutoEquipItem(WorldPacket &packet);
   void HandleAutoEquipItemSlot(WorldPacket &packet);
   void HandleUseItem(WorldPacket &packet);
+  void HandleDestroyItem(WorldPacket &packet);
   void HandleGmTicketCreate(WorldPacket &packet);
   void HandleGmTicketUpdateText(WorldPacket &packet);
   void HandleGmTicketDelete(WorldPacket &packet);

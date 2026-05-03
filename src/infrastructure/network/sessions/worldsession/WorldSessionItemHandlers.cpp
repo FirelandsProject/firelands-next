@@ -74,6 +74,9 @@ void SendInventoryChangeFailure(WorldSession &session, int32_t bagResult) {
   session.SendPacket(pkt);
 }
 
+// Trinity `InventoryResult` (client inventory error text).
+int32_t constexpr kEquipErrItemNotFound = 18;
+
 std::optional<uint8_t> FindBag0SlotByItemLowGuid(Character const &ch,
                                                   uint32_t itemLowGuid) {
   if (itemLowGuid == 0)
@@ -328,6 +331,60 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
     LOG_INFO("HandleAutoEquipItemSlot: swap rejected src={} dst={} guid={}",
              *srcSlotOpt, dstSlot, _playerGuid);
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
+  if (!refreshed) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  UpdateData update(_mapId);
+  update.AddValuesUpdate(
+      _playerGuid,
+      WorldSessionObjectUpdate::BuildPlayerBag0InventoryValues(*refreshed));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  SendPacket(pkt);
+}
+
+void WorldSession::HandleDestroyItem(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+  int32_t constexpr kEquipErrCantEquipOther = 15;
+  // Trinity `WorldPackets::Item::DestroyItem::Read()` — ContainerId, SlotNum, Count.
+  if (packet.Size() - packet.GetReadPos() <
+      sizeof(uint8_t) * 2 + sizeof(uint32_t)) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  uint8_t const containerId = packet.Read<uint8_t>();
+  uint8_t const slotNum = packet.Read<uint8_t>();
+  uint32_t const count = packet.Read<uint32_t>();
+  uint8_t const normalizedSlot = NormalizeBag0ItemSlot(containerId, slotNum);
+
+  LOG_INFO(
+      "HandleDestroyItem: account={} guid={} container={} slot={} normalized={} count={}",
+      _accountId, _playerGuid, containerId, slotNum, normalizedSlot, count);
+
+  if (containerId != 0 && containerId != CLIENT_INVENTORY_SLOT_DEFAULT_BACKPACK) {
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  if (normalizedSlot < INVENTORY_SLOT_ITEM_START ||
+      normalizedSlot >= INVENTORY_SLOT_ITEM_END) {
+    // Equipment / bags not supported yet (no unequip rules).
+    SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
+    return;
+  }
+
+  if (!_charService->DestroyBag0BackpackItem(
+          _accountId, static_cast<uint32_t>(_playerGuid), containerId, slotNum,
+          count)) {
+    SendInventoryChangeFailure(*this, kEquipErrItemNotFound);
     return;
   }
 
