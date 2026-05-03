@@ -24,6 +24,8 @@ enum class Permission : uint64_t {
   CommandGameplay = 1ull << 7,
   /// GM help ticket queue (`.ticket …`).
   ManageGmTickets = 1ull << 8,
+  /// Open mailbox UI anywhere (`.email` — moderator+).
+  CommandMailbox = 1ull << 9,
 };
 
 inline constexpr PermissionMask ToMask(Permission p) {
@@ -35,7 +37,8 @@ inline PermissionMask DefaultPermissions(AccessLevel level) {
   case AccessLevel::Player:
     return 0;
   case AccessLevel::Moderator:
-    return ToMask(Permission::ModerateChat) | ToMask(Permission::CommandGps);
+    return ToMask(Permission::ModerateChat) | ToMask(Permission::CommandGps) |
+           ToMask(Permission::CommandMailbox);
   case AccessLevel::GameMaster:
     return DefaultPermissions(AccessLevel::Moderator) |
            ToMask(Permission::CommandTeleport) |

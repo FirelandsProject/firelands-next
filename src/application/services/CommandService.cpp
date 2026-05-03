@@ -9,6 +9,7 @@
 #include <shared/Common.h>
 #include <shared/Crypto.h>
 #include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
 #include <shared/Logger.h>
 #include <shared/network/MovementInfo.h>
 #include <cmath>
@@ -64,6 +65,8 @@ public:
   void SetGmFlyEnabled(bool on) override { _subject->SetGmFlyEnabled(on); }
 
   void SetGmRunSpeed(float speed) override { _subject->SetGmRunSpeed(speed); }
+
+  void OpenGmMailboxUi() override { _subject->OpenGmMailboxUi(); }
 
   uint32 GetMapId() const override { return _subject->GetMapId(); }
 
@@ -345,6 +348,10 @@ CommandService::CommandService(
                  ToMask(Permission::ManageGmTickets), CommandAvailability::Game,
                  ConsoleArgLayout::SameAsInGame});
   RegisterCommand(
+      "email", {[this](auto s, auto a, auto o) { return HandleEmail(s, a, o); },
+                ToMask(Permission::CommandMailbox), CommandAvailability::Game,
+                ConsoleArgLayout::SameAsInGame});
+  RegisterCommand(
       "server", {[this](auto s, auto a, auto o) { return HandleServer(s, a, o); },
                  ToMask(Permission::ServerControl), CommandAvailability::Both,
                  ConsoleArgLayout::SameAsInGame});
@@ -364,12 +371,20 @@ bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
   if (!session || !IsCommand(message))
     return false;
 
-  // In-game: staff chat commands (leading `.`) are reserved for Game Master
-  // (stored access level 2) and above. Moderator (1) and players get no
-  // feedback — not even `.help` or unknown-command errors.
-  if (origin == PrivilegeOrigin::GameClient &&
-      !HasAtLeast(session->GetAccountAccessLevel(), AccessLevel::GameMaster)) {
-    return true;
+  // In-game: dot commands are for Game Master (2+) except `.email`, which
+  // moderators (1+) may use to open the mailbox UI anywhere.
+  if (origin == PrivilegeOrigin::GameClient) {
+    AccessLevel const acc = session->GetAccountAccessLevel();
+    std::string const tail = message.substr(1);
+    std::istringstream peekIss(tail);
+    std::string firstToken;
+    peekIss >> firstToken;
+    bool const moderatorEmail =
+        AsciiEqualsLower(firstToken, "email") &&
+        HasAtLeast(acc, AccessLevel::Moderator);
+    if (!HasAtLeast(acc, AccessLevel::GameMaster) && !moderatorEmail) {
+      return true;
+    }
   }
 
   std::string cmdStr = message.substr(1);
@@ -502,8 +517,9 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
   notifyHelp(
       "|cffFCE566=== Firelands — staff command help ===|r\n"
       "|cffAAAAAAEvery command starts with|r |cffffffff.|r\n"
-      "|cffAAAAAAIn-game,|r |cffffcc00Game Master|r |cffAAAAAAaccounts (access "
-      "level 2+) can use these; lower ranks see no response.|r");
+      "|cffAAAAAAIn-game,|r |cffffcc00Moderator+|r |cffAAAAAAcan use|r "
+      "|cffCCCCCC.email|r|cffAAAAAA; full command set from|r |cffffcc00Game Master "
+      "(2+)|r|cffAAAAAA. Players see no response.|r");
 
   notifyHelp(
       "|cffFFD200· Help & position|r\n"
@@ -511,6 +527,8 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cffffffff.help|r\n"
       "|cffCCCCCC.commands|r |cff888888—|r Same as .help.  |cff666666e.g.|r "
       "|cffffffff.commands|r\n"
+      "|cffCCCCCC.email|r |cff888888—|r |cffAAAAAA(Moderator+)|r Open mailbox UI "
+      "without a mailbox NPC.  |cff666666e.g.|r |cffffffff.email|r\n"
       "|cffCCCCCC.gps|r |cff888888—|r Print your X, Y, Z, facing.  "
       "|cff666666e.g.|r |cffffffff.gps|r\n"
       "|cffCCCCCC.tele|r |cff888888—|r Teleport to coordinates.  "
@@ -562,8 +580,8 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cff666666World console:|r character name always first: "
       "|cffffffff.additem Annabell 6948 1|r\n"
       "|cffAAAAAAFull main backpack|r |cff666666(slots 23–38)|r |cffAAAAAA→|r "
-      "item is stored in |cffCCCCCCmail|r |cffAAAAAA(DB); client mailbox UI is not "
-      "wired yet.|r\n"
+      "item is stored in |cffCCCCCCmail|r |cffAAAAAA(DB); use|r |cffCCCCCC.email|r "
+      "|cffAAAAAAto open the mailbox and review.|r\n"
       "|cffCCCCCC.delitem|r |cff888888—|r Same targeting as |cffCCCCCC.additem|r; "
       "removes up to |cffffffffcount|r from the |cff666666main backpack only|r "
       "(not equipped).  |cff666666e.g.|r |cffffffff.delitem 6948|r |cff666666or|r "
@@ -1403,6 +1421,22 @@ bool CommandService::HandleTicket(std::shared_ptr<ICommandSession> session,
 
 void CommandService::SetShutdownRequestHandler(std::function<void()> handler) {
   _shutdownRequestHandler = std::move(handler);
+}
+
+bool CommandService::HandleEmail(std::shared_ptr<ICommandSession> session,
+                                 const std::vector<std::string> &args,
+                                 PrivilegeOrigin origin) {
+  (void)args;
+  if (origin != PrivilegeOrigin::GameClient) {
+    session->SendNotification(".email is only available in-game.");
+    return true;
+  }
+  if (session->GetActiveCharacterObjectGuid() == 0) {
+    session->SendNotification("You must be in world to use .email.");
+    return true;
+  }
+  session->OpenGmMailboxUi();
+  return true;
 }
 
 void CommandService::PollScheduledRestart() {

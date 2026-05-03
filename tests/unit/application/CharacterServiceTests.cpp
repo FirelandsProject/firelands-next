@@ -41,6 +41,7 @@ public:
     MOCK_METHOD(bool, DestroyBag0BackpackItem,
                 (uint32_t, uint8_t, uint32_t), (override));
     MOCK_METHOD(bool, SaveInventory, (uint32_t, Bag0InventoryData const&), (override));
+    MOCK_METHOD(std::vector<MailInboxRow>, LoadMailInbox, (uint32_t), (override));
 };
 
 TEST(CharacterServiceTests, GetCharacters_ReturnsCharactersFromRepository) {

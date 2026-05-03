@@ -136,6 +136,25 @@ public:
     return guid;
   }
 
+  /// Overwrite little-endian `uint16` at `byteOffset` (must be within current size).
+  void PatchUInt16(size_t byteOffset, uint16_t value) {
+    if (byteOffset + sizeof(uint16_t) > _storage.size())
+      return;
+    std::memcpy(&_storage[byteOffset], &value, sizeof(value));
+  }
+
+  void PatchUInt32(size_t byteOffset, uint32_t value) {
+    if (byteOffset + sizeof(uint32_t) > _storage.size())
+      return;
+    std::memcpy(&_storage[byteOffset], &value, sizeof(value));
+  }
+
+  void PatchUInt8(size_t byteOffset, uint8_t value) {
+    if (byteOffset >= _storage.size())
+      return;
+    _storage[byteOffset] = value;
+  }
+
   void AppendPackedTime(time_t time) {
     std::tm lt;
 #ifdef _WIN32

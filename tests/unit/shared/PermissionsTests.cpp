@@ -13,6 +13,11 @@ TEST(PermissionsTests, ModeratorHasGps) {
                             ToMask(Permission::CommandGps)));
 }
 
+TEST(PermissionsTests, ModeratorHasMailboxCommand) {
+  EXPECT_TRUE(HasPermission(AccessLevel::Moderator, PrivilegeOrigin::GameClient,
+                            ToMask(Permission::CommandMailbox)));
+}
+
 TEST(PermissionsTests, GameMasterHasTeleport) {
   EXPECT_TRUE(HasPermission(AccessLevel::GameMaster, PrivilegeOrigin::GameClient,
                              ToMask(Permission::CommandTeleport)));

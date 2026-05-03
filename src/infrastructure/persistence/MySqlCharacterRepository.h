@@ -53,6 +53,7 @@ namespace Firelands {
                                      uint32_t clientCount) override;
         bool SaveInventory(uint32_t characterGuid,
                            Bag0InventoryData const &invData) override;
+        std::vector<MailInboxRow> LoadMailInbox(uint32_t receiverGuid) override;
     private:
         std::shared_ptr<sql::Connection> _connection;
         std::shared_ptr<sql::Connection> _worldConnection;

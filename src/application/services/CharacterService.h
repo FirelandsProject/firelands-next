@@ -326,6 +326,10 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
                                                  clientCount);
   }
 
+  std::vector<MailInboxRow> LoadMailInbox(uint32_t characterGuid) {
+    return m_repository->LoadMailInbox(characterGuid);
+  }
+
   /// Client `gtCombatRatings` / `gtChanceTo*Crit*` tables (may be unloaded if DBC path empty).
   GtPlayerStatGameTables const *GetStatGameTables() const {
     return m_playerCreateInfoService ? &m_playerCreateInfoService->GetStatGameTables()

@@ -12,6 +12,23 @@ namespace Firelands {
 
 class Character;
 
+struct MailInboxItemRow {
+  uint32_t itemGuidLow = 0;
+  uint32_t itemEntry = 0;
+  uint32_t count = 0;
+};
+
+struct MailInboxRow {
+  uint64_t mailId = 0;
+  uint32_t senderGuidLow = 0;
+  std::string subject;
+  std::string body;
+  uint32_t checked = 0;
+  uint32_t deliverTime = 0;
+  uint32_t expireTime = 0;
+  std::vector<MailInboxItemRow> items;
+};
+
 class ICharacterRepository {
 public:
   virtual ~ICharacterRepository() = default;
@@ -65,6 +82,9 @@ public:
                                        uint32_t clientCount) = 0;
   virtual bool SaveInventory(uint32_t characterGuid,
                           Bag0InventoryData const &invData) = 0;
+
+  /// Rows from `mail` / `mail_items` for the given character (receiver).
+  virtual std::vector<MailInboxRow> LoadMailInbox(uint32_t receiverGuid) = 0;
 };
 
 } // namespace Firelands

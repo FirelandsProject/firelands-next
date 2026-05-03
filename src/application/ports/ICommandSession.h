@@ -76,6 +76,9 @@ public:
   virtual void SetGmVisibleToPlayers(bool visible) { (void)visible; }
   virtual void SetGmFlyEnabled(bool on) { (void)on; }
   virtual void SetGmRunSpeed(float speed) { (void)speed; }
+
+  /// Opens the mailbox UI (`SMSG_SHOW_MAILBOX`); default no-op (world client only).
+  virtual void OpenGmMailboxUi() {}
 };
 
 } // namespace Firelands

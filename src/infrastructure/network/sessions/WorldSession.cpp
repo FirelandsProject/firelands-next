@@ -22,6 +22,8 @@
 #include <shared/game/PlayerGmAppearance.h>
 #include <shared/dbc/GtPlayerStatGameTables.h>
 #include <shared/game/WowGuid.h>
+#include <shared/game/Permissions.h>
+#include <domain/repositories/ICharacterRepository.h>
 #include <algorithm>
 #include <map>
 #include <chrono>
@@ -32,6 +34,71 @@
 #include <vector>
 
 namespace Firelands {
+
+namespace {
+
+constexpr uint8_t kMailMessageTypeNormal = 0;
+constexpr int kMailItemEnchantSlots = 10;
+constexpr uint32_t kMailDaySeconds = 86400u;
+constexpr uint32_t kMailListMaxShown = 50;
+
+void AppendOneMailListEntry(WorldPacket &data, MailInboxRow const &row,
+                            std::time_t now) {
+  size_t const sizePos = data.Size();
+  data.Append<uint16>(0);
+  size_t const payloadBegin = data.Size();
+
+  data.Append<uint32>(static_cast<uint32>(row.mailId));
+  data.Append<uint8>(kMailMessageTypeNormal);
+  data.WritePackedGuid(static_cast<uint64>(row.senderGuidLow));
+  data.Append<uint64>(0u);       // COD
+  data.Append<uint32>(0u);       // package
+  data.Append<uint32>(41u);     // stationery (matches common TC defaults)
+  data.Append<uint64>(0u);       // money
+  data.Append<uint32>(row.checked);
+  float daysLeft = 30.0f;
+  if (row.expireTime != 0) {
+    if (static_cast<uint32_t>(now) < row.expireTime) {
+      daysLeft = static_cast<float>(row.expireTime - static_cast<uint32_t>(now)) /
+                 static_cast<float>(kMailDaySeconds);
+    } else {
+      daysLeft = 0.0f;
+    }
+  }
+  data.Append<float>(daysLeft);
+  data.Append<uint32>(0u); // mail template id
+  data.WriteString(row.subject);
+  data.WriteString(row.body);
+
+  size_t const itemCount =
+      std::min(row.items.size(), static_cast<size_t>(12));
+  data.Append<uint8>(static_cast<uint8>(itemCount));
+  for (size_t i = 0; i < itemCount; ++i) {
+    MailInboxItemRow const &it = row.items[i];
+    data.Append<uint8>(static_cast<uint8>(i));
+    data.Append<uint32>(it.itemGuidLow);
+    data.Append<uint32>(it.itemEntry);
+    for (int e = 0; e < kMailItemEnchantSlots; ++e) {
+      data.Append<uint32>(0u);
+      data.Append<uint32>(0u);
+      data.Append<uint32>(0u);
+    }
+    data.Append<int32>(0);
+    data.Append<uint32>(0u);
+    uint32_t const cnt = it.count != 0 ? it.count : 1u;
+    data.Append<uint32>(cnt);
+    data.Append<uint32>(0u);
+    data.Append<uint32>(0u);
+    data.Append<uint32>(0u);
+    data.Append<uint8>(1u);
+  }
+
+  uint16_t const payloadBytes =
+      static_cast<uint16_t>(data.Size() - payloadBegin);
+  data.PatchUInt16(sizePos, payloadBytes);
+}
+
+} // namespace
 
 namespace ws_obj = WorldSessionObjectUpdate;
 
@@ -1167,6 +1234,52 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
   if (auto host = WorldService::Instance().GetScriptHost()) {
     host->FireGossipSelect(npcGuid, menuId, listId);
   }
+}
+
+void WorldSession::OpenGmMailboxUi() {
+  if (_playerGuid == 0)
+    return;
+  WorldPacket data(SMSG_SHOW_MAILBOX, 32);
+  data.WritePackedGuid(_playerGuid);
+  SendPacket(data);
+}
+
+void WorldSession::HandleMailGetList(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+  if (packet.Size() <= packet.GetReadPos())
+    return;
+  // 4.3.4: mailbox GUID is packed (same as `SMSG_SHOW_MAILBOX`), not a raw uint64.
+  uint64 const mailboxGuid = packet.ReadPackedGuid();
+  if (mailboxGuid != _playerGuid)
+    return;
+  if (!HasPermission(_accountAccessLevel, PrivilegeOrigin::GameClient,
+                     ToMask(Permission::CommandMailbox)))
+    return;
+  SendMailListToClient(static_cast<uint32_t>(_playerGuid));
+}
+
+void WorldSession::SendMailListToClient(uint32_t characterGuid) {
+  std::vector<MailInboxRow> rows = _charService->LoadMailInbox(characterGuid);
+  std::time_t const now = std::time(nullptr);
+  WorldPacket data(SMSG_MAIL_LIST_RESULT, 512);
+  data.Append<uint32>(0);
+  data.Append<uint8>(0);
+
+  uint32_t shown = 0;
+  for (MailInboxRow const &row : rows) {
+    if (row.deliverTime != 0 && static_cast<uint32_t>(now) < row.deliverTime)
+      continue;
+    if (shown >= kMailListMaxShown)
+      break;
+    AppendOneMailListEntry(data, row, now);
+    ++shown;
+  }
+
+  uint32_t const realTotal = static_cast<uint32_t>(rows.size());
+  data.PatchUInt32(0, realTotal);
+  data.PatchUInt8(4, static_cast<uint8>(shown));
+  SendPacket(data);
 }
 
 void WorldSession::HandleRealmSplit(WorldPacket &packet) {

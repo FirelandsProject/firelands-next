@@ -113,6 +113,8 @@ private:
                     const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleServer(std::shared_ptr<ICommandSession> session,
                     const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleEmail(std::shared_ptr<ICommandSession> session,
+                   const std::vector<std::string> &args, PrivilegeOrigin origin);
 
   std::shared_ptr<OnlineCharacterSessionRegistry> _onlineCharacters;
   std::shared_ptr<IAccountRepository> _accountRepo;

@@ -7,6 +7,7 @@
 #include <shared/game/ItemEquipSlots.h>
 #include <shared/Logger.h>
 #include <cmath>
+#include <limits>
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -1137,6 +1138,55 @@ bool MySqlCharacterRepository::SendGmMailWithItem(uint32_t receiverCharacterGuid
     LOG_ERROR("SendGmMailWithItem failed: {}", e.what());
     return false;
   }
+}
+
+std::vector<MailInboxRow> MySqlCharacterRepository::LoadMailInbox(
+    uint32_t receiverGuid) {
+  std::vector<MailInboxRow> out;
+  if (receiverGuid == 0 || !EnsureMailTables(_connection))
+    return out;
+  try {
+    std::shared_ptr<sql::PreparedStatement> st(_connection->prepareStatement(
+        "SELECT m.id, m.sender_guid, m.subject, m.body, m.checked, m.deliver_time, "
+        "m.expire_time, mi.item_guid, ii.itemEntry, ii.count "
+        "FROM mail m "
+        "LEFT JOIN mail_items mi ON mi.mail_id = m.id AND mi.receiver_guid = "
+        "m.receiver_guid "
+        "LEFT JOIN item_instance ii ON ii.guid = mi.item_guid "
+        "WHERE m.receiver_guid = ? ORDER BY m.id ASC, mi.item_guid ASC"));
+    st->setUInt(1, receiverGuid);
+    std::unique_ptr<sql::ResultSet> rs(st->executeQuery());
+    uint64_t lastMailId = std::numeric_limits<uint64_t>::max();
+    MailInboxRow *current = nullptr;
+    while (rs->next()) {
+      uint64_t const mid = rs->getUInt64("id");
+      if (mid != lastMailId) {
+        out.push_back(MailInboxRow{});
+        current = &out.back();
+        lastMailId = mid;
+        current->mailId = mid;
+        current->senderGuidLow = rs->getUInt("sender_guid");
+        current->subject = rs->getString("subject");
+        current->body = rs->isNull("body") ? std::string{} : rs->getString("body");
+        current->checked = rs->getUInt("checked");
+        current->deliverTime = rs->getUInt("deliver_time");
+        current->expireTime = rs->getUInt("expire_time");
+      }
+      if (!rs->isNull("item_guid")) {
+        uint64_t const ig = rs->getUInt64("item_guid");
+        if (ig != 0 && current != nullptr) {
+          MailInboxItemRow row;
+          row.itemGuidLow = static_cast<uint32_t>(ig);
+          row.itemEntry = rs->isNull("itemEntry") ? 0u : rs->getUInt("itemEntry");
+          row.count = rs->isNull("count") ? 1u : rs->getUInt("count");
+          current->items.push_back(row);
+        }
+      }
+    }
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("LoadMailInbox failed: {}", e.what());
+  }
+  return out;
 }
 
 bool MySqlCharacterRepository::AutoEquipFromBag0Slot(

@@ -112,6 +112,8 @@ public:
                               std::string const &gmResponse) override;
   uint32_t GetAccountId() const override { return _accountId; }
 
+  void OpenGmMailboxUi() override;
+
   PlayerGmAppearanceForUpdates GetGmAppearanceForPlayerUpdates() const {
     return _gmAppearance;
   }
@@ -160,6 +162,7 @@ private:
   void HandleGossipHello(WorldPacket &packet);
   void HandleGossipSelectOption(WorldPacket &packet);
   void HandleQueryNextMailTime(WorldPacket &packet);
+  void HandleMailGetList(WorldPacket &packet);
   void HandleCalendarGetNumPending(WorldPacket &packet);
   void HandleZoneUpdate(WorldPacket &packet);
   void HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket &packet);
@@ -217,6 +220,7 @@ private:
   void SendTalentsInfo();
   void SendInitialFactions();
   void SendLoginVerifyWorld(uint32 mapId, float x, float y, float z, float o);
+  void SendMailListToClient(uint32_t characterGuid);
   void SendQueryTimeResponse();
 
   // Helpers

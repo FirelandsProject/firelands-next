@@ -24,6 +24,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case MSG_QUERY_NEXT_MAIL_TIME:
     HandleQueryNextMailTime(packet);
     break;
+  case CMSG_MAIL_GET_LIST:
+    HandleMailGetList(packet);
+    break;
   case CMSG_CALENDAR_GET_NUM_PENDING:
     HandleCalendarGetNumPending(packet);
     break;
