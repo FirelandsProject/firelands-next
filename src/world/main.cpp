@@ -5,6 +5,7 @@
 #include <application/services/PlayerCreateInfoService.h>
 #include <application/services/WorldService.h>
 #include <application/spell/SpellManager.h>
+#include <domain/repositories/ISpellCastTables.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <chrono>
 #include <conncpp.hpp>
@@ -17,6 +18,7 @@
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
+#include <infrastructure/dbc/SpellCastTablesDbc.h>
 #include <infrastructure/dbc/SpellEntryDbcStore.h>
 #include <infrastructure/persistence/MySqlRealmRepository.h>
 #include <infrastructure/scripting/LuaGameScriptHost.h>
@@ -194,6 +196,19 @@ int main(int argc, char **argv) {
       }
     }
 
+    std::shared_ptr<ISpellCastTables const> spellCastTables;
+    {
+      auto tables = std::make_shared<SpellCastTablesDbc>();
+      if (!tables->Load(dbcBasePath + "/SpellCastTimes.dbc",
+                        dbcBasePath + "/SpellRange.dbc")) {
+        LOG_WARN(
+            "SpellCastTimes.dbc and SpellRange.dbc were not both loadable from "
+            "{}; SMSG_SPELL_START cast time stays 0 until valid DBCs are present.",
+            dbcBasePath);
+      }
+      spellCastTables = std::move(tables);
+    }
+
     SpellDifficultyDbc spellDifficultyDbc;
     if (spellDifficultyDbc.Load(dbcBasePath + "/SpellDifficulty.dbc")) {
       LOG_DEBUG("SpellDifficulty.dbc ready ({} difficulty rows).",
@@ -206,12 +221,14 @@ int main(int argc, char **argv) {
     auto itemDbHotfix = std::make_shared<ItemDbHotfixStore>();
     itemDbHotfix->load(dbcBasePath);
 
-    auto spellManager = std::make_shared<SpellManager>(spellDefinitions);
+    auto spellManager =
+        std::make_shared<SpellManager>(spellDefinitions, spellCastTables);
 
     auto sessionFactory = [authService, charService, commandService,
                            accountDataRepo, languagesDbc, spellDefinitions,
                            realmRepo, onlineCharRegistry, gmTicketService,
-                           itemDbHotfix, spellManager](boost::asio::ip::tcp::socket socket) {
+                           itemDbHotfix, spellManager](
+                              boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
                                      commandService, accountDataRepo,
                                      languagesDbc, spellDefinitions, realmRepo,

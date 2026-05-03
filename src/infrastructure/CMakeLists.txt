@@ -1,4 +1,5 @@
 add_library(FirelandsInfrastructure STATIC
+    dbc/SpellCastTablesDbc.cpp
     dbc/SpellEntryDbcStore.cpp
     persistence/MySqlAccountRepository.cpp
     persistence/MySqlAccountDataRepository.cpp

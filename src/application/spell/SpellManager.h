@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include <domain/repositories/ISpellCastTables.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <shared/Common.h>
 #include <shared/network/SpellCastWire.h>
@@ -39,7 +40,8 @@ struct SpellCastOutcome {
 class SpellManager {
 public:
   explicit SpellManager(
-      std::shared_ptr<ISpellDefinitionStore const> spellDefinitions = nullptr);
+      std::shared_ptr<ISpellDefinitionStore const> spellDefinitions = nullptr,
+      std::shared_ptr<ISpellCastTables const> spellCastTables = nullptr);
 
   /// Evaluates a cast request. On success, sets `newGcdReady` and fills start/go packets.
   /// On failure, fills `failurePacket` only. Does not send on the wire.
@@ -50,6 +52,7 @@ private:
   static bool IsSpellKnown(uint32 spellId, std::vector<uint32> const *knownSpells);
 
   std::shared_ptr<ISpellDefinitionStore const> m_spellDefinitions;
+  std::shared_ptr<ISpellCastTables const> m_spellCastTables;
 };
 
 } // namespace Firelands

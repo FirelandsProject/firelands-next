@@ -51,7 +51,8 @@ Motd:
   - "Enjoy your stay in the lands of Fire and Ice."
 
 # Client DBC folder (4.3.4): CharStartOutfit, gt combat tables, Spell.dbc,
-# SpellDifficulty.dbc (raid/dungeon spell id variants), Languages.dbc, etc.
+# SpellCastTimes.dbc, SpellRange.dbc, SpellDifficulty.dbc (raid/dungeon spell
+# id variants), Languages.dbc, etc.
 # XP-to-next-level for the experience bar comes from the world DB table
 # `player_xp_for_level` (see sql/migrations/15_world_player_xp_for_level.sql), not
 # from a loose client file.

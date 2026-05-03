@@ -4,8 +4,10 @@
 
 namespace Firelands {
 
-SpellManager::SpellManager(std::shared_ptr<ISpellDefinitionStore const> spellDefinitions)
-    : m_spellDefinitions(std::move(spellDefinitions)) {}
+SpellManager::SpellManager(std::shared_ptr<ISpellDefinitionStore const> spellDefinitions,
+                           std::shared_ptr<ISpellCastTables const> spellCastTables)
+    : m_spellDefinitions(std::move(spellDefinitions)),
+      m_spellCastTables(std::move(spellCastTables)) {}
 
 bool SpellManager::IsSpellKnown(uint32 spellId,
                                 std::vector<uint32> const *knownSpells) {
@@ -48,6 +50,13 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
     return;
   }
 
+  uint32 castTimeStart = 0;
+  if (m_spellDefinitions && m_spellCastTables) {
+    if (auto const def = m_spellDefinitions->GetDefinition(spellId))
+      castTimeStart =
+          m_spellCastTables->GetCastTimeMs(def->castingTimeIndex);
+  }
+
   uint32 targetFlags = req.client.targetFlags;
   uint64 targetUnitGuid = req.casterGuid;
   if ((req.client.targetFlags & SpellCastWire::ClientTargetPrimaryGuidMask) == 0) {
@@ -65,7 +74,6 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
 
   uint32 const castFlagsStart = SpellCastWire::CAST_FLAG_HAS_TRAJECTORY;
   uint32 const castFlagsGo = SpellCastWire::CAST_FLAG_UNKNOWN_9;
-  uint32 const castTimeStart = 0;
   uint32 const castTimeGo = static_cast<uint32>(
       std::chrono::duration_cast<std::chrono::milliseconds>(
           req.now.time_since_epoch())

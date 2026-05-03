@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <application/spell/SpellManager.h>
+#include <domain/repositories/ISpellCastTables.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldOpcodes.h>
@@ -15,6 +16,54 @@ public:
     return std::nullopt;
   }
 };
+
+class SpellDefinitionStoreWithCasting final : public ISpellDefinitionStore {
+public:
+  explicit SpellDefinitionStoreWithCasting(uint32 castingTimeIndex)
+      : m_castingTimeIndex(castingTimeIndex) {}
+
+  bool HasSpell(uint32 /*spellId*/) const override { return true; }
+  std::optional<SpellDefinition> GetDefinition(uint32 spellId) const override {
+    SpellDefinition d{};
+    d.id = spellId;
+    d.castingTimeIndex = m_castingTimeIndex;
+    return d;
+  }
+
+private:
+  uint32 m_castingTimeIndex;
+};
+
+class MockSpellCastTables final : public ISpellCastTables {
+public:
+  explicit MockSpellCastTables(uint32 castTimeMs, uint32 respondForIndex = 1)
+      : m_castTimeMs(castTimeMs), m_respondForIndex(respondForIndex) {}
+
+  uint32 GetCastTimeMs(uint32 castingTimeIndex) const override {
+    return castingTimeIndex == m_respondForIndex ? m_castTimeMs : 0u;
+  }
+
+  float GetHostileRangeMaxYards(uint32 /*rangeIndex*/) const override {
+    return 0.0f;
+  }
+
+private:
+  uint32 m_castTimeMs;
+  uint32 m_respondForIndex;
+};
+
+/// Reads `castTimeMs` from `SMSG_SPELL_START` built by `SpellCastWire::BuildSpellStart`
+/// (two packed caster GUIDs, then core fields — no trajectory payload in our wire).
+static uint32 ReadSpellStartCastTimeMs(WorldPacket &p) {
+  p.SetReadPos(0);
+  (void)p.ReadPackedGuid();
+  (void)p.ReadPackedGuid();
+  (void)p.Read<uint8>();
+  (void)p.Read<uint32>();
+  (void)p.Read<uint32>();
+  (void)p.Read<uint32>();
+  return p.Read<uint32>();
+}
 
 } // namespace
 
@@ -84,4 +133,16 @@ TEST(SpellManagerTests, DefinitionStoreRejectsKnownSpell) {
   mgr.ProcessCastRequest(req, &out);
   ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellFailure);
   EXPECT_TRUE(out.failurePacket.Is(SMSG_SPELL_FAILURE));
+}
+
+TEST(SpellManagerTests, CastTablesFillSpellStartCastTime) {
+  auto defs = std::make_shared<SpellDefinitionStoreWithCasting>(9);
+  auto tables = std::make_shared<MockSpellCastTables>(3200u, 9u);
+  SpellManager mgr(defs, tables);
+  std::vector<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+  EXPECT_EQ(ReadSpellStartCastTimeMs(out.spellStart), 3200u);
 }
