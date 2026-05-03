@@ -4,8 +4,10 @@
 
 namespace Firelands {
 
-Creature::Creature(uint64 guid, uint32 entry, uint32 displayId, uint32 maxHealth)
-    : WorldObject(guid), m_entry(entry), m_displayId(displayId) {
+Creature::Creature(uint64 guid, uint32 entry, uint32 displayId, uint32 maxHealth,
+                   uint8 level)
+    : WorldObject(guid), m_entry(entry), m_displayId(displayId),
+      m_level(level == 0 ? 1 : level) {
   m_liveMaxHealth = std::max(1u, maxHealth);
   m_liveHealth = m_liveMaxHealth;
 }

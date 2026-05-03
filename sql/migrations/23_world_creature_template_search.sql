@@ -1,4 +1,6 @@
--- Minimal creature_template for GM `.npc search` (name lookup).
+-- Minimal creature_template bootstrap for GM `.npc search` (name lookup).
+-- For full Trinity-aligned columns + `creature` / addon tables, apply
+-- `24_world_creature_tables.sql` (or use merged world schema including that migration).
 -- Populate from your Cataclysm client DB export or tooling; seed rows are examples only.
 
 USE `firelands_world`;

@@ -511,8 +511,8 @@ bool CommandService::HandleTele(std::shared_ptr<ICommandSession> session,
     float x = std::stof(args[0]);
     float y = std::stof(args[1]);
     float z = std::stof(args[2]);
-    uint32 mapId =
-        (args.size() > 3) ? static_cast<uint32>(std::stoul(args[3])) : 0;
+    uint32 mapId = (args.size() > 3) ? static_cast<uint32>(std::stoul(args[3]))
+                                      : session->GetMapId();
 
     session->TeleportTo(mapId, x, y, z);
     return true;
@@ -551,8 +551,8 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cffCCCCCC.gps|r |cff888888—|r Print your X, Y, Z, facing.  "
       "|cff666666e.g.|r |cffffffff.gps|r\n"
       "|cffCCCCCC.tele|r |cff888888—|r Teleport to coordinates.  "
-      "|cff666666In-game:|r |cffffffff.tele -8759 544 97|r |cff666666(map 0 "
-      "default).|r\n"
+      "|cff666666In-game:|r |cffffffff.tele -8759 544 97|r |cff666666(current "
+      "map if map id omitted).|r\n"
       "|cff666666With map id:|r |cffffffff.tele 100 -50 25 571|r\n"
       "|cff666666World console (target online character first):|r\n"
       "|cffffffff.tele Annabell -8759 544 97|r  |cff666666or|r  "

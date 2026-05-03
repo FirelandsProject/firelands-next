@@ -20,6 +20,7 @@ add_executable(FirelandsUnitTests
     unit/application/SpellManagerTests.cpp
     unit/application/PlayerCreateInfoServiceStatsTests.cpp
     unit/application/WorldServiceCreatureScriptTests.cpp
+    unit/application/CreatureSpawnLogicTests.cpp
     unit/domain/MapTests.cpp
     unit/domain/CreatureCombatTests.cpp
     unit/domain/PlayerCombatTests.cpp

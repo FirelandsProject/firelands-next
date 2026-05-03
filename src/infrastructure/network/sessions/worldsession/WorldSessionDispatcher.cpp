@@ -219,6 +219,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case MSG_MOVE_FALL_LAND:
     HandleMovement(packet);
     break;
+  case MSG_MOVE_TELEPORT_ACK:
+    HandleMoveTeleportAck(packet);
+    break;
   default:
     LOG_DEBUG("[PACKET] Unknown/unhandled opcode: 0x{:04X} (size: {})", opcode,
               packet.Size());

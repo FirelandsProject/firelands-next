@@ -103,6 +103,27 @@ std::shared_ptr<Creature> Map::TryGetCreature(uint64 guid) {
   return std::dynamic_pointer_cast<Creature>(it->second);
 }
 
+void Map::ForEachCreatureNear(
+    float x, float y, int cellRadius,
+    std::function<void(std::shared_ptr<Creature> const &)> const &fn) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  GridCoord const center = GetCoord(x, y);
+  int const r = std::clamp(cellRadius, 0, 63);
+  for (int dx = -r; dx <= r; ++dx) {
+    for (int dy = -r; dy <= r; ++dy) {
+      int const gx = center.x + dx;
+      int const gy = center.y + dy;
+      if (gx < 0 || gx >= 64 || gy < 0 || gy >= 64)
+        continue;
+      for (auto const &[gid, obj] : m_grid[gx][gy].objects) {
+        (void)gid;
+        if (auto cr = std::dynamic_pointer_cast<Creature>(obj))
+          fn(cr);
+      }
+    }
+  }
+}
+
 void Map::BroadcastPacket(uint64 senderGuid, WorldPacket &packet,
                           bool includeSelf) {
   std::lock_guard<std::mutex> lock(m_mapMutex);

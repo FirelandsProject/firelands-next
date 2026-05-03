@@ -17,6 +17,9 @@
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlNpcTemplateSearchRepository.h>
+#include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
+#include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
+#include <infrastructure/world/DbCreatureSpawnBootstrap.h>
 #include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
 #include <infrastructure/dbc/SpellCastTablesDbc.h>
@@ -235,6 +238,11 @@ int main(int argc, char **argv) {
 
     auto npcTemplateSearchRepo =
         std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
+    auto creatureStatsRepo =
+        std::make_shared<MySqlCreatureClassLevelStatsRepository>(worldConn);
+    auto creatureSpawnRepo =
+        std::make_shared<MySqlCreatureSpawnRepository>(worldConn);
+    LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo);
 
     auto sessionFactory = [authService, charService, commandService,
                            accountDataRepo, languagesDbc, spellDefinitions,

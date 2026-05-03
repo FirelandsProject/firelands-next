@@ -850,6 +850,16 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
                               character.GetPackItemStackCount(pi)));
   }
 
+  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    map->ForEachCreatureNear(move.x, move.y, 1, [&](std::shared_ptr<Creature> const &cr) {
+      auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
+          cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
+          cr->GetLiveMaxHealth(), cr->GetLevel(), 0u);
+      update.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
+                             npcFields);
+    });
+  }
+
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
   update.Build(updatePacket);
   SendPacket(updatePacket);
@@ -1019,6 +1029,18 @@ void WorldSession::FinalizeWorldExit() {
 
   CancelPeriodicTimeSync();
   CancelPendingClientSpellCast();
+
+  if (_awaitingTeleportNear) {
+    _position.x = _teleportPendingX;
+    _position.y = _teleportPendingY;
+    _position.z = _teleportPendingZ;
+    _position.orientation = _teleportPendingO;
+    _position.flags = 0;
+    _position.flags2 = 0;
+    _position.time = 0;
+    _position.fallTime = 0;
+    _awaitingTeleportNear = false;
+  }
 
   uint64 const guid = _playerGuid;
   uint32 const mapId = _mapId;
@@ -1578,8 +1600,8 @@ bool WorldSession::GmNpcSearchPrintResults(std::string const &nameQuery) {
   if (!_npcTemplateSearch) {
     SendNotification(
         "|cffff5555[NPC search]|r |cffffffffcreature_template|r not available. Run "
-        "migration |cffFFD20023_world_creature_template_search.sql|r on "
-        "|cfffffffffirelands_world|r.");
+        "migrations |cffFFD20023_world_creature_template_search.sql|r / "
+        "|cffFFD20024_world_creature_tables.sql|r on |cfffffffffirelands_world|r.");
     return false;
   }
 
@@ -2014,7 +2036,8 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
     return false;
 
   BroadcastGmCreatureCreate(_mapId, guid, cr->GetPosition(), creatureEntry, displayId,
-                            cr->GetLiveHealth(), cr->GetLiveMaxHealth(), 1);
+                            cr->GetLiveHealth(), cr->GetLiveMaxHealth(),
+                            cr->GetLevel());
   SendNotification("Spawned NPC entry=" + std::to_string(creatureEntry) +
                    " display=" + std::to_string(displayId) + " guid=" +
                    std::to_string(guid) + ".");

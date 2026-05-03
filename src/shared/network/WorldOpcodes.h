@@ -154,6 +154,10 @@ enum WorldOpcode : uint32 {
   MSG_MOVE_STOP_SWIM = 0x3802,
   MSG_MOVE_JUMP = 0x7A06,
   MSG_MOVE_SET_FACING = 0x7914,
+  /// Reference: TrinityCore `Opcodes.h` OpcodeServer / OpcodeClient (build 15595).
+  MSG_MOVE_TELEPORT = 0x55A0,
+  MSG_MOVE_TELEPORT_ACK = 0x390C,
+  SMSG_MOVE_UPDATE_TELEPORT = 0x50B2,
 
   /// Channel join request (e.g. General/Trade on login).
   CMSG_JOIN_CHANNEL = 0x0156,

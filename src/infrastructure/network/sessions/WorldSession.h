@@ -161,6 +161,7 @@ public:
   void HandleQueryTime(WorldPacket &packet);
   void HandlePlayedTime(WorldPacket &packet);
   void HandleMovement(WorldPacket &packet);
+  void HandleMoveTeleportAck(WorldPacket &packet);
   void HandlePing(WorldPacket &packet);
   void HandleSetSelection(WorldPacket &packet);
   void HandleTimeSyncResp(WorldPacket &packet);
@@ -355,6 +356,14 @@ public:
   bool _gmFlyEnabled = false;
   float _gmRunSpeed = 7.0f;
   uint32 _moveCounterForGmPackets = 0;
+
+  /// Near teleport (same map): waiting for `MSG_MOVE_TELEPORT_ACK` before committing pos.
+  bool _awaitingTeleportNear = false;
+  uint32 _teleportAckExpectedIndex = 0;
+  float _teleportPendingX = 0.f;
+  float _teleportPendingY = 0.f;
+  float _teleportPendingZ = 0.f;
+  float _teleportPendingO = 0.f;
 };
 
 } // namespace Firelands

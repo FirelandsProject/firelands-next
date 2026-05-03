@@ -42,6 +42,11 @@ public:
   /// Returns the creature on this map, or nullptr if missing or not a creature.
   std::shared_ptr<Creature> TryGetCreature(uint64 guid);
 
+  /// Invokes `fn` for each `Creature` in grid cells within `cellRadius` of (x,y).
+  void ForEachCreatureNear(
+      float x, float y, int cellRadius,
+      std::function<void(std::shared_ptr<Creature> const &)> const &fn);
+
 private:
   struct GridCoord {
     int x, y;

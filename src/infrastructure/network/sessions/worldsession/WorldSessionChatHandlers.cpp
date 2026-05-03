@@ -321,14 +321,4 @@ void WorldSession::RequestDisconnect(std::string const &reason) {
   Close();
 }
 
-void WorldSession::TeleportTo(uint32 /*mapId*/, float x, float y, float z,
-                              float orientation) {
-  _position.x = x;
-  _position.y = y;
-  _position.z = z;
-  _position.orientation = orientation;
-  SendNotification("Teleported to: " + std::to_string(x) + ", " +
-                   std::to_string(y) + ", " + std::to_string(z));
-}
-
 } // namespace Firelands

@@ -1,5 +1,5 @@
 -- Merged world migrations (Firelands Next)
--- Execution order: lexicographic in DatabaseMigrator; this bundle mirrors 2..16 + 17 + z_ensure
+-- Execution order: lexicographic in DatabaseMigrator; this bundle mirrors 2..16 + 17 + z_ensure + 24 + 25
 
 -- === 2_playercreateinfo.sql + 4 + 5 + backfill ===
 CREATE DATABASE IF NOT EXISTS `firelands_world`;
@@ -608,3 +608,272 @@ INSERT IGNORE INTO `player_racestats` (`race`, `str`, `agi`, `sta`, `inte`, `spi
   (1,0,0,0,0,0), (2,3,-3,3,-3,0), (3,0,0,1,0,0), (4,-4,2,0,0,0),
   (5,0,0,0,0,0), (6,1,0,1,0,0), (7,-5,2,0,3,0), (8,1,2,0,0,0),
   (9,0,0,0,0,0), (10,0,0,0,0,0), (11,0,0,0,2,0), (22,0,0,0,0,0);
+
+
+-- === 24_world_creature_tables.sql ===
+-- TrinityCore-aligned creature schema for Firelands Next (world DB).
+-- Behaviour is Lua-driven; `smart_scripts` is intentionally omitted.
+-- JDBC-safe: no DELIMITER / stored procedures (DatabaseMigrator splits on ';').
+--
+-- Legacy installs from migration 23 (only entry/name/subname): conditional rebuild via
+-- backup table + DROP + CREATE + restore rows.
+
+USE `firelands_world`;
+
+SELECT CASE
+         WHEN EXISTS (SELECT 1 FROM information_schema.TABLES
+                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'creature_template')
+              AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS
+                              WHERE TABLE_SCHEMA = DATABASE()
+                                AND TABLE_NAME = 'creature_template'
+                                AND COLUMN_NAME = 'faction')
+              THEN 1 ELSE 0 END
+INTO @fl_m24_legacy_expand;
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'DROP TABLE IF EXISTS `_fl_m24_ct_backup`',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'CREATE TABLE `_fl_m24_ct_backup` (`entry` int unsigned NOT NULL, `name` varchar(255) NOT NULL, `subname` varchar(255) NOT NULL, PRIMARY KEY (`entry`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'INSERT INTO `_fl_m24_ct_backup` (`entry`,`name`,`subname`) SELECT `entry`,`name`,`subname` FROM `creature_template`',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'DROP TABLE `creature_template`',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+CREATE TABLE IF NOT EXISTS `creature_template` (
+  `entry` int unsigned NOT NULL DEFAULT '0',
+  `KillCredit1` int unsigned NOT NULL DEFAULT '0',
+  `KillCredit2` int unsigned NOT NULL DEFAULT '0',
+  `name` mediumtext,
+  `femaleName` mediumtext,
+  `subname` mediumtext,
+  `TitleAlt` mediumtext,
+  `IconName` varchar(64) DEFAULT NULL,
+  `RequiredExpansion` int NOT NULL DEFAULT '0',
+  `VignetteID` int NOT NULL DEFAULT '0',
+  `faction` smallint unsigned NOT NULL DEFAULT '0',
+  `npcflag` bigint unsigned NOT NULL DEFAULT '0',
+  `speed_walk` float NOT NULL DEFAULT '1',
+  `speed_run` float NOT NULL DEFAULT '1.14286',
+  `scale` float NOT NULL DEFAULT '1',
+  `Classification` tinyint unsigned NOT NULL DEFAULT '0',
+  `dmgschool` tinyint NOT NULL DEFAULT '0',
+  `BaseAttackTime` int unsigned NOT NULL DEFAULT '0',
+  `RangeAttackTime` int unsigned NOT NULL DEFAULT '0',
+  `BaseVariance` float NOT NULL DEFAULT '1',
+  `RangeVariance` float NOT NULL DEFAULT '1',
+  `unit_class` tinyint unsigned NOT NULL DEFAULT '0',
+  `unit_flags` int unsigned NOT NULL DEFAULT '0',
+  `unit_flags2` int unsigned NOT NULL DEFAULT '0',
+  `unit_flags3` int unsigned NOT NULL DEFAULT '0',
+  `family` int NOT NULL DEFAULT '0',
+  `trainer_class` tinyint unsigned NOT NULL DEFAULT '0',
+  `type` tinyint unsigned NOT NULL DEFAULT '0',
+  `VehicleId` int unsigned NOT NULL DEFAULT '0',
+  `AIName` varchar(64) NOT NULL DEFAULT '',
+  `MovementType` tinyint unsigned NOT NULL DEFAULT '0',
+  `ExperienceModifier` float NOT NULL DEFAULT '1',
+  `RacialLeader` tinyint unsigned NOT NULL DEFAULT '0',
+  `movementId` int unsigned NOT NULL DEFAULT '0',
+  `WidgetSetID` int NOT NULL DEFAULT '0',
+  `WidgetSetUnitConditionID` int NOT NULL DEFAULT '0',
+  `RegenHealth` tinyint unsigned NOT NULL DEFAULT '1',
+  `CreatureImmunitiesId` int NOT NULL DEFAULT '0',
+  `flags_extra` int unsigned NOT NULL DEFAULT '0',
+  `ScriptName` varchar(64) NOT NULL DEFAULT '',
+  `StringId` varchar(64) DEFAULT NULL,
+  `VerifiedBuild` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`entry`),
+  KEY `idx_creature_template_name` (`name`(64))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Creature definitions (AI via Lua; no smart_scripts)';
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'INSERT INTO `creature_template` (`entry`,`name`,`subname`) SELECT `entry`,`name`,`subname` FROM `_fl_m24_ct_backup`',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+SET @fl_sql := IF(@fl_m24_legacy_expand = 1,
+  'DROP TABLE `_fl_m24_ct_backup`',
+  'SELECT 1');
+PREPARE _fl_m24_p FROM @fl_sql;
+EXECUTE _fl_m24_p;
+DEALLOCATE PREPARE _fl_m24_p;
+
+CREATE TABLE IF NOT EXISTS `creature` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0',
+  `id` int unsigned NOT NULL DEFAULT '0' COMMENT 'Creature Identifier',
+  `map` smallint unsigned NOT NULL DEFAULT '0' COMMENT 'Map Identifier',
+  `zoneId` smallint unsigned NOT NULL DEFAULT '0' COMMENT 'Zone Identifier',
+  `areaId` smallint unsigned NOT NULL DEFAULT '0' COMMENT 'Area Identifier',
+  `spawnDifficulties` varchar(100) NOT NULL DEFAULT '0',
+  `phaseUseFlags` tinyint unsigned NOT NULL DEFAULT '0',
+  `PhaseId` int DEFAULT '0',
+  `PhaseGroup` int DEFAULT '0',
+  `terrainSwapMap` int NOT NULL DEFAULT '-1',
+  `modelid` int unsigned NOT NULL DEFAULT '0',
+  `equipment_id` tinyint NOT NULL DEFAULT '0',
+  `position_x` float NOT NULL DEFAULT '0',
+  `position_y` float NOT NULL DEFAULT '0',
+  `position_z` float NOT NULL DEFAULT '0',
+  `orientation` float NOT NULL DEFAULT '0',
+  `spawntimesecs` int unsigned NOT NULL DEFAULT '120',
+  `wander_distance` float NOT NULL DEFAULT '0',
+  `currentwaypoint` int unsigned NOT NULL DEFAULT '0',
+  `curHealthPct` int unsigned NOT NULL DEFAULT '100',
+  `MovementType` tinyint unsigned NOT NULL DEFAULT '0',
+  `npcflag` bigint unsigned DEFAULT NULL,
+  `unit_flags` int unsigned DEFAULT NULL,
+  `unit_flags2` int unsigned DEFAULT NULL,
+  `unit_flags3` int unsigned DEFAULT NULL,
+  `ScriptName` varchar(64) NOT NULL DEFAULT '',
+  `StringId` varchar(64) DEFAULT NULL,
+  `VerifiedBuild` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`guid`),
+  KEY `idx_map` (`map`),
+  KEY `idx_id` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Creature spawns (world placement)';
+
+CREATE TABLE IF NOT EXISTS `creature_addon` (
+  `guid` bigint unsigned NOT NULL DEFAULT '0',
+  `PathId` int unsigned NOT NULL DEFAULT '0',
+  `mount` int unsigned NOT NULL DEFAULT '0',
+  `MountCreatureID` int unsigned NOT NULL DEFAULT '0',
+  `StandState` tinyint unsigned NOT NULL DEFAULT '0',
+  `AnimTier` tinyint unsigned NOT NULL DEFAULT '0',
+  `VisFlags` tinyint unsigned NOT NULL DEFAULT '0',
+  `SheathState` tinyint unsigned NOT NULL DEFAULT '1',
+  `PvPFlags` tinyint unsigned NOT NULL DEFAULT '0',
+  `emote` int unsigned NOT NULL DEFAULT '0',
+  `aiAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `movementAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `meleeAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `visibilityDistanceType` tinyint unsigned NOT NULL DEFAULT '0',
+  `auras` mediumtext,
+  PRIMARY KEY (`guid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `creature_template_addon` (
+  `entry` int unsigned NOT NULL DEFAULT '0',
+  `PathId` int unsigned NOT NULL DEFAULT '0',
+  `mount` int unsigned NOT NULL DEFAULT '0',
+  `MountCreatureID` int unsigned NOT NULL DEFAULT '0',
+  `StandState` tinyint unsigned NOT NULL DEFAULT '0',
+  `AnimTier` tinyint unsigned NOT NULL DEFAULT '0',
+  `VisFlags` tinyint unsigned NOT NULL DEFAULT '0',
+  `SheathState` tinyint unsigned NOT NULL DEFAULT '1',
+  `PvPFlags` tinyint unsigned NOT NULL DEFAULT '0',
+  `emote` int unsigned NOT NULL DEFAULT '0',
+  `aiAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `movementAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `meleeAnimKit` smallint unsigned NOT NULL DEFAULT '0',
+  `visibilityDistanceType` tinyint unsigned NOT NULL DEFAULT '0',
+  `auras` mediumtext,
+  PRIMARY KEY (`entry`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `creature_template` (`entry`, `name`, `subname`) VALUES
+  (6, 'Kobold Vermin', 'Monster'),
+  (2575, 'Harlan Bagley', 'Baker'),
+  (35176, 'Stormwind Mage', 'Portal Trainer')
+ON DUPLICATE KEY UPDATE
+  `name` = VALUES(`name`),
+  `subname` = VALUES(`subname`);
+
+-- === 25_world_creature_classlevelstats.sql ===
+-- Per-level creature stats (`creature_classlevelstats`) + template level range.
+-- JDBC-safe: seed uses INSERT…SELECT + recursive CTE (MySQL 8+), no procedures.
+
+USE `firelands_world`;
+
+CREATE TABLE IF NOT EXISTS `creature_classlevelstats` (
+  `level` tinyint unsigned NOT NULL,
+  `class` tinyint unsigned NOT NULL COMMENT 'Creature UnitClass (matches creature_template.unit_class; 0 = warrior fallback in core)',
+  `basemana` int unsigned NOT NULL DEFAULT '0',
+  `attackpower` smallint NOT NULL DEFAULT '0',
+  `rangedattackpower` smallint NOT NULL DEFAULT '0',
+  `basehealth` int unsigned NOT NULL DEFAULT '100',
+  `comment` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`level`,`class`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `creature_classlevelstats`
+  (`level`, `class`, `basemana`, `attackpower`, `rangedattackpower`, `basehealth`, `comment`)
+WITH RECURSIVE `lvl` (`n`) AS (
+  SELECT 1 AS `n`
+  UNION ALL
+  SELECT `n` + 1 FROM `lvl` WHERE `n` < 85
+),
+`cls` (`c`) AS (
+  SELECT 1 AS `c`
+  UNION ALL
+  SELECT `c` + 1 FROM `cls` WHERE `c` < 11
+)
+SELECT
+  `lvl`.`n`,
+  `cls`.`c`,
+  CASE WHEN `cls`.`c` IN (1, 4) THEN 0 ELSE LEAST(60000, 80 + `lvl`.`n` * 45) END,
+  CAST(5 + `lvl`.`n` * 3 AS SIGNED),
+  CAST(
+    CASE WHEN `cls`.`c` IN (3, 8, 9, 11) THEN 5 + `lvl`.`n` * 3
+         ELSE (5 + `lvl`.`n` * 3) DIV 2 END AS SIGNED),
+  LEAST(4000000, 45 + `lvl`.`n` * 18 + `cls`.`c` * 4),
+  'Firelands seed'
+FROM `lvl` CROSS JOIN `cls`;
+
+SET @exist_minlevel :=
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'creature_template'
+     AND COLUMN_NAME = 'minlevel');
+
+SET @sql_minmax := IF(@exist_minlevel = 0,
+  'ALTER TABLE `creature_template`
+     ADD COLUMN `minlevel` tinyint unsigned NOT NULL DEFAULT ''1'' AFTER `VerifiedBuild`,
+     ADD COLUMN `maxlevel` tinyint unsigned NOT NULL DEFAULT ''1'' AFTER `minlevel`',
+  'SELECT 1');
+
+PREPARE stmt_minmax FROM @sql_minmax;
+EXECUTE stmt_minmax;
+DEALLOCATE PREPARE stmt_minmax;
+
+UPDATE `creature_template`
+SET `minlevel` = 3, `maxlevel` = 5, `unit_class` = 1
+WHERE `entry` = 6;
+
+INSERT IGNORE INTO `creature` (
+  `guid`, `id`, `map`, `zoneId`, `areaId`, `spawnDifficulties`, `phaseUseFlags`,
+  `PhaseId`, `PhaseGroup`, `terrainSwapMap`, `modelid`, `equipment_id`,
+  `position_x`, `position_y`, `position_z`, `orientation`,
+  `spawntimesecs`, `wander_distance`, `currentwaypoint`, `curHealthPct`,
+  `MovementType`, `npcflag`, `unit_flags`, `unit_flags2`, `unit_flags3`,
+  `ScriptName`, `StringId`, `VerifiedBuild`
+) VALUES (
+  9000001, 6, 0, 9, 9, '0', 0,
+  0, 0, -1, 2576, 0,
+  -8949.0, -132.0, 83.5, 5.2,
+  120, 0, 0, 100,
+  0, NULL, NULL, NULL, NULL,
+  '', NULL, 0
+);
