@@ -197,6 +197,27 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_VIOLENCE_LEVEL:
     // Ignore violence level settings
     break;
+  case CMSG_TUTORIAL_FLAG:
+    HandleTutorialFlag(packet);
+    break;
+  case CMSG_TUTORIAL_CLEAR:
+    HandleTutorialClear(packet);
+    break;
+  case CMSG_TUTORIAL_RESET:
+    HandleTutorialReset(packet);
+    break;
+  case CMSG_COMPLETE_MOVIE:
+    HandleCompleteMovie(packet);
+    break;
+  case CMSG_OPENING_CINEMATIC:
+    HandleOpeningCinematic(packet);
+    break;
+  case CMSG_COMPLETE_CINEMATIC:
+    HandleCompleteCinematic(packet);
+    break;
+  case CMSG_NEXT_CINEMATIC_CAMERA:
+    HandleNextCinematicCamera(packet);
+    break;
   case MSG_MOVE_HEARTBEAT:
   case MSG_MOVE_START_FORWARD:
   case MSG_MOVE_START_BACKWARD:

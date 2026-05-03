@@ -1,6 +1,5 @@
 #pragma once
 
-#include <domain/repositories/ICharacterRepository.h>
 #include <shared/Common.h>
 #include <shared/game/Bag0InventoryData.h>
 #include <shared/game/InventorySlots.h>
@@ -14,6 +13,9 @@ namespace Firelands {
 
 class Character {
 public:
+  /// Words mirrored by `SMSG_TUTORIAL_FLAGS` (Trinity `MAX_ACCOUNT_TUTORIAL_VALUES`).
+  static constexpr size_t kTutorialMaskInts = 8;
+
   Character(uint32 guid, uint32 account, std::string name, uint8 race,
             uint8 klass, uint8 gender, uint8 skin, uint8 face, uint8 hairStyle,
             uint8 hairColor, uint8 facialHair, uint8 level, uint16 zoneId,
@@ -26,7 +28,8 @@ public:
             std::array<uint32_t, kPackSlotCount> packItemEntries = {},
             std::array<uint32_t, kPackSlotCount> packItemGuids = {},
             std::array<uint32_t, kPackSlotCount> packItemStacks = {},
-            uint32 moneyCopper = 0, uint32_t xp = 0)
+            uint32 moneyCopper = 0, uint32_t xp = 0,
+            std::array<uint32_t, kTutorialMaskInts> tutorialMask = {})
       : m_guid(guid), m_account(account), m_name(std::move(name)), m_race(race),
         m_klass(klass), m_gender(gender), m_skin(skin), m_face(face),
         m_hairStyle(hairStyle), m_hairColor(hairColor),
@@ -38,7 +41,8 @@ public:
         m_visibleItems(visibleItems), m_visibleItemGuids(visibleItemGuids),
         m_visibleItemStacks(visibleItemStacks), m_packItemEntries(packItemEntries),
         m_packItemGuids(packItemGuids), m_packItemStacks(packItemStacks),
-        m_moneyCopper(moneyCopper), m_xp(xp), m_health(100), m_maxHealth(100),
+        m_moneyCopper(moneyCopper), m_xp(xp), m_tutorialMask(tutorialMask),
+        m_health(100), m_maxHealth(100),
         m_factionTemplate(1), m_displayId(GetDefaultDisplayId(race, gender)),
         m_primaryStats(GetDefaultPrimaryStats(klass)) {}
 
@@ -122,6 +126,10 @@ public:
   uint32 GetCharacterFlags() const { return m_characterFlags; }
   uint32 GetCustomizationFlags() const { return m_customizationFlags; }
   bool IsFirstLogin() const { return m_firstLogin; }
+
+  std::array<uint32_t, kTutorialMaskInts> GetTutorialMask() const {
+    return m_tutorialMask;
+  }
   uint8 GetOutfitId() const { return m_outfitId; }
   std::string const &GetEquipmentCache() const { return m_equipmentCache; }
 
@@ -267,6 +275,7 @@ private:
 
   uint32 m_moneyCopper = 0;
   uint32_t m_xp = 0;
+  std::array<uint32_t, kTutorialMaskInts> m_tutorialMask{};
 
   uint32 m_health;
   uint32 m_maxHealth;

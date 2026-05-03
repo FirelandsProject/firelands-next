@@ -142,6 +142,41 @@ bool EnsureCharactersLivePower1Column(std::shared_ptr<sql::Connection> conn) {
   }
 }
 
+bool EnsureCharactersTutorialColumn(std::shared_ptr<sql::Connection> conn,
+                                    char const *columnName,
+                                    char const *afterColumnName) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    std::string ddl =
+        std::string("ALTER TABLE `firelands_characters`.`characters` ADD COLUMN `") +
+        columnName +
+        "` int unsigned NOT NULL DEFAULT 0 AFTER `" + afterColumnName + "`";
+    st->execute(ddl);
+    LOG_DEBUG("Added missing column `firelands_characters.characters.{}`.",
+              columnName);
+    return true;
+  } catch (sql::SQLException &e) {
+    if (e.getErrorCode() == 1060)
+      return true;
+    std::string const msg{e.what()};
+    if (msg.find("Duplicate column") != std::string::npos)
+      return true;
+    LOG_WARN("EnsureCharactersTutorialColumn ({}): {}", columnName, e.what());
+    return false;
+  }
+}
+
+void EnsureCharactersTutorialMaskColumns(std::shared_ptr<sql::Connection> conn) {
+  static constexpr char const *names[] = {
+      "tutorial0", "tutorial1", "tutorial2", "tutorial3",
+      "tutorial4", "tutorial5", "tutorial6", "tutorial7"};
+  static constexpr char const *after[] = {"live_power1", "tutorial0", "tutorial1",
+                                          "tutorial2", "tutorial3", "tutorial4",
+                                          "tutorial5", "tutorial6"};
+  for (size_t i = 0; i < Character::kTutorialMaskInts; ++i)
+    (void)EnsureCharactersTutorialColumn(conn, names[i], after[i]);
+}
+
 bool EnsureCharacterSpellTable(std::shared_ptr<sql::Connection> conn) {
   try {
     std::unique_ptr<sql::Statement> st(conn->createStatement());
@@ -555,6 +590,7 @@ struct AccountCharacterRow {
   std::string dbEquipmentCache;
   uint32_t money = 0;
   uint32_t xp = 0;
+  std::array<uint32_t, Character::kTutorialMaskInts> tutorialMask{};
 };
 
 } // namespace
@@ -569,6 +605,7 @@ MySqlCharacterRepository::MySqlCharacterRepository(
   EnsureCharactersXpColumn(_connection);
   EnsureCharactersLiveHealthColumn(_connection);
   EnsureCharactersLivePower1Column(_connection);
+  EnsureCharactersTutorialMaskColumns(_connection);
   EnsureCharacterSpellTable(_connection);
   _charStartOutfitLoaded =
       _charStartOutfitDbc.Load("data/dbc/CharStartOutfit.dbc");
@@ -588,7 +625,9 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
         "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
-        "customizationFlags, firstLogin, money, xp "
+        "customizationFlags, firstLogin, money, xp, "
+        "tutorial0, tutorial1, tutorial2, tutorial3, tutorial4, tutorial5, "
+        "tutorial6, tutorial7 "
         "FROM characters WHERE account = ?"));
     stmnt->setUInt(1, accountId);
 
@@ -625,6 +664,14 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
                                         : std::string(res->getString("equipmentCache"));
       row.money = res->getUInt("money");
       row.xp = res->getUInt("xp");
+      row.tutorialMask[0] = res->getUInt("tutorial0");
+      row.tutorialMask[1] = res->getUInt("tutorial1");
+      row.tutorialMask[2] = res->getUInt("tutorial2");
+      row.tutorialMask[3] = res->getUInt("tutorial3");
+      row.tutorialMask[4] = res->getUInt("tutorial4");
+      row.tutorialMask[5] = res->getUInt("tutorial5");
+      row.tutorialMask[6] = res->getUInt("tutorial6");
+      row.tutorialMask[7] = res->getUInt("tutorial7");
       rows.push_back(std::move(row));
     }
     res.reset();
@@ -648,7 +695,7 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
-          r.money, r.xp));
+          r.money, r.xp, r.tutorialMask));
     }
   } catch (sql::SQLException &e) {
     LOG_ERROR("Database error in GetCharactersByAccount: {}", e.what());
@@ -663,8 +710,11 @@ MySqlCharacterRepository::CreateCharacter(const Character &character) {
         "INSERT INTO characters (account, name, race, class, gender, skin, "
         "face, hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
         "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
-        "customizationFlags, firstLogin, money, xp) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+        "customizationFlags, firstLogin, money, xp, "
+        "tutorial0, tutorial1, tutorial2, tutorial3, tutorial4, tutorial5, tutorial6, "
+        "tutorial7) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+        "?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
     stmnt->setUInt(1, character.GetAccount());
     stmnt->setString(2, character.GetName());
@@ -691,6 +741,9 @@ MySqlCharacterRepository::CreateCharacter(const Character &character) {
     stmnt->setBoolean(23, character.IsFirstLogin());
     stmnt->setUInt(24, character.GetMoney());
     stmnt->setUInt(25, static_cast<unsigned int>(character.GetXp()));
+    auto const tut = character.GetTutorialMask();
+    for (size_t i = 0; i < tut.size(); ++i)
+      stmnt->setUInt(static_cast<unsigned>(26 + i), tut[i]);
 
     stmnt->executeUpdate();
 
@@ -881,7 +934,9 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
         "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
-        "customizationFlags, firstLogin, money, xp, live_health, live_power1 "
+        "customizationFlags, firstLogin, money, xp, live_health, live_power1, "
+        "tutorial0, tutorial1, tutorial2, tutorial3, tutorial4, tutorial5, "
+        "tutorial6, tutorial7 "
         "FROM characters WHERE guid = ?"));
     stmnt->setUInt64(1, guid);
 
@@ -916,6 +971,15 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                                         : std::string(res->getString("equipmentCache"));
       uint32_t const money = res->getUInt("money");
       uint32_t const xp = res->getUInt("xp");
+      std::array<uint32_t, Character::kTutorialMaskInts> tutorialMask{};
+      tutorialMask[0] = res->getUInt("tutorial0");
+      tutorialMask[1] = res->getUInt("tutorial1");
+      tutorialMask[2] = res->getUInt("tutorial2");
+      tutorialMask[3] = res->getUInt("tutorial3");
+      tutorialMask[4] = res->getUInt("tutorial4");
+      tutorialMask[5] = res->getUInt("tutorial5");
+      tutorialMask[6] = res->getUInt("tutorial6");
+      tutorialMask[7] = res->getUInt("tutorial7");
       // Read the full row before nested queries; do not `res.reset()` here — closing
       // the result set early has been observed to upset the same connection/session
       // for the inventory query on some MariaDB connector builds.
@@ -926,7 +990,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                    pz, po, guildId, characterFlags, customizationFlags, firstLogin,
                    outfitId, equipmentCache, bag0.equipEntries, bag0.equipGuids,
                    bag0.equipStacks, bag0.packEntries, bag0.packGuids,
-                   bag0.packStacks, money, xp);
+                   bag0.packStacks, money, xp, tutorialMask);
       std::optional<uint32> liveH;
       std::optional<uint32> liveP1;
       if (!res->isNull("live_health"))
@@ -947,7 +1011,9 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
 bool MySqlCharacterRepository::SaveCharacterOnLogout(
     uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
     float x, float y, float z, float orientation, uint32_t moneyCopper,
-    uint32_t xp, std::optional<uint32_t> liveHealth,
+    uint32_t xp,
+    std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
+    std::optional<uint32_t> liveHealth,
     std::optional<uint32_t> livePower1) {
   try {
     bool const persistVitals =
@@ -957,12 +1023,16 @@ bool MySqlCharacterRepository::SaveCharacterOnLogout(
                           "UPDATE characters SET mapId = ?, zoneId = ?, x = ?, y = "
                           "?, z = ?, "
                           "orientation = ?, firstLogin = 0, money = ?, xp = ?, "
+                          "tutorial0 = ?, tutorial1 = ?, tutorial2 = ?, tutorial3 = ?, "
+                          "tutorial4 = ?, tutorial5 = ?, tutorial6 = ?, tutorial7 = ?, "
                           "live_health = ?, "
                           "live_power1 = ? WHERE guid = ? AND account = ?")
                       : _connection->prepareStatement(
                           "UPDATE characters SET mapId = ?, zoneId = ?, x = ?, y = "
                           "?, z = ?, "
-                          "orientation = ?, firstLogin = 0, money = ?, xp = ? "
+                          "orientation = ?, firstLogin = 0, money = ?, xp = ?, "
+                          "tutorial0 = ?, tutorial1 = ?, tutorial2 = ?, tutorial3 = ?, "
+                          "tutorial4 = ?, tutorial5 = ?, tutorial6 = ?, tutorial7 = ? "
                           "WHERE guid = ? AND "
                           "account = ?"));
     stmnt->setUInt(1, mapId);
@@ -973,14 +1043,16 @@ bool MySqlCharacterRepository::SaveCharacterOnLogout(
     stmnt->setDouble(6, static_cast<double>(FiniteOrZero(orientation)));
     stmnt->setUInt(7, moneyCopper);
     stmnt->setUInt(8, xp);
+    for (size_t i = 0; i < tutorialMask.size(); ++i)
+      stmnt->setUInt(static_cast<unsigned>(9 + i), tutorialMask[i]);
     if (persistVitals) {
-      stmnt->setUInt(9, static_cast<uint32>(*liveHealth));
-      stmnt->setUInt(10, static_cast<uint32>(*livePower1));
-      stmnt->setUInt(11, characterGuid);
-      stmnt->setUInt(12, accountId);
+      stmnt->setUInt(17, static_cast<uint32>(*liveHealth));
+      stmnt->setUInt(18, static_cast<uint32>(*livePower1));
+      stmnt->setUInt(19, characterGuid);
+      stmnt->setUInt(20, accountId);
     } else {
-      stmnt->setUInt(9, characterGuid);
-      stmnt->setUInt(10, accountId);
+      stmnt->setUInt(17, characterGuid);
+      stmnt->setUInt(18, accountId);
     }
 
     auto affected = stmnt->executeUpdate();

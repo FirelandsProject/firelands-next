@@ -26,6 +26,7 @@
 #include <shared/dbc/GtPlayerStatGameTables.h>
 #include <shared/game/WowGuid.h>
 #include <shared/game/Permissions.h>
+#include <shared/game/StarterOpeningCinematic.h>
 #include <domain/repositories/ICharacterRepository.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <algorithm>
@@ -564,6 +565,8 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
     return;
   }
   Character const &character = *characterOpt;
+  _sentOpeningCinematic = false;
+  _tutorialInts = character.GetTutorialMask();
   _playerRace = character.GetRace();
   _moneyCopper = character.GetMoney();
   _playerXp = character.GetXp();
@@ -755,7 +758,7 @@ void WorldSession::LoginSendMotdAndMetaPackets() {
   // Reference sends MOTD and SMSG_FEATURE_SYSTEM_STATUS after BeforeAddToMap.
   SendMotd();
   SendFeatureSystemStatus();
-  SendTutorialFlags();
+  SendTutorialMask(_tutorialInts);
   SendClientCacheVersion(0);
 }
 
@@ -809,6 +812,19 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
+
+  TrySendFirstLoginOpeningCinematic(character);
+}
+
+void WorldSession::TrySendFirstLoginOpeningCinematic(Character const &character) {
+  if (!character.IsFirstLogin() || _sentOpeningCinematic)
+    return;
+  uint32_t const seq =
+      OpeningCinematicSequence(character.GetClass(), character.GetRace());
+  if (seq == 0)
+    return;
+  SendTriggerCinematic(seq);
+  _sentOpeningCinematic = true;
 }
 
 void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
@@ -1103,8 +1119,8 @@ void WorldSession::FinalizeWorldExit() {
 
   if (!_charService->SaveCharacterOnLogout(
           _accountId, charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,
-          persistPos.z, persistPos.orientation, _moneyCopper, _playerXp, liveHealth,
-          livePower1)) {
+          persistPos.z, persistPos.orientation, _moneyCopper, _playerXp, _tutorialInts,
+          liveHealth, livePower1)) {
     LOG_ERROR("SaveCharacterOnLogout failed for guid {}, account {}",
               charGuidLow, _accountId);
   } else {
@@ -1137,6 +1153,8 @@ void WorldSession::FinalizeWorldExit() {
   _activeCharacterGuid = 0;
   _playerRace = 0;
   _playerXp = 0;
+  _sentOpeningCinematic = false;
+  _tutorialInts.fill(0);
   _knownSpells.clear();
   _knownSpellIds.clear();
   _gcdReady = {};
@@ -1806,10 +1824,91 @@ void WorldSession::SendClientCacheVersion(uint32 version) {
   SendPacket(data);
 }
 
-void WorldSession::SendTutorialFlags() {
+void WorldSession::SendTutorialFlagsUnauthenticated() {
+  std::array<uint32_t, Character::kTutorialMaskInts> allDone{};
+  allDone.fill(0xFFFFFFFFu);
+  SendTutorialMask(allDone);
+}
+
+void WorldSession::SendTutorialMask(
+    std::array<uint32_t, Character::kTutorialMaskInts> const &mask) {
   WorldPacket data(SMSG_TUTORIAL_FLAGS);
-  for (int i = 0; i < 8; ++i) data.Append<uint32>(0xFFFFFFFF);
+  for (uint32_t word : mask)
+    data.Append<uint32>(word);
   SendPacket(data);
+}
+
+void WorldSession::SendTriggerMovie(uint32_t movieId) {
+  if (movieId == 0 || !_crypt.IsInitialized())
+    return;
+  WorldPacket pkt(SMSG_TRIGGER_MOVIE);
+  pkt.Append<uint32>(movieId);
+  SendPacket(pkt);
+}
+
+void WorldSession::SendTriggerCinematic(uint32_t cinematicSequenceId) {
+  if (cinematicSequenceId == 0 || !_crypt.IsInitialized())
+    return;
+  WorldPacket pkt(SMSG_TRIGGER_CINEMATIC);
+  pkt.Append<uint32>(cinematicSequenceId);
+  SendPacket(pkt);
+}
+
+void WorldSession::HandleOpeningCinematic(WorldPacket &packet) {
+  (void)packet;
+  if (_playerGuid == 0 || _sentOpeningCinematic)
+    return;
+  // Trinity/Kheros 4.3.4: repeat prompt only for characters that never gained XP.
+  if (_playerXp != 0)
+    return;
+  auto ch = _charService->GetCharacterByGuid(_playerGuid);
+  if (!ch || !ch->IsFirstLogin())
+    return;
+  uint32_t const seq = OpeningCinematicSequence(ch->GetClass(), ch->GetRace());
+  if (seq == 0)
+    return;
+  SendTriggerCinematic(seq);
+  _sentOpeningCinematic = true;
+}
+
+void WorldSession::HandleCompleteCinematic(WorldPacket &packet) {
+  (void)packet;
+}
+
+void WorldSession::HandleNextCinematicCamera(WorldPacket &packet) {
+  (void)packet;
+}
+
+void WorldSession::HandleTutorialFlag(WorldPacket &packet) {
+  if (_playerGuid == 0 || packet.Size() < 4)
+    return;
+  uint32_t const data = packet.Read<uint32>();
+  uint32_t const index = data / 32u;
+  if (index >= Character::kTutorialMaskInts)
+    return;
+  uint32_t const bit = data % 32u;
+  _tutorialInts[static_cast<size_t>(index)] |= (1u << bit);
+}
+
+void WorldSession::HandleTutorialClear(WorldPacket &packet) {
+  (void)packet;
+  if (_playerGuid == 0)
+    return;
+  _tutorialInts.fill(0xFFFFFFFFu);
+  SendTutorialMask(_tutorialInts);
+}
+
+void WorldSession::HandleTutorialReset(WorldPacket &packet) {
+  (void)packet;
+  if (_playerGuid == 0)
+    return;
+  _tutorialInts.fill(0);
+  SendTutorialMask(_tutorialInts);
+}
+
+void WorldSession::HandleCompleteMovie(WorldPacket &packet) {
+  // Reserved for scripted post-movie hooks (reference fires script callbacks).
+  (void)packet;
 }
 
 void WorldSession::SendFeatureSystemStatus() {

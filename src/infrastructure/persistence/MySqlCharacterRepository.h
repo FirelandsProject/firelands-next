@@ -7,6 +7,7 @@
 #include <shared/dbc/CharStartOutfitDbc.h>
 #include <shared/dbc/ItemDb2Wdb2.h>
 #include <conncpp.hpp>
+#include <array>
 #include <memory>
 #include <optional>
 
@@ -32,6 +33,7 @@ namespace Firelands {
             uint32_t accountId, uint32_t characterGuid, uint16_t mapId,
             uint16_t zoneId, float x, float y, float z, float orientation,
             uint32_t moneyCopper, uint32_t xp,
+            std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
             std::optional<uint32_t> liveHealth = std::nullopt,
             std::optional<uint32_t> livePower1 = std::nullopt) override;
         bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,

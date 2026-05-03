@@ -206,7 +206,7 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
   // Reference parity: after auth success, send cache version and tutorial flags.
   // FirelandsCore does: SendAddonsInfo(); SendClientCacheVersion(...); SendTutorialsData();
   SendClientCacheVersion(0);
-  SendTutorialFlags();
+  SendTutorialFlagsUnauthenticated();
 }
 
 void WorldSession::HandleAuthSessionScattered(

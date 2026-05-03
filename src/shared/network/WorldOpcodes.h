@@ -70,6 +70,10 @@ enum WorldOpcode : uint32 {
   SMSG_BIND_POINT_UPDATE = 0x0527,
   SMSG_WORLD_SERVER_INFO = 0x31A2,
   SMSG_LOAD_CUF_PROFILES = 0x50B1,
+  /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs`
+  SMSG_TRIGGER_MOVIE = 0x4625,
+  /// Opening flythrough uses `CinematicSequences.dbc` (not `Movie.dbc`).
+  SMSG_TRIGGER_CINEMATIC = 0x6C27,
   SMSG_SET_FORCED_REACTIONS = 0x4615,
   SMSG_SET_PROFICIENCY = 0x6207,
   SMSG_TALENTS_INFO = 0x6F26,
@@ -247,6 +251,15 @@ enum WorldOpcode : uint32 {
   CMSG_SET_SHEATHED = 0x4326,
   CMSG_LOADING_SCREEN_NOTIFY = 0x2422,
   CMSG_VIOLENCE_LEVEL = 0x7816,
+  /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs`
+  CMSG_COMPLETE_MOVIE = 0x4136,
+  /// Client asks server to start race/class intro cameras (zero XP characters).
+  CMSG_OPENING_CINEMATIC = 0x0A16,
+  CMSG_COMPLETE_CINEMATIC = 0x2116,
+  CMSG_NEXT_CINEMATIC_CAMERA = 0x2014,
+  CMSG_TUTORIAL_FLAG = 0x6C26,
+  CMSG_TUTORIAL_CLEAR = 0x6515,
+  CMSG_TUTORIAL_RESET = 0x2726,
 };
 
 } // namespace Firelands

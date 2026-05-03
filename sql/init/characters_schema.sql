@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS `characters` (
   `xp` int unsigned NOT NULL DEFAULT '0',
   `live_health` int unsigned NULL DEFAULT NULL,
   `live_power1` int unsigned NULL DEFAULT NULL,
+  `tutorial0` int unsigned NOT NULL DEFAULT '0',
+  `tutorial1` int unsigned NOT NULL DEFAULT '0',
+  `tutorial2` int unsigned NOT NULL DEFAULT '0',
+  `tutorial3` int unsigned NOT NULL DEFAULT '0',
+  `tutorial4` int unsigned NOT NULL DEFAULT '0',
+  `tutorial5` int unsigned NOT NULL DEFAULT '0',
+  `tutorial6` int unsigned NOT NULL DEFAULT '0',
+  `tutorial7` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`guid`),
   KEY `idx_account` (`account`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

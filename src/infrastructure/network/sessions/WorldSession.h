@@ -35,7 +35,6 @@
 
 namespace Firelands {
 
-class Character;
 class UpdateData;
 
 using boost::asio::ip::tcp;
@@ -198,12 +197,24 @@ public:
   void HandleGmTicketGetTicket(WorldPacket &packet);
   void HandleGmTicketSystemStatus(WorldPacket &packet);
   void HandleGmTicketResponseResolve(WorldPacket &packet);
+  void HandleTutorialFlag(WorldPacket &packet);
+  void HandleTutorialClear(WorldPacket &packet);
+  void HandleTutorialReset(WorldPacket &packet);
+  void HandleCompleteMovie(WorldPacket &packet);
+  void HandleOpeningCinematic(WorldPacket &packet);
+  void HandleCompleteCinematic(WorldPacket &packet);
+  void HandleNextCinematicCamera(WorldPacket &packet);
 
   // Server Packet Senders (SMSG)
   void SendAuthResponse();
   void SendAddonInfo();
   void SendClientCacheVersion(uint32 version = 0);
-  void SendTutorialFlags();
+  /// Character-select / pre-player socket parity (Trinity `SendTutorialsData` without player).
+  void SendTutorialFlagsUnauthenticated();
+  /// In-world mask (`SMSG_TUTORIAL_FLAGS`): set bits mark completed tutorial triggers.
+  void SendTutorialMask(std::array<uint32_t, Character::kTutorialMaskInts> const &mask);
+  void SendTriggerMovie(uint32_t movieId);
+  void SendTriggerCinematic(uint32_t cinematicSequenceId);
   void SendAccountDataTimes(uint32 mask);
   void ReloadGlobalAccountDataFromDb();
   void ReloadCharacterAccountDataFromDb(uint32 characterGuid);
@@ -261,6 +272,7 @@ public:
   /// After same-map teleport ACK: client needs CREATE for units near the new cell.
   void SendNearbyCreatureCreatesToSelf(float x, float y);
   void LoginFinalizeWorldEntry(uint64 guid);
+  void TrySendFirstLoginOpeningCinematic(Character const &character);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
   /// Persists position, `player_logout`, removes from map and online registry, clears
   /// in-world fields. Requires `_playerGuid != 0`.
@@ -322,6 +334,8 @@ public:
   uint32_t _moneyCopper = 0;
   /// Persisted experience (`characters.xp`); mirrored on logout and GM level.
   uint32_t _playerXp = 0;
+  bool _sentOpeningCinematic = false;
+  std::array<uint32_t, Character::kTutorialMaskInts> _tutorialInts{};
   uint32 _mapId = 0;
   uint32 _zoneId = 0;
   MovementInfo _position;

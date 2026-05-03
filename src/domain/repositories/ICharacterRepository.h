@@ -1,6 +1,8 @@
 #pragma once
 
+#include <domain/models/Character.h>
 #include <domain/models/PlayerCreateInfo.h>
+#include <array>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/Bag0InventoryData.h>
 #include <cstdint>
@@ -9,8 +11,6 @@
 #include <vector>
 
 namespace Firelands {
-
-class Character;
 
 struct MailInboxItemRow {
   uint32_t itemGuidLow = 0;
@@ -50,7 +50,9 @@ public:
   virtual bool SaveCharacterOnLogout(
       uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
       float x, float y, float z, float orientation, uint32_t moneyCopper,
-      uint32_t xp, std::optional<uint32_t> liveHealth = std::nullopt,
+      uint32_t xp,
+      std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
+      std::optional<uint32_t> liveHealth = std::nullopt,
       std::optional<uint32_t> livePower1 = std::nullopt) = 0;
 
   virtual bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
