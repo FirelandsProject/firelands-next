@@ -50,7 +50,7 @@ bool EnsureCharactersOrientationColumn(std::shared_ptr<sql::Connection> conn) {
     st->execute(
         "ALTER TABLE `firelands_characters`.`characters` "
         "ADD COLUMN `orientation` float NOT NULL DEFAULT 0 AFTER `z`");
-    LOG_INFO(
+    LOG_DEBUG(
         "Added missing column `firelands_characters.characters.orientation`.");
     return true;
   } catch (sql::SQLException &e) {
@@ -70,7 +70,7 @@ bool EnsureCharactersMoneyColumn(std::shared_ptr<sql::Connection> conn) {
     st->execute(
         "ALTER TABLE `firelands_characters`.`characters` "
         "ADD COLUMN `money` int unsigned NOT NULL DEFAULT 0 AFTER `firstLogin`");
-    LOG_INFO("Added missing column `firelands_characters.characters.money`.");
+    LOG_DEBUG("Added missing column `firelands_characters.characters.money`.");
     return true;
   } catch (sql::SQLException &e) {
     if (e.getErrorCode() == 1060)
@@ -1018,16 +1018,16 @@ bool MySqlCharacterRepository::AutoEquipFromBag0Slot(
     uint32_t characterGuid, uint8_t srcSlot,
     std::optional<uint8_t> fallbackInventoryType) {
   if (srcSlot < INVENTORY_SLOT_ITEM_START || srcSlot >= INVENTORY_SLOT_ITEM_END) {
-    LOG_INFO("AutoEquipFromBag0Slot: guid={} invalid srcSlot={}", characterGuid,
-             srcSlot);
+    LOG_DEBUG("AutoEquipFromBag0Slot: guid={} invalid srcSlot={}", characterGuid,
+              srcSlot);
     return false;
   }
   auto bag0 = LoadBag0Inventory(_connection, characterGuid);
   size_t const pi = static_cast<size_t>(srcSlot - INVENTORY_SLOT_ITEM_START);
   uint32_t const entry = bag0.packEntries[pi];
   if (entry == 0) {
-    LOG_INFO("AutoEquipFromBag0Slot: guid={} empty bag slot={}", characterGuid,
-             srcSlot);
+    LOG_DEBUG("AutoEquipFromBag0Slot: guid={} empty bag slot={}", characterGuid,
+              srcSlot);
     return false;
   }
   auto proto = FetchItemProto(itemTemplateConnection(), entry,
@@ -1038,24 +1038,24 @@ bool MySqlCharacterRepository::AutoEquipFromBag0Slot(
     inventoryType = proto->inventoryType;
   } else if (fallbackInventoryType && *fallbackInventoryType != 0) {
     inventoryType = *fallbackInventoryType;
-    LOG_INFO(
+    LOG_DEBUG(
         "AutoEquipFromBag0Slot: guid={} entry={} using fallback inventoryType={}",
         characterGuid, entry, static_cast<uint32_t>(inventoryType));
   } else {
-    LOG_INFO("AutoEquipFromBag0Slot: guid={} entry={} missing item proto",
-             characterGuid, entry);
+    LOG_DEBUG("AutoEquipFromBag0Slot: guid={} entry={} missing item proto",
+              characterGuid, entry);
     return false;
   }
 
   auto dstOpt = PickAutoEquipDestination(bag0, inventoryType);
   if (!dstOpt) {
-    LOG_INFO(
+    LOG_DEBUG(
         "AutoEquipFromBag0Slot: guid={} entry={} inventoryType={} has no equip slot",
         characterGuid, entry, static_cast<uint32_t>(inventoryType));
     return false;
   }
   bool const swapped = SwapBag0Slots(characterGuid, srcSlot, *dstOpt);
-  LOG_INFO(
+  LOG_DEBUG(
       "AutoEquipFromBag0Slot: guid={} entry={} src={} dst={} swapped={}",
       characterGuid, entry, srcSlot, *dstOpt, swapped);
   return swapped;
@@ -1065,8 +1065,8 @@ bool MySqlCharacterRepository::DestroyBag0BackpackItem(uint32_t characterGuid,
                                                         uint8_t slot,
                                                         uint32_t clientCount) {
   if (slot < INVENTORY_SLOT_ITEM_START || slot >= INVENTORY_SLOT_ITEM_END) {
-    LOG_INFO("DestroyBag0BackpackItem: guid={} invalid slot={}", characterGuid,
-             slot);
+    LOG_DEBUG("DestroyBag0BackpackItem: guid={} invalid slot={}", characterGuid,
+              slot);
     return false;
   }
   if (!EnsureStarterInventoryTables(_connection))
@@ -1145,8 +1145,8 @@ bool MySqlCharacterRepository::DestroyBag0BackpackItem(uint32_t characterGuid,
 
     _connection->commit();
     _connection->setAutoCommit(true);
-    LOG_INFO("DestroyBag0BackpackItem: guid={} slot={} removed={} of stack={}",
-             characterGuid, slot, remove, stack);
+    LOG_DEBUG("DestroyBag0BackpackItem: guid={} slot={} removed={} of stack={}",
+              characterGuid, slot, remove, stack);
     return true;
   } catch (sql::SQLException &e) {
     try {

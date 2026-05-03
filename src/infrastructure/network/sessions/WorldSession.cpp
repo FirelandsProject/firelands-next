@@ -67,7 +67,7 @@ WorldSession::~WorldSession() {
 }
 
 void WorldSession::Start() {
-  LOG_INFO("WorldSession started for {}", GetIpAddress());
+  LOG_DEBUG("WorldSession started for {}", GetIpAddress());
 
   // Cataclysm 4.3.4 Handshake: Server sends initializer string first (NO
   // OPCODES)
@@ -109,8 +109,8 @@ void WorldSession::SendPacket(WorldPacket &packet) {
     buffer.Append(packet.GetBuffer(), packet.Size());
   }
 
-  LOG_INFO("[SMSG] {} payload={} wire={}",
-           packet.GetOpcodeName(), packet.Size(), buffer.Size());
+  LOG_DEBUG("[SMSG] {} payload={} wire={}",
+            packet.GetOpcodeName(), packet.Size(), buffer.Size());
 
   auto shared_buffer = std::make_shared<std::vector<uint8>>(
       buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
@@ -205,7 +205,8 @@ void WorldSession::Close() {
     LOG_INFO("Session disconnect: Account={} IP={} Character={} (saving and removing from world)",
              _accountId, GetIpAddress(), _playerGuid);
     FinalizeWorldExit();
-    LOG_INFO("Character removed from world: Account={} GUID={}", _accountId, _playerGuid);
+    LOG_DEBUG("Character removed from world: Account={} GUID={}", _accountId,
+              _playerGuid);
   } else {
     UnregisterFromOnlineCharacterRegistryIfNeeded();
   }
@@ -365,7 +366,7 @@ void WorldSession::HandlePacket(ByteBuffer &buffer) {
   }
 
   if (received == expected) {
-    LOG_INFO("WorldSession: Handshake string validated.");
+    LOG_DEBUG("WorldSession: Handshake string validated.");
     _initialized = true;
 
     SendAuthChallenge();
@@ -396,8 +397,9 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   _playerRace = character.GetRace();
   _moneyCopper = character.GetMoney();
 
-  LOG_INFO("PlayerLogin: Account={} GUID={} Name='{}' Level={} Map={}",
-           _accountId, guid, character.GetName(), character.GetLevel(), character.GetMapId());
+  LOG_DEBUG("PlayerLogin: Account={} GUID={} Name='{}' Level={} Map={}",
+            _accountId, guid, character.GetName(), character.GetLevel(),
+            character.GetMapId());
 
   LoginSendAccountDataAndPreMapPackets(guid, character);
   LoginBuildKnownSpellsAndSendSpellbook(character);
@@ -550,13 +552,13 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
           ids.push_back(',');
         ids += std::to_string(_knownSpells[i]);
       }
-      LOG_INFO("[CHAT] login race={} class={} defaultLang={} langSpell={} known={} "
-               "spells={} ids=[{}]",
-               static_cast<uint32>(character.GetRace()),
-               static_cast<uint32>(character.GetClass()), defaultLang,
-               defaultLangSpell,
-               PlayerKnowsLanguage(_knownSpells, defaultLang) ? 1 : 0,
-               _knownSpells.size(), ids);
+      LOG_DEBUG("[CHAT] login race={} class={} defaultLang={} langSpell={} known={} "
+                "spells={} ids=[{}]",
+                static_cast<uint32>(character.GetRace()),
+                static_cast<uint32>(character.GetClass()), defaultLang,
+                defaultLangSpell,
+                PlayerKnowsLanguage(_knownSpells, defaultLang) ? 1 : 0,
+                _knownSpells.size(), ids);
     }
   }
   _gcdReady = {};
@@ -706,7 +708,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
   SchedulePeriodicTimeSync();
   SendLoadCUFProfiles();
 
-  LOG_INFO("Player {} logged in and spawned at Map {}", guid, _mapId);
+  LOG_DEBUG("Player {} finished world entry (map {})", guid, _mapId);
 
   if (auto host = WorldService::Instance().GetScriptHost()) {
     host->FireEvent("player_login", guid);
@@ -758,7 +760,7 @@ if (!_charService->SaveCharacterOnLogout(_accountId, charGuidLow, mapIdDb,
     LOG_ERROR("SaveCharacterOnLogout failed for guid {}, account {}",
               charGuidLow, _accountId);
   } else {
-    LOG_INFO("Saved logout position guid {}: map {} zone {} x={} y={} z={} o={}",
+    LOG_DEBUG("Saved logout position guid {}: map {} zone {} x={} y={} z={} o={}",
             charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,
             persistPos.z, persistPos.orientation);
   }
@@ -770,7 +772,7 @@ if (!_charService->SaveCharacterOnLogout(_accountId, charGuidLow, mapIdDb,
       LOG_ERROR("SaveInventory failed for guid {}, account {}",
                 charGuidLow, _accountId);
     } else {
-      LOG_INFO("Saved inventory for guid {}", charGuidLow);
+      LOG_DEBUG("Saved inventory for guid {}", charGuidLow);
     }
   }
 

@@ -93,7 +93,7 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
     m_itemGrants[key] = std::move(itemGrants);
   }
 
-  LOG_INFO("Loaded CharStartOutfit.dbc: {} outfit keys.", m_visuals.size());
+  LOG_DEBUG("Loaded CharStartOutfit.dbc: {} outfit keys.", m_visuals.size());
   return true;
 }
 

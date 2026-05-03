@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
     if (!scriptHost->Init(scriptsRoot)) {
       LOG_WARN("Lua script host failed to initialize (continuing without scripts)");
     } else {
-      LOG_INFO("Lua script host ready, root: {}", scriptsRoot);
+      LOG_DEBUG("Lua script host ready, root: {}", scriptsRoot);
       scriptHost->FireEvent("world_startup", 0);
     }
     WorldService::Instance().SetScriptHost(std::move(scriptHost));
@@ -214,8 +214,8 @@ int main(int argc, char **argv) {
       bool consoleEnabled =
           config.GetNested<bool>({"Console", "Enabled"}, true);
       if (consoleEnabled && !StdoutIsInteractiveTerminal()) {
-        LOG_INFO("Console.Enabled is true but stdin is not a TTY; interactive "
-                 "console disabled.");
+        LOG_DEBUG("Console.Enabled is true but stdin is not a TTY; interactive "
+                  "console disabled.");
         consoleEnabled = false;
       }
 
@@ -229,11 +229,11 @@ int main(int argc, char **argv) {
 
       if (useTerminalUi) {
         interactiveConsole.Start(consoleEnabled, false);
-        LOG_INFO("Terminal UI (FTXUI): logs above, command input fixed below.");
+        LOG_DEBUG("Terminal UI (FTXUI): logs above, command input fixed below.");
         RunWorldFtxuiConsole(worldServer, interactiveConsole);
       } else if (consoleEnabled) {
         interactiveConsole.Start(consoleEnabled, true);
-        LOG_INFO("Interactive console (stdin); type .help or quit to exit.");
+        LOG_DEBUG("Interactive console (stdin); type .help or quit to exit.");
         while (!interactiveConsole.ShutdownRequested()) {
           worldServer.Update();
           interactiveConsole.ProcessPending();

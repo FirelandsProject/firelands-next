@@ -76,7 +76,7 @@ bool GtPlayerStatGameTables::Load(std::string const &dbcDirectory) {
     any = true;
 
   if (m_combatRatingsLoaded)
-    LOG_INFO("GtPlayerStatGameTables: gtCombatRatings.dbc ({} rows).",
+    LOG_DEBUG("GtPlayerStatGameTables: gtCombatRatings.dbc ({} rows).",
              m_combatRatings.GetRecordCount());
   return any;
 }

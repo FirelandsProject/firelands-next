@@ -52,7 +52,7 @@ bool PlayerCreateInfoService::TryApplyTemplateCombatState(Character &character) 
                                    static_cast<uint16_t>(fallback[2]),
                                    static_cast<uint16_t>(fallback[3]),
                                    static_cast<uint16_t>(fallback[4])};
-    LOG_INFO(
+    LOG_DEBUG(
         "TryApplyTemplateCombatState: no player_classlevelstats row for "
         "class={} level={} (guid={}); using built-in fallback (apply "
         "sql/17_player_class_and_race_stats.sql or sql/z_ensure_player_classlevelstats_seed.sql on "

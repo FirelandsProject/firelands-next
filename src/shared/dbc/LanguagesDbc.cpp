@@ -35,7 +35,7 @@ bool LanguagesDbc::Load(std::string const &path) {
   }
 
   m_loaded = true;
-  LOG_INFO("Languages.dbc: {} language ids from {}.", m_languageIds.size(), path);
+  LOG_DEBUG("Languages.dbc: {} language ids from {}.", m_languageIds.size(), path);
   return true;
 }
 

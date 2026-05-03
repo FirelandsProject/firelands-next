@@ -28,7 +28,7 @@ bool RestAuthServer::Start() {
     DoAccept();
 
     _workerThread = std::thread([this]() {
-      LOG_INFO("REST Auth Server running on {}:{}", _address, _port);
+      LOG_DEBUG("REST Auth Server running on {}:{}", _address, _port);
       _ioc.run();
     });
 
@@ -110,13 +110,13 @@ void RestAuthServer::HandleRequest(http::request<http::string_body> &&req,
           res.body() =
               json({{"success", true}, {"token", session.token}}).dump();
 
-          LOG_INFO("REST successful login for user: {}", username);
+          LOG_DEBUG("REST successful login for user: {}", username);
         } else {
           res.result(http::status::unauthorized);
           res.body() =
               json({{"success", false}, {"error", "Invalid credentials"}})
                   .dump();
-          LOG_INFO("REST failed login attempt for user: {}", username);
+          LOG_WARN("REST failed login attempt for user: {}", username);
         }
       }
     } catch (const std::exception &e) {

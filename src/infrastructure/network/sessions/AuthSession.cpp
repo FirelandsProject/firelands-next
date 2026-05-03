@@ -102,7 +102,7 @@ void AuthSession::HandleLogonChallenge(AuthPacket &packet) {
 
   _username = challenge.username;
   _accountAccessLevel = AccessLevel::Player;
-  LOG_INFO("Login challenge for user: {} ({})", _username, GetIpAddress());
+  LOG_DEBUG("Login challenge for user: {} ({})", _username, GetIpAddress());
 
   auto account = _authService->FindAccount(_username);
 
@@ -113,7 +113,7 @@ void AuthSession::HandleLogonChallenge(AuthPacket &packet) {
     response.result = AUTH_FAIL_UNKNOWN_ACCOUNT;
   } else if (account->locked) {
     response.result = AUTH_FAIL_BANNED;
-    LOG_INFO("Login challenge rejected (locked): {} ({})", _username, GetIpAddress());
+    LOG_WARN("Login challenge rejected (locked): {} ({})", _username, GetIpAddress());
   } else {
     response.result = AUTH_SUCCESS;
 
@@ -216,10 +216,10 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
 
   bool const liveMerge =
       _realmService && _realmService->UsesLiveRealmState();
-  LOG_INFO("Realm list for {}: {} realm(s) ({} after access filter), "
-           "realmLinkMerge={}",
-           _username, realms.size(), visibleRealms.size(),
-           liveMerge ? "on" : "off");
+  LOG_DEBUG("Realm list for {}: {} realm(s) ({} after access filter), "
+            "realmLinkMerge={}",
+            _username, realms.size(), visibleRealms.size(),
+            liveMerge ? "on" : "off");
   if (!liveMerge) {
     std::call_once(realmLinkConfigHint, [] {
       LOG_WARN(

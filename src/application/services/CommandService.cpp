@@ -366,10 +366,10 @@ bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
 
   CommandEntry const &entry = it->second;
 
-  LOG_INFO("Command executed: Account={} Access={} Cmd=.{} Args={}",
-           session->GetAccountId(),
-           static_cast<int>(session->GetAccountAccessLevel()),
-           cmdName, args.size());
+  LOG_DEBUG("Command executed: Account={} Access={} Cmd=.{} Args={}",
+            session->GetAccountId(),
+            static_cast<int>(session->GetAccountAccessLevel()),
+            cmdName, args.size());
   switch (entry.availability) {
   case CommandAvailability::Console:
     if (origin != PrivilegeOrigin::ServerConsole) {
@@ -1331,7 +1331,7 @@ bool CommandService::HandleServer(std::shared_ptr<ICommandSession> session,
   if (_onlineCharacters)
     _onlineCharacters->BroadcastAnnouncement("|cffFFCC00[Server]|r " + plain, plain);
   session->SendNotification("Scheduled: " + plain);
-  LOG_INFO("[server] {}", plain);
+  LOG_DEBUG("[server] {}", plain);
   return true;
 }
 

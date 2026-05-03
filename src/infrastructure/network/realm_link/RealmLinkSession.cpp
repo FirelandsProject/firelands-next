@@ -90,7 +90,7 @@ bool RealmLinkSession::tryConsumeHandshake() {
   SendAck(kRealmLinkAckOk);
   _handshakeDone = true;
   _rx.erase(_rx.begin(), _rx.begin() + static_cast<std::ptrdiff_t>(need));
-  LOG_INFO("Realm-link: world registered for realm {}", realmId);
+  LOG_DEBUG("Realm-link: world registered for realm {}", realmId);
   return true;
 }
 
@@ -111,7 +111,7 @@ void RealmLinkSession::FailHandshake(uint8_t ack) {
 void RealmLinkSession::OnDisconnect() {
   if (_registered && _registry) {
     _registry->release(_realmId);
-    LOG_INFO("Realm-link: world disconnected for realm {}", _realmId);
+    LOG_DEBUG("Realm-link: world disconnected for realm {}", _realmId);
     _registered = false;
   }
 }

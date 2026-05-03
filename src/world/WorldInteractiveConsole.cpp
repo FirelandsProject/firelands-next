@@ -26,7 +26,7 @@ class ServerConsoleCommandSession final : public ICommandSession {
 
 public:
   void SendNotification(const std::string &message) override {
-    LOG_INFO("[console] {}", message);
+    LOG_DEBUG("[console] {}", message);
   }
 
   const MovementInfo &GetPosition() const override { return _position; }
@@ -40,7 +40,7 @@ public:
   }
 
   void RequestDisconnect(std::string const &reason) override {
-    LOG_INFO("[console] RequestDisconnect (no world character): {}", reason);
+    LOG_DEBUG("[console] RequestDisconnect (no world character): {}", reason);
   }
 
   bool GmLearnSpell(uint32 /*spellId*/) override { return false; }
@@ -246,8 +246,8 @@ void WorldInteractiveConsole::ProcessPending() {
       }
     }
     if (!_commands->IsCommand(line)) {
-      LOG_INFO("[console] not a command (use .help). Ignored: '{}'",
-               line.size() > 64 ? line.substr(0, 64) + "..." : line);
+      LOG_DEBUG("[console] not a command (use .help). Ignored: '{}'",
+                line.size() > 64 ? line.substr(0, 64) + "..." : line);
       continue;
     }
     _commands->ExecuteCommand(_consoleSession, line,

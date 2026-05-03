@@ -115,7 +115,7 @@ bool ItemDb2Wdb2::Load(std::string const &path) {
     m_byEntry.insert_or_assign(id, row);
   }
 
-  LOG_INFO("Item.db2: indexed {} item entries from {}", m_byEntry.size(), path);
+  LOG_DEBUG("Item.db2: indexed {} item entries from {}", m_byEntry.size(), path);
   return !m_byEntry.empty();
 }
 

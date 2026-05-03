@@ -27,7 +27,7 @@ bool SpellDbc::Load(std::string const &path) {
   }
 
   m_loaded = true;
-  LOG_INFO("Spell.dbc: {} spell ids from {}.", m_spellIds.size(), path);
+  LOG_DEBUG("Spell.dbc: {} spell ids from {}.", m_spellIds.size(), path);
   return true;
 }
 

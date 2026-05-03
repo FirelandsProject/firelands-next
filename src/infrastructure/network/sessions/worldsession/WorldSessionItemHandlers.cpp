@@ -205,7 +205,7 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
 
   uint8_t const normalizedSlot = NormalizeBag0ItemSlot(packSlot, slot);
 
-  LOG_INFO(
+  LOG_DEBUG(
       "HandleAutoEquipItem: account={} guid={} packSlot={} slot={} normalizedSlot={} "
       "consumed={} usedInvPrefix={} invItems={}",
       _accountId, _playerGuid, packSlot, slot, normalizedSlot,
@@ -213,8 +213,8 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
 
   if (!_charService->AutoEquipFromBag0(_accountId, static_cast<uint32_t>(_playerGuid),
                                         packSlot, normalizedSlot)) {
-    LOG_INFO("HandleAutoEquipItem: equip rejected (account={} guid={})", _accountId,
-             _playerGuid);
+    LOG_DEBUG("HandleAutoEquipItem: equip rejected (account={} guid={})", _accountId,
+              _playerGuid);
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
   }
@@ -305,7 +305,7 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
 
   uint64_t const itemGuid = parsed.itemGuid;
   uint8_t const dstSlot = parsed.dstSlot;
-  LOG_INFO(
+  LOG_DEBUG(
       "HandleAutoEquipItemSlot: account={} guid={} itemLow={} dstSlot={} "
       "usedInvPrefix={} invItems={} consumed={}",
       _accountId, _playerGuid,
@@ -313,7 +313,7 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
       parsed.usedInvPrefix, parsed.invItems, parsed.consumed);
 
   if (dstSlot >= EQUIPMENT_SLOT_END) {
-    LOG_INFO("HandleAutoEquipItemSlot: invalid dstSlot={}", dstSlot);
+    LOG_DEBUG("HandleAutoEquipItemSlot: invalid dstSlot={}", dstSlot);
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
   }
@@ -321,15 +321,15 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
   uint32_t const itemLowGuid = static_cast<uint32_t>(itemGuid & 0xFFFFFFFFu);
   auto srcSlotOpt = FindBag0SlotByItemLowGuid(*ch, itemLowGuid);
   if (!srcSlotOpt) {
-    LOG_INFO("HandleAutoEquipItemSlot: itemLowGuid={} not found in bag0",
-             itemLowGuid);
+    LOG_DEBUG("HandleAutoEquipItemSlot: itemLowGuid={} not found in bag0",
+              itemLowGuid);
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
   }
 
   if (!_charService->SwapBag0Slots(_playerGuid, *srcSlotOpt, dstSlot)) {
-    LOG_INFO("HandleAutoEquipItemSlot: swap rejected src={} dst={} guid={}",
-             *srcSlotOpt, dstSlot, _playerGuid);
+    LOG_DEBUG("HandleAutoEquipItemSlot: swap rejected src={} dst={} guid={}",
+              *srcSlotOpt, dstSlot, _playerGuid);
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
     return;
   }
@@ -365,7 +365,7 @@ void WorldSession::HandleDestroyItem(WorldPacket &packet) {
   uint32_t const count = packet.Read<uint32_t>();
   uint8_t const normalizedSlot = NormalizeBag0ItemSlot(containerId, slotNum);
 
-  LOG_INFO(
+  LOG_DEBUG(
       "HandleDestroyItem: account={} guid={} container={} slot={} normalized={} count={}",
       _accountId, _playerGuid, containerId, slotNum, normalizedSlot, count);
 
@@ -419,8 +419,8 @@ void WorldSession::HandleUseItem(WorldPacket &packet) {
   (void)packet.Read<uint8_t>(); // Cast.CastID
   (void)packet.Read<int32_t>(); // Cast.SpellID (non-zero for many equippables; TCPP uses spellmgr)
   packet.SetReadPos(packet.Size());
-  LOG_INFO("HandleUseItem: account={} guid={} packSlot={} slot={} normalized={}",
-           _accountId, _playerGuid, packSlot, slot, normalizedSlot);
+  LOG_DEBUG("HandleUseItem: account={} guid={} packSlot={} slot={} normalized={}",
+            _accountId, _playerGuid, packSlot, slot, normalizedSlot);
 
   if (!_charService->AutoEquipFromBag0(_accountId, static_cast<uint32_t>(_playerGuid),
                                         packSlot, normalizedSlot)) {

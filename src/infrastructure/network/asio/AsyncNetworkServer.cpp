@@ -14,7 +14,7 @@ bool AsyncNetworkServer::Start(const std::string &address, uint16 port) {
     tcp::endpoint endpoint(boost::asio::ip::make_address(address), port);
     _acceptor = std::make_unique<tcp::acceptor>(_ioContext, endpoint);
 
-    LOG_INFO("Network Server started on {}:{}", address, port);
+    LOG_DEBUG("Network server acceptor bound on {}:{}", address, port);
 
     DoAccept();
     return true;
@@ -37,8 +37,8 @@ void AsyncNetworkServer::DoAccept() {
   _acceptor->async_accept(
       [this](boost::system::error_code ec, tcp::socket socket) {
         if (!ec) {
-          LOG_INFO("New connection from {}",
-                   socket.remote_endpoint().address().to_string());
+          LOG_DEBUG("New TCP connection from {}",
+                    socket.remote_endpoint().address().to_string());
           if (_sessionFactory) {
             _sessionFactory(std::move(socket));
           }

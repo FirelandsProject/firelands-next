@@ -2,6 +2,8 @@
 
 ## Build Commands
 
+**Nota para el agente:** NUNCA compiles el proyecto automáticamente. Después de cualquier cambio, PIDE confirmación al usuario antes de compilar. Solo compila si el usuario lo autoriza explícitamente.
+
 ### Configuration
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug

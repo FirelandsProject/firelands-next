@@ -284,8 +284,8 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
   AppendSmsgMessageChatPayload(response, type, lang, _playerGuid, receiverGuid,
                                 message, chPtr, gmChat, senderNameForGmPacket,
                                 chatTag);
-  LOG_INFO("[CHAT] out type={} lang={} receiverGuid={} msgLen={}", type, lang,
-           receiverGuid, message.size());
+  LOG_DEBUG("[CHAT] out type={} lang={} receiverGuid={} msgLen={}", type, lang,
+            receiverGuid, message.size());
   SendPacket(response);
 
   if (type == CHAT_MSG_SAY || type == CHAT_MSG_YELL) {

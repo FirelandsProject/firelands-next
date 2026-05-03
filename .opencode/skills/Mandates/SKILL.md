@@ -19,7 +19,7 @@ description: Global project mandates for Firelands Next. Use as the default base
 - **Strategic Delegation and Roles:** `Delegation/SKILL.md`
 
 ## Operational Mandates
-- **Build:** Always recompile the project after making any adjustments or code changes to verify build integrity.
+- **Build:** NUNCA compiles el proyecto automáticamente. Después de cualquier cambio, PIDE confirmación al usuario antes de compilar. Solo compila si el usuario lo autoriza explícitamente.
 - **Build Tooling:** Compile using Ninja (configure with `cmake -G Ninja ...` and build via Ninja), not Make.
 - **Inheritance:** Use inheritance to share implementation logic where it applies and improves code reuse.
 

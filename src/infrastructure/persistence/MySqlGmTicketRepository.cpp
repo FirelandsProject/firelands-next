@@ -69,7 +69,7 @@ bool MySqlGmTicketRepository::EnsureNeedMoreHelpColumn(
         "ALTER TABLE `firelands_characters`.`gm_ticket` "
         "ADD COLUMN `need_more_help` tinyint unsigned NOT NULL DEFAULT 0 "
         "AFTER `category`");
-    LOG_INFO("Added column `firelands_characters.gm_ticket.need_more_help`.");
+    LOG_DEBUG("Added column `firelands_characters.gm_ticket.need_more_help`.");
     return true;
   } catch (sql::SQLException &e) {
     if (e.getErrorCode() == 1060)

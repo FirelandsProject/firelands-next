@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
     sql::Properties properties({{"user", dbUser}, {"password", dbPass}});
 
     std::shared_ptr<sql::Connection> conn(driver->connect(authUrl, properties));
-    LOG_INFO("Database connection established.");
+    LOG_DEBUG("Database connection established.");
 
     // 2. Initialize Repositories
     auto accountRepo = std::make_shared<MySqlAccountRepository>(conn);
@@ -119,9 +119,9 @@ int main(int argc, char **argv) {
     std::shared_ptr<RealmLiveRegistry> realmLive;
     if (!realmLinkToken.empty() && realmLinkPort > 0) {
       realmLive = std::make_shared<RealmLiveRegistry>();
-      LOG_INFO("Realm-link: listener will bind {}:{} (realm list uses live "
-               "state)",
-               realmLinkBind, realmLinkPort);
+      LOG_DEBUG("Realm-link: listener will bind {}:{} (realm list uses live "
+                "state)",
+                realmLinkBind, realmLinkPort);
     } else {
       bool const hasRl = config.HasNestedKey({"RealmLink"});
       bool const hasTok = config.HasNestedKey({"RealmLink", "Token"});
@@ -190,22 +190,22 @@ int main(int argc, char **argv) {
                                 restPort);
 
       if (restServer.Start()) {
-        LOG_INFO("REST Authentication API listening on {}:{}", bindIp,
-                 restPort);
+        LOG_DEBUG("REST Authentication API listening on {}:{}", bindIp,
+                  restPort);
       }
 
       bool consoleEnabled =
           config.GetNested<bool>({"Console", "Enabled"}, true);
       if (consoleEnabled && !StdoutIsInteractiveTerminal()) {
-        LOG_INFO("Console.Enabled is true but stdout is not a TTY; using plain "
-                 "log loop (no TUI).");
+        LOG_DEBUG("Console.Enabled is true but stdout is not a TTY; using plain "
+                  "log loop (no TUI).");
         consoleEnabled = false;
       }
       const bool useTerminalUi =
           consoleEnabled && config.GetNested<bool>({"Console", "Tui"}, true);
 
       if (useTerminalUi) {
-        LOG_INFO("Terminal UI (FTXUI): logs only; press Q or Ctrl+C to stop.");
+        LOG_DEBUG("Terminal UI (FTXUI): logs only; press Q or Ctrl+C to stop.");
         RunAuthFtxuiConsole(authServer, realmLinkServer.get());
       } else {
         while (true) {

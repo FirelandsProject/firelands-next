@@ -16,7 +16,7 @@ bool EnsureAccountLockedColumn(std::shared_ptr<sql::Connection> conn) {
         "ALTER TABLE `firelands_auth`.`account` "
         "ADD COLUMN `locked` tinyint unsigned NOT NULL DEFAULT 0 "
         "AFTER `expansion`");
-    LOG_INFO("Added missing column `firelands_auth.account.locked`.");
+    LOG_DEBUG("Added missing column `firelands_auth.account.locked`.");
     return true;
   } catch (sql::SQLException &e) {
     if (e.getErrorCode() == 1060)

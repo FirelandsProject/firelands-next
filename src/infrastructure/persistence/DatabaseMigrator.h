@@ -336,7 +336,7 @@ private:
       int const code = e.getErrorCode();
       // Duplicate column / duplicate key name / table already exists (1050)
       if (code == 1060 || code == 1061 || code == 1050) {
-        LOG_INFO("Migration statement skipped (already present): {}", e.what());
+        LOG_DEBUG("Migration statement skipped (already present): {}", e.what());
         return true;
       }
       LOG_WARN("Migration SQL failed ({}): {}", trimmed.substr(0, 80), e.what());

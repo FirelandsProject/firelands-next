@@ -110,7 +110,7 @@ bool LoadWdb2Rows(std::string const &path,
     return false;
   }
 
-  LOG_INFO("ItemDbHotfixStore: loaded {} rows table_hash=0x{:08X} from {}",
+  LOG_DEBUG("ItemDbHotfixStore: loaded {} rows table_hash=0x{:08X} from {}",
            outById.size(), outTableHash, path);
   return true;
 }
@@ -154,7 +154,7 @@ bool ItemDbHotfixStore::load(std::string const &dbcDirectory) {
         dbcDirectory);
 
   if (itemOk && sparseOk)
-    LOG_INFO("ItemDbHotfixStore: Item + Item-sparse ready (hashes 0x{:08X} / 0x{:08X})",
+    LOG_DEBUG("ItemDbHotfixStore: Item + Item-sparse ready (hashes 0x{:08X} / 0x{:08X})",
              itemTableHash_, sparseTableHash_);
 
   return itemOk;
