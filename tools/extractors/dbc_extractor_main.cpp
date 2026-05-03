@@ -11,6 +11,7 @@ void PrintUsage(const char *prog) {
   std::cerr << "Usage:\n"
             << "  " << prog << "                     (interactive menu)\n"
             << "  " << prog << " --data <WoW/Data> --out <output_dir> [options]\n"
+            << "Extracts DBFilesClient\\*.dbc and DBFilesClient\\*.db2 from the MPQ chain.\n"
             << "Options:\n"
             << "  --list-mpqs   Print resolved MPQ open order and exit\n";
 }

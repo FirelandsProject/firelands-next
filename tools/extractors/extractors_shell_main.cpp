@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
     const std::string a(argv[1]);
     if (a == "-h" || a == "--help") {
       std::cout
-          << "firelands-extractors — interactive menu for DBC and map extraction.\n"
+          << "firelands-extractors — interactive menu for DBC/DB2 and map extraction.\n"
              "\n"
              "Run with no arguments to open the console menu.\n"
              "\n"

@@ -11,8 +11,8 @@ Las herramientas leen un folder retail de **Cataclysm** `World of Warcraft/Data`
 
 | Target | Propósito |
 |--------|-----------|
-| **`firelands-extractors`** | **Menú interactivo** (recomendado): DBC / maps / listar MPQs, luego pedir rutas. |
-| `firelands-dbc-extractor` | Extracción DBC; **sin argumentos** abre el mismo menú interactivo. |
+| **`firelands-extractors`** | **Menú interactivo** (recomendado): tablas `DBFilesClient` (.dbc / .db2), maps, listar MPQs. |
+| `firelands-dbc-extractor` | Extrae `DBFilesClient\*.dbc` y `DBFilesClient\*.db2`; **sin argumentos** abre el mismo menú interactivo. |
 | `firelands-map-extractor` | Extracción de assets de mapas; **sin argumentos** abre el mismo menú. |
 
 Los artefactos quedan en `${CMAKE_BINARY_DIR}/bin/`.
@@ -32,7 +32,7 @@ O cualquiera de los extractores sin argumentos:
 ./firelands-map-extractor
 ```
 
-Verás un menú numerado (DBC, maps, listar orden MPQ, salir). Tras elegir, ingresa el **directorio `Data`** de WoW (debe existir) y, al extraer, un **directorio de salida** (se crea si no existe). `firelands-extractors --help` imprime un resumen.
+Verás un menú numerado (DBC+DB2, maps, listar orden MPQ, salir). Tras elegir, ingresa el **directorio `Data`** de WoW (debe existir) y, al extraer, un **directorio de salida** (se crea si no existe). `firelands-extractors --help` imprime un resumen.
 
 ## Modo no interactivo (scripts / CI)
 
@@ -42,7 +42,7 @@ Listar el orden de MPQs que usará StormLib (base + parches):
 ./firelands-dbc-extractor --data "/path/to/WoW/Data" --list-mpqs
 ```
 
-Extraer todos los DBC del cliente:
+Extraer todas las tablas `DBFilesClient` del cliente (`.dbc` y `.db2`):
 
 ```bash
 ./firelands-dbc-extractor --data "/path/to/WoW/Data" --out ./client-dbc

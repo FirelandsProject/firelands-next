@@ -52,7 +52,7 @@ void PrintBanner(const char *programName) {
 
 void PrintMainMenu() {
   std::cout << "  Choose an action:\n"
-            << "    1  Extract DBC files (DBFilesClient\\*.dbc)\n"
+            << "    1  Extract DBFilesClient tables (*.dbc, *.db2)\n"
             << "    2  Extract map assets (World\\maps\\ … .adt / .wdt / .wdl)\n"
             << "    3  List MPQ open order only (no extraction)\n"
             << "    4  Exit\n"

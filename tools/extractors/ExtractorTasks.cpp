@@ -7,7 +7,6 @@
 #include <cctype>
 #include <cstring>
 #include <iostream>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -39,16 +38,19 @@ std::string NormalizeSlashesLower(std::string s) {
   return s;
 }
 
-// Internal MPQ paths are usually "DBFilesClient\Foo.dbc"; some builds use '/'.
-bool IsDbFilesClientDbcPath(const std::string &archived) {
+// Internal MPQ paths are usually "DBFilesClient\Foo.dbc" or "...\Item.db2";
+// some builds use '/'.
+bool IsDbFilesClientDataStorePath(const std::string &archived) {
   const std::string n = NormalizeSlashesLower(archived);
   static const char kPrefix[] = "dbfilesclient\\";
   const size_t pl = sizeof(kPrefix) - 1;
-  if (n.size() >= pl && n.compare(0, pl, kPrefix) == 0) {
-    return EndsWithInsensitive(n, ".dbc");
+  const bool underDbFilesClient =
+      (n.size() >= pl && n.compare(0, pl, kPrefix) == 0) ||
+      (n.find("\\dbfilesclient\\") != std::string::npos);
+  if (!underDbFilesClient) {
+    return false;
   }
-  static const char kMid[] = "\\dbfilesclient\\";
-  return n.find(kMid) != std::string::npos && EndsWithInsensitive(n, ".dbc");
+  return EndsWithInsensitive(n, ".dbc") || EndsWithInsensitive(n, ".db2");
 }
 
 bool IsMapAsset(const std::string &archivedNorm) {
@@ -93,37 +95,40 @@ int RunDbcExtractTask(const std::filesystem::path &dataDir,
     return 1;
   }
 
-  // Step 1: Discover every *.dbc name by opening each MPQ independently.
-  // This is robust against chain-based enumeration gaps on macOS/Linux where
-  // SFileFindFirstFile may not traverse all patch archives reliably.
-  std::vector<std::string> dbcNames;
-  MpqPatchChain::EnumerateAcrossArchives(mpqs, "*.dbc",
-                                          [&](const std::string &name) {
-                                            if (IsDbFilesClientDbcPath(name)) {
-                                              dbcNames.push_back(name);
-                                            }
-                                          });
+  // Discover *.dbc and *.db2 under DBFilesClient: enumerate each MPQ, then the
+  // open chain as a fallback (robust against chain gaps on macOS/Linux).
+  std::vector<std::string> storePaths;
+  std::unordered_set<std::string> seenNorm;
 
-  // Step 2: Also try the wildcard directly on the open chain as a fallback to
-  // catch any files not found by the per-archive pass (e.g. in rare MPQ v4 HET layouts).
-  {
-    std::unordered_set<std::string> seen;
-    for (const auto &n : dbcNames) {
-      seen.insert(NormalizeSlashesLower(n));
-    }
-    chain.ForEachFile("*.dbc", [&](const std::string &name) {
-      if (IsDbFilesClientDbcPath(name) &&
-          seen.find(NormalizeSlashesLower(name)) == seen.end()) {
-        dbcNames.push_back(name);
-        seen.insert(NormalizeSlashesLower(name));
+  auto collectWildcard = [&](const char *wildcard) {
+    MpqPatchChain::EnumerateAcrossArchives(
+        mpqs, wildcard, [&](const std::string &name) {
+          if (!IsDbFilesClientDataStorePath(name)) {
+            return;
+          }
+          const std::string k = NormalizeSlashesLower(name);
+          if (seenNorm.insert(k).second) {
+            storePaths.push_back(name);
+          }
+        });
+    chain.ForEachFile(wildcard, [&](const std::string &name) {
+      if (!IsDbFilesClientDataStorePath(name)) {
+        return;
+      }
+      const std::string k = NormalizeSlashesLower(name);
+      if (seenNorm.insert(k).second) {
+        storePaths.push_back(name);
       }
     });
-  }
+  };
+
+  collectWildcard("*.dbc");
+  collectWildcard("*.db2");
 
   size_t extracted = 0;
   size_t failed = 0;
 
-  for (const auto &archived : dbcNames) {
+  for (const auto &archived : storePaths) {
     const std::filesystem::path dest = outDir / ArchivedPathToRelative(archived);
     if (chain.ExtractFile(archived.c_str(), dest)) {
       ++extracted;
@@ -134,14 +139,14 @@ int RunDbcExtractTask(const std::filesystem::path &dataDir,
   }
 
   if (extracted == 0 && failed == 0) {
-    err << "No DBC files found. Tips:\n"
+    err << "No DBFilesClient DBC/DB2 files found. Tips:\n"
            "  - --data must be the WoW client \"Data\" folder containing .MPQ files.\n"
-           "  - For Cataclysm 4.3.4, locale DBCs live in Data/enUS/ (or your locale).\n"
+           "  - For Cataclysm 4.3.4, locale tables often live in Data/enUS/ (or your locale).\n"
            "  - Use menu option 3 (or --list-mpqs) to see which archives were detected.\n";
   }
 
-  out << "Extracted " << extracted << " DBC file(s) to " << outDir.string()
-      << "\n";
+  out << "Extracted " << extracted << " DBFilesClient file(s) (.dbc / .db2) to "
+      << outDir.string() << "\n";
   return failed != 0 ? 1 : 0;
 }
 
