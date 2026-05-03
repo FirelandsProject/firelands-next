@@ -669,7 +669,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
                 static_cast<uint32>(character.GetRace()),
                 static_cast<uint32>(character.GetClass()), defaultLang,
                 defaultLangSpell,
-                PlayerKnowsLanguage(_knownSpells, defaultLang) ? 1 : 0,
+                PlayerKnowsLanguage(_knownSpellIds, defaultLang) ? 1 : 0,
                 _knownSpells.size(), ids);
     }
   }

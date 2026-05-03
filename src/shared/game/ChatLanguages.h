@@ -2,6 +2,7 @@
 
 #include <shared/Common.h>
 
+#include <unordered_set>
 #include <vector>
 
 namespace Firelands {
@@ -17,6 +18,9 @@ uint32 LanguageSpellIdForLang(uint32 lang);
 
 /// True if `knownSpells` contains the passive spell that grants `lang`.
 bool PlayerKnowsLanguage(std::vector<uint32> const &knownSpells, uint32 lang);
+/// Same as the vector overload; preferred when ids are stored in a set (O(1)).
+bool PlayerKnowsLanguage(std::unordered_set<uint32> const &knownSpellIds,
+                         uint32 lang);
 
 /// Default spoken language for a race (Common/Orcish by faction in 4.3.4).
 uint32 DefaultLanguageForRace(uint8 race);

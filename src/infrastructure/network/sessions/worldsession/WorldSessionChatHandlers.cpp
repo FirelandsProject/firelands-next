@@ -226,7 +226,7 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
             packet.GetOpcode(), 0, type, lang,
             message.size(), chatPreview());
   LOG_DEBUG("[CHAT] knows lang={} => {}", lang,
-            PlayerKnowsLanguage(_knownSpells, lang) ? 1 : 0);
+            PlayerKnowsLanguage(_knownSpellIds, lang) ? 1 : 0);
 
   if (_commandService->IsCommand(message)) {
     _commandService->ExecuteCommand(
@@ -248,7 +248,7 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
       }
     } else {
       // Keep permissive behavior: if spell list is out of sync, do not block chat.
-      if (!PlayerKnowsLanguage(_knownSpells, lang))
+      if (!PlayerKnowsLanguage(_knownSpellIds, lang))
         lang = DefaultLanguageForRace(_playerRace);
     }
   }

@@ -3,6 +3,7 @@
 #include <shared/Common.h>
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace Firelands {
 
@@ -130,6 +131,14 @@ bool PlayerKnowsLanguage(std::vector<uint32> const &knownSpells, uint32 lang) {
     return false;
   return std::find(knownSpells.begin(), knownSpells.end(), sid) !=
          knownSpells.end();
+}
+
+bool PlayerKnowsLanguage(std::unordered_set<uint32> const &knownSpellIds,
+                         uint32 lang) {
+  uint32 const sid = LanguageSpellIdForLang(lang);
+  if (sid == 0)
+    return false;
+  return knownSpellIds.count(sid) != 0u;
 }
 
 uint32 DefaultLanguageForRace(uint8 race) {
