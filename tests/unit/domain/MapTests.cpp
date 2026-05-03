@@ -104,6 +104,33 @@ TEST_F(MapTests, ForEachPlayer_VisitsOnlyPlayers) {
   EXPECT_EQ(count, 2);
 }
 
+TEST_F(MapTests, TryGetObjectWorldPosition_ReturnsCoordsWhenPresent) {
+  auto map = std::make_shared<Map>(1);
+  auto notifier = std::make_shared<MockNotifier>();
+  auto player = std::make_shared<Player>(77, notifier);
+  MovementInfo m{};
+  m.x = 12.5f;
+  m.y = -3.f;
+  m.z = 100.f;
+  player->SetPosition(m);
+  map->AddObject(player);
+  float x = 0.f;
+  float y = 0.f;
+  float z = 0.f;
+  ASSERT_TRUE(map->TryGetObjectWorldPosition(77, x, y, z));
+  EXPECT_FLOAT_EQ(x, 12.5f);
+  EXPECT_FLOAT_EQ(y, -3.f);
+  EXPECT_FLOAT_EQ(z, 100.f);
+}
+
+TEST_F(MapTests, TryGetObjectWorldPosition_FalseWhenMissing) {
+  auto map = std::make_shared<Map>(1);
+  float x = 0.f;
+  float y = 0.f;
+  float z = 0.f;
+  EXPECT_FALSE(map->TryGetObjectWorldPosition(999, x, y, z));
+}
+
 TEST_F(MapTests, BroadcastPacketToNearby_DoesNotSendToFarPlayers) {
     auto map = std::make_shared<Map>(1);
     

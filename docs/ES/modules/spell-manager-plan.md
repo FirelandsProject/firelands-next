@@ -89,7 +89,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 ### Fase C — Validación de mundo
 
-1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` compara distancia 3D con `GetHostileRangeMaxYards` + tolerancia 3 yd (estilo TCPP) cuando caster **y** objetivo tienen coords. `WorldSession` rellena caster + objetivo solo si el GUID del target es el propio jugador (self-cast); falta resolver posición de otros objetos vía mapa.
+1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` compara distancia 3D con `GetHostileRangeMaxYards` + tolerancia 3 yd (estilo TCPP) cuando caster **y** objetivo tienen coords. `WorldSession` rellena caster y, si el target es otro GUID, intenta `Map::TryGetObjectWorldPosition` sobre el mapa del jugador (jugadores/crías/objetos registrados en `Map`).
 2. LoS / colisión cuando exista datos; flag para desactivar en pruebas.
 
 **Rendimiento:** orden estricto cheap→caro; caché opcional de LoS documentada.

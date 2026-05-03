@@ -7,7 +7,6 @@
 #include <mutex>
 #include <shared/Common.h>
 #include <unordered_map>
-#include <vector>
 
 namespace Firelands {
 
@@ -21,6 +20,9 @@ public:
   void RemoveObject(uint64 guid);
 
   void UpdateObjectPosition(uint64 guid, const MovementInfo &pos);
+
+  /// Thread-safe lookup for spell range / proximity (players, creatures, GOs on map).
+  bool TryGetObjectWorldPosition(uint64 guid, float &outX, float &outY, float &outZ);
 
   void BroadcastPacket(uint64 senderGuid, class WorldPacket &packet,
                        bool includeSelf = false);

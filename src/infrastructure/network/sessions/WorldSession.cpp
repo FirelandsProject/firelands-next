@@ -1084,11 +1084,23 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   req.casterX = pos.x;
   req.casterY = pos.y;
   req.casterZ = pos.z;
-  if (c.unitTargetGuid != 0 && c.unitTargetGuid == _playerGuid) {
-    req.hasTargetWorldPosition = true;
-    req.targetX = pos.x;
-    req.targetY = pos.y;
-    req.targetZ = pos.z;
+  if (c.unitTargetGuid != 0) {
+    if (c.unitTargetGuid == _playerGuid) {
+      req.hasTargetWorldPosition = true;
+      req.targetX = pos.x;
+      req.targetY = pos.y;
+      req.targetZ = pos.z;
+    } else if (auto map = WorldService::Instance().GetMap(_mapId)) {
+      float tx = 0.f;
+      float ty = 0.f;
+      float tz = 0.f;
+      if (map->TryGetObjectWorldPosition(c.unitTargetGuid, tx, ty, tz)) {
+        req.hasTargetWorldPosition = true;
+        req.targetX = tx;
+        req.targetY = ty;
+        req.targetZ = tz;
+      }
+    }
   }
 
   SpellCastOutcome out;

@@ -64,6 +64,18 @@ void Map::UpdateObjectPosition(uint64 guid, const MovementInfo &pos) {
   }
 }
 
+bool Map::TryGetObjectWorldPosition(uint64 guid, float &outX, float &outY,
+                                    float &outZ) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  auto it = m_objects.find(guid);
+  if (it == m_objects.end())
+    return false;
+  outX = it->second->GetX();
+  outY = it->second->GetY();
+  outZ = it->second->GetZ();
+  return true;
+}
+
 void Map::ForEachPlayer(
     std::function<void(std::shared_ptr<Player> const &)> const &fn) {
   std::lock_guard<std::mutex> lock(m_mapMutex);
