@@ -3,6 +3,8 @@
 // Top-level map extraction task.
 // Opens the MPQ patch chain, reads Map.dbc + the three liquid DBCs, then
 // iterates every map and converts each existing ADT tile into a .map file.
+// Also extracts cinematic camera M2 models listed in CinematicCamera.dbc into
+// outputDir/Cameras/ (reference map_extractor parity).
 //
 // Callable from firelands-map-extractor / firelands-extractors (TUI launcher).
 

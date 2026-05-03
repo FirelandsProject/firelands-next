@@ -8,10 +8,12 @@
 #include "StormLib.h"
 
 #include <bitset>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -161,6 +163,131 @@ static void ReadLiquidDbcs(HANDLE locale, LiquidDbcTables& dbc, bool verbose) {
     }
 }
 
+// ─── Cinematic camera M2 extract (CinematicCamera.dbc) ───────────────────────
+// Matches reference map_extractor: list paths from DBC (locale MPQ), open each
+// M2 from the world MPQ patch chain, write under outputRoot/Cameras/<relative>.
+
+static std::string ToLowerAscii(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+static std::filesystem::path RelativeUnderCamerasDir(std::string mpqInternalPath) {
+    for (char& c : mpqInternalPath) {
+        if (c == '\\') {
+            c = '/';
+        }
+    }
+    std::string const lower = ToLowerAscii(mpqInternalPath);
+    static constexpr char kPrefix[] = "cameras/";
+    std::size_t const pos = lower.find(kPrefix);
+    if (pos == std::string::npos) {
+        return {};
+    }
+    return std::filesystem::path(mpqInternalPath.substr(pos + sizeof(kPrefix) - 1));
+}
+
+static bool WriteMpqFileToDisk(HANDLE worldMpq, char const* internalPath,
+                               std::filesystem::path const& destPath) {
+    HANDLE file = nullptr;
+    // Same as MpqStream: opened archive already has patch chain; FROM_MPQ resolves patched file.
+    if (!SFileOpenFileEx(worldMpq, internalPath, SFILE_OPEN_FROM_MPQ, &file)) {
+        return false;
+    }
+    DWORD hi = 0;
+    DWORD lo = SFileGetFileSize(file, &hi);
+    if (hi != 0 || lo == 0) {
+        SFileCloseFile(file);
+        return false;
+    }
+    std::vector<uint8_t> buf(lo);
+    DWORD read = 0;
+    if (!SFileReadFile(file, buf.data(), lo, &read, nullptr) || read != lo) {
+        SFileCloseFile(file);
+        return false;
+    }
+    SFileCloseFile(file);
+
+    std::error_code ec;
+    fs::create_directories(destPath.parent_path(), ec);
+    FILE* out = std::fopen(destPath.string().c_str(), "wb");
+    if (!out) {
+        return false;
+    }
+    std::size_t const n = std::fwrite(buf.data(), 1, buf.size(), out);
+    std::fclose(out);
+    return n == buf.size();
+}
+
+// Returns number of camera M2 files written, or 0 if DBC missing / no paths.
+static int ExtractCameraM2Files(HANDLE worldMpq, HANDLE localeMpq,
+                                 fs::path const& outputRoot, bool verbose) {
+    if (verbose) {
+        std::printf("Extracting cinematic camera M2 files...\n");
+    }
+
+    DbcReader camdbc(localeMpq, "DBFilesClient\\CinematicCamera.dbc");
+    if (!camdbc.IsOpen()) {
+        if (verbose) {
+            std::fprintf(stderr,
+                         "[map] CinematicCamera.dbc not found — camera extract skipped.\n");
+        }
+        return 0;
+    }
+
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> mpqPaths;
+    mpqPaths.reserve(camdbc.RecordCount());
+
+    for (uint32_t i = 0; i < camdbc.RecordCount(); ++i) {
+        std::string camFile(camdbc.GetString(i, 1));
+        if (camFile.empty()) {
+            continue;
+        }
+        std::size_t const loc = camFile.find(".mdx");
+        if (loc != std::string::npos) {
+            camFile.replace(loc, 4, ".m2");
+        }
+        if (seen.insert(camFile).second) {
+            mpqPaths.push_back(std::move(camFile));
+        }
+    }
+
+    fs::path const camerasRoot = outputRoot / "Cameras";
+    int count = 0;
+
+    for (std::string const& internal : mpqPaths) {
+        fs::path const rel = RelativeUnderCamerasDir(internal);
+        if (rel.empty() || rel.string().find("..") != std::string::npos) {
+            if (verbose) {
+                std::fprintf(stderr, "[map] Skipping camera path (unexpected layout): %s\n",
+                             internal.c_str());
+            }
+            continue;
+        }
+        fs::path const dest = camerasRoot / rel;
+        if (fs::exists(dest)) {
+            continue;
+        }
+        if (!WriteMpqFileToDisk(worldMpq, internal.c_str(), dest)) {
+            if (verbose) {
+                std::fprintf(stderr, "[map] Unable to extract camera file: %s\n",
+                             internal.c_str());
+            }
+            continue;
+        }
+        ++count;
+    }
+
+    if (verbose) {
+        std::printf("Extracted %d cinematic camera file(s) under %s\n", count,
+                    camerasRoot.string().c_str());
+    }
+    return count;
+}
+
 // ─── RunMapExtractorTask ──────────────────────────────────────────────────────
 
 int RunMapExtractorTask(const MapExtractorOptions& opts) {
@@ -254,6 +381,8 @@ int RunMapExtractorTask(const MapExtractorOptions& opts) {
         std::snprintf(tlName, sizeof(tlName), "%03u.tilelist", map.id);
         MapFileWriter::WriteTileList(mapsDir / tlName, convertedTiles, opts.build);
     }
+
+    ExtractCameraM2Files(worldMpq, localeMpq, opts.outputDir, opts.verbose);
 
     SFileCloseArchive(worldMpq);
     SFileCloseArchive(localeMpq);

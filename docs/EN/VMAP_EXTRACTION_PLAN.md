@@ -1,39 +1,74 @@
-# VMap Extraction & Build Pipeline — Port Plan (WoW 4.3.4 / build 15595)
+# Client Data & Collision Extractors — Master Plan (WoW 4.3.4 / build 15595)
 
-**Strategy:** Full C++ port from reference implementation source — zero wrapped binaries.  
-**Goal:** Byte-identical output to the reference so the existing `IMapCollisionQueries` / VMapManager2 runtime can consume our files without modification.  
-**Reference:** use a local clone of reference implementation for the tools and Collision code.
+**Strategy:** Full C++ port from the reference implementation — zero wrapped binaries for the collision pipeline.  
+**Primary goal:** Reference-identical **server collision artifacts** (`.map`, `vmaps/`, `mmaps/`) so a ported **`VMapManager2` / mmap runtime** can replace `MapCollisionQueriesStub` without format hacks.  
+**Secondary goal:** A coherent **extractor program**: MPQ tools (`StormLib`), DBC/raw-map CLI, TUI launcher, and documentation that describe one end-to-end workflow.  
+**Reference:** local clone of the reference implementation (tools + `src/common/Collision`).
+
+This document is the **single master plan** for “extractors” work. MPQ-only milestones are summarized in `docs/EN/STORM_LIB_ROADMAP.md` (Storm pin, phase-1 raw map extract); this file owns **collision + mmap + closure criteria**.
 
 ---
 
-## 1. The three-tool pipeline (end-to-end)
+## 0. Scope — everything under “extractores”
+
+| Area | CMake target(s) | Purpose | Status (high level) |
+|------|-----------------|---------|---------------------|
+| MPQ + patch order | `FirelandsExtractCommon` | `MpqPatchChain`, `WowDataMpqList` | **Done** |
+| DBC / DB2 extract | `firelands-dbc-extractor` | `DBFilesClient` → output tree | **Done** |
+| Raw client maps | `firelands-map-extractor` | `World/maps/**` from MPQs (WDT/ADT/WDL…) | **Done** (phase 1) |
+| TUI launcher | `firelands-extractors` | FTXUI: DBC + raw maps today | **Partial** — must grow to drive full pipeline (§6 Phase G) |
+| Shared vmap math I/O | `FirelandsVmapCommon` | Magic constants, BIH, DBC reader, MPQ stream, `ModelSpawn` | **Done** (see §6 Phase A) |
+| Server `.map` + tilelist + **Cameras/** | `firelands-map-extractor-vmap` | Tool 1 — ADT/WDT → `maps/*.map`, `*.tilelist`; `CinematicCamera.dbc` → `Cameras/*.m2` | **Implemented** (consolidated sources; parity hardening in §6) |
+| VMap4 extract | `firelands-vmap4-extractor` | Tool 2 — `Buildings/` | **Ported** (monolithic layout; modular split optional) |
+| VMap4 assemble | `firelands-vmap4-assembler` | Tool 3 — `vmaps/` | **Implemented** (first port; integration tests pending) |
+| MMAP generate | `firelands-mmap-generator` (name TBD) | Tool 4 — `mmaps/` (Recast/Detour) | **Not started** |
+| Runtime collision | `world` | `IMapCollisionQueries` + data root | **Stub only** |
+
+**Naming note (avoid confusion):** there are **two** “map extractors”. Only the **vmap** one produces server `.map` binaries.
+
+| Binary | Location | Output |
+|--------|----------|--------|
+| `firelands-map-extractor` | `tools/extractors/` | Raw client files under `World/maps/…` |
+| `firelands-map-extractor-vmap` | `tools/vmap/map_extractor/` | Server `maps/<id><yy><xx>.map` + `<id>.tilelist` |
+
+---
+
+## 1. Collision pipeline (end-to-end)
+
+Raw MPQ extract (optional for Tool 2 if ADT paths resolve via the same MPQ chain) is separate from **server** `.map` generation.
 
 ```
 WoW 4.3.4 Data/
-      │  (MPQ + locale MPQs — already handled by MpqPatchChain)
+      │  (MPQ + locale MPQs — MpqPatchChain / StormLib)
       ▼
-┌─────────────────────┐
-│  firelands-map-     │  ← Tool 1  (ADT/WDT → .map tiles + DBC dump)
-│    extractor        │
-└────────┬────────────┘
-         │  maps/          dbc/
-         ▼
-┌─────────────────────┐
-│  firelands-vmap4-   │  ← Tool 2  (WMO/M2 geometry → Buildings/)
-│    extractor        │
-└────────┬────────────┘
-         │  Buildings/dir_bin   Buildings/<model>.vmo-raw
-         ▼
-┌─────────────────────┐
-│  firelands-vmap4-   │  ← Tool 3  (Buildings → vmaps/)
-│    assembler        │
-└────────┬────────────┘
-         │  vmaps/*.vmtree   vmaps/*.vmtile   vmaps/*.vmo
-         ▼
-   Server worldserver reads vmaps/ via IMapCollisionQueries
+┌──────────────────────────┐
+│ firelands-map-extractor- │  ← Tool 1  ADT/WDT → server maps/*.map + *.tilelist
+│ vmap                     │
+└────────────┬─────────────┘
+             │  maps/
+             ▼
+┌──────────────────────────┐
+│ firelands-vmap4-         │  ← Tool 2  WMO/M2 → Buildings/
+│ extractor                │
+└────────────┬─────────────┘
+             │  Buildings/dir_bin, *.vmo-raw, …
+             ▼
+┌──────────────────────────┐
+│ firelands-vmap4-         │  ← Tool 3  Buildings/ → vmaps/
+│ assembler                │
+└────────────┬─────────────┘
+             │  vmaps/*.vmtree, *.vmtile, *.vmo, GameObjectModels.dtree
+             ▼
+┌──────────────────────────┐
+│ firelands-mmap-          │  ← Tool 4  maps/ + vmaps/ → mmaps/ (navmesh tiles)
+│ generator                │
+└────────────┬─────────────┘
+             │  mmaps/
+             ▼
+   worldserver: VMap + Detour mmap loaders → real IMapCollisionQueries
 ```
 
-**Run order is mandatory.** Tools 2 and 3 do not depend on `maps/` output directly but must follow Tool 1 in documentation to be clear.
+**Run order:** Tool 1 → 2 → 3 → 4 for a full collision dataset. Tool 4 **requires** Tool 1 and Tool 3 outputs (and typically the same `maps/` layout the reference generator expects).
 
 ---
 
@@ -52,19 +87,29 @@ Defined in reference `VMapDefinitions.h`; our port must use identical values.
 
 ---
 
-## 3. Repository layout (new directories)
+## 3. Repository layout (actual vs planned)
+
+**As of this plan revision:**
 
 ```
 tools/
-  extractors/          ← already exists (DBC / raw map extract + MpqPatchChain)
+  extractors/                    ← MPQ chain, DBC CLI, raw map CLI, FTXUI shell
+    FirelandsExtractCommon
+    firelands-dbc-extractor
+    firelands-map-extractor      ← raw World/maps/* only (not server .map)
+    firelands-extractors         ← TUI (must orchestrate full pipeline — Phase G)
   vmap/
-    common/            ← shared math, chunk reader, DBC reader reused by tools 1–3
-    map_extractor/     ← Tool 1
-    vmap4_extractor/   ← Tool 2
-    vmap4_assembler/   ← Tool 3
+    common/                      ← FirelandsVmapCommon (tools 1–3 + tests)
+    map_extractor/               ← Tool 1 → firelands-map-extractor-vmap
+    vmap4_extractor/             ← Tool 2 → firelands-vmap4-extractor
+    vmap4_assembler/             ← Tool 3 → firelands-vmap4-assembler
+  mmap/   (or vmap/mmap_generator/)
+    …                            ← Tool 4 — to be added (Phase F)
 ```
 
-All three tools link a new static library **`FirelandsVmapCommon`** and the existing **`FirelandsExtractCommon`** (for `MpqPatchChain`, `WowDataMpqList`). No linkage into `world`/`auth`.
+**Linkage rule:** `FirelandsVmapCommon` (+ map extractor lib) must **not** link into `world` / `auth`. Tool 4 may depend on **Recast/Detour** as a `FetchContent` dependency; keep it scoped to the generator target only.
+
+**Optional later:** link `firelands-map-extractor-vmap` against `FirelandsExtractCommon` to reuse one MPQ-open implementation instead of parallel Storm code in `MapExtractorTask.cpp` — only if parity tests prove identical file lists and patch order.
 
 ---
 
@@ -91,16 +136,33 @@ All three tools link a new static library **`FirelandsVmapCommon`** and the exis
 
 ### 4.2 Tool 1 — `tools/vmap/map_extractor/`
 
-Target binary: **`firelands-map-extractor`** (replaces / supersedes existing stub with full ADT logic).
+Target binary: **`firelands-map-extractor-vmap`** (server `.map` + tilelist; **not** `tools/extractors/firelands-map-extractor`).
 
-| Our file | Ported from | Content |
-|----------|-------------|---------|
-| `AdtChunks.h` | `map_extractor/adt.h` | `AdtMcvt`, `AdtMclq`, `AdtMcnk`, `AdtMfbo`, `AdtLiquidInstance`, `AdtMh2o`; liquid constants |
-| `WdtChunks.h` | `map_extractor/wdt.h` | `WdtMain` (64×64 presence grid) |
-| `MapFileWriter.h/cpp` | `map_extractor/System.cpp` (write side) | Output binary format writer: `MapFileHeader`, AREA / MHGT / MLIQ / holes chunks |
-| `LiquidTables.h/cpp` | `map_extractor/System.cpp` (DBC caches) | `LiquidMaterialEntry`, `LiquidObjectEntry`, `LiquidTypeEntry` + DBC loaders |
-| `AdtConverter.h/cpp` | `map_extractor/System.cpp` (`ConvertADT`) | ADT → `.map` conversion logic |
-| `MapExtractorMain.cpp` | `map_extractor/System.cpp` (`main`) | CLI, MPQ loading, WDT iteration, DBC/DB2 dump, camera M2 copy |
+**Implemented layout** (functionally covers the rows below; names differ from an “ideal” split):
+
+| Current module | Role |
+|----------------|------|
+| `AdtReader.h/cpp` | ADT chunk parse + liquid resolution → in-memory grid for writer |
+| `WdtReader.h/cpp` | WDT 64×64 presence |
+| `MapFileWriter.h/cpp` | `MAPS` header, AREA / MHGT / MLIQ / holes, tilelist writer |
+| `MapExtractorTask.h/cpp` | MPQ open (world + locale), `Map.dbc` + liquid DBCs, per-map loop, deep-water ignore list, **camera M2 extract** |
+| `map_extractor_main.cpp` | CLI `-d/-o/-b/-q` |
+
+#### Cinematic cameras (`Cameras/`)
+
+Reference **map_extractor** (`ExtractCameraFiles` / TCP `System.cpp`): read **`DBFilesClient\CinematicCamera.dbc`** from the **locale** archive; for each row, string field **1** is an internal path (often `Cameras\….mdx`); replace **`.mdx` → `.m2`**; open the file from the **world** MPQ handle (patch chain already applied; same resolution as `MpqStream` / `SFILE_OPEN_FROM_MPQ`); write to **`{output}/Cameras/{relative after Cameras\}`**, skipping rows with unknown layout or files already on disk.
+
+Used by the world server for race/class intro and cinematic camera paths (`CMSG_NEXT_CINEMATIC_CAMERA` and related data).
+
+**Reference-aligned file split** (optional refactor if readability suffers — not blocking):
+
+| Idealized file | Ported from | Content |
+|----------------|-------------|---------|
+| `AdtChunks.h` | `map_extractor/adt.h` | Chunk struct layouts / constants |
+| `LiquidTables.h/cpp` | `map_extractor/System.cpp` (DBC caches) | Liquid tables + loaders (today inside `MapExtractorTask` / `AdtReader`) |
+| `AdtConverter` | `ConvertADT` | Could be peeled from `AdtReader` |
+
+**Remaining optional gaps vs ref:** extra DB2 sidecars or locale-subfolder camera layout (335-era `Cameras/<locale>/`) — only if we need byte-identical folder layout to an older ref; **4.3.4 TCP** writes flat `{output}/Cameras/`.
 
 #### Output format — `.map` (byte layout, must be exact)
 
@@ -128,7 +190,9 @@ Map 0 (Azeroth) and Map 1 (Thousand Needles) have specific `(x,y)` grid cells wh
 
 ### 4.3 Tool 2 — `tools/vmap/vmap4_extractor/`
 
-Target binary: **`firelands-vmap4-extractor`**
+Target binary: **`firelands-vmap4-extractor`**.
+
+**Current port shape:** one executable built from `vmapexport.cpp`, `adtfile.cpp`, `wdtfile.cpp`, `wmo.cpp`, `model.cpp`, `mpqfile.cpp`, `gameobject_extract.cpp`, `QuatMath.cpp`, linked to `FirelandsVmapCommon`. The table below is the **logical** module map; splitting files to match names 1:1 is optional cleanup.
 
 | Our file | Ported from | Content |
 |----------|-------------|---------|
@@ -310,49 +374,66 @@ These are four functions totalling ~50 lines; implement in `tools/vmap/common/Ma
 
 ---
 
-## 6. Phased delivery
+## 6. Phased delivery (status + remaining work)
 
-### Phase A — Common library + BIH (prerequisite for phases B–D)
-- [ ] `VMapMagic.h` — all constants.
-- [ ] `Vec3.h` — Vec3, AaBox3, Quaternion.
-- [ ] `Mat3.h` — `fromEulerAnglesZYX`, `toEulerAnglesXYZ`, `Quat * Mat3`, `Mat3 * Vec3`.
-- [ ] `ChunkReader.h/cpp` — chunked file parser (`MVER` ver-18 guard).
-- [ ] `MpqStream.h/cpp` — full-file MPQ load, seek, `flipcc`.
-- [ ] `DbcReader.h/cpp` — WDBC reader.
-- [ ] `ModelSpawn.h/cpp` — flags, `readFromFile/writeToFile`.
-- [ ] `BoundingIntervalHierarchy.h/cpp` — build + `writeToFile/readFromFile`.
-- [ ] CMake: `FirelandsVmapCommon` static lib.
-- [ ] Unit tests: BIH round-trip (write → read → same bounds/tree); `ModelSpawn` serialization.
+Use this section as the **authoritative checklist**. Update checkboxes when merging work.
 
-### Phase B — Tool 1: map extractor (`.map` + `.tilelist`)
-- [ ] `AdtChunks.h` — all struct layouts.
-- [ ] `LiquidTables.h/cpp` — DBC-driven liquid resolution.
-- [ ] `AdtConverter.h/cpp` — ADT → `.map` (MHGT, MLIQ, AREA, holes).
-- [ ] `MapExtractorMain.cpp` — CLI + MPQ loading + WDT 64×64 iteration.
-- [ ] Integration test: extract a single known ADT tile; compare MHGT header fields and area chunk against reference output.
+### Phase A — Common library + BIH
+- [x] `VMapMagic.h/cpp` — constants + `ReadAndValidateChunk`.
+- [x] `Vec3.h` — Vec3, AaBox3, Quaternion (header-only).
+- [x] `Mat3.h` — Euler / quat helpers (header-only).
+- [x] `ChunkReader.h` — chunked parser + `MVER` guard (header-only; no `.cpp` required).
+- [x] `MpqStream.h/cpp`.
+- [x] `DbcReader.h/cpp`.
+- [x] `ModelSpawn.h/cpp`.
+- [x] `BoundingIntervalHierarchy.h/cpp`.
+- [x] CMake: `FirelandsVmapCommon`.
+- [x] Unit tests: `tests/unit/vmap/` — BIH, `ModelSpawn`, `Vec3`/`Mat3`, `MapFileWriter`, `QuatMath`.
 
-### Phase C — Tool 2: vmap4 extractor (`Buildings/`)
-- [ ] `ModelHeaders.h`, `M2Model.h/cpp` — M2 collision mesh + `ConvertToVMAPModel`.
-- [ ] `WmoRoot.h/cpp`, `WmoGroup.h/cpp` — WMO chunk parsers + group converter.
-- [ ] `DoodadData.h`, `DoodadExtract.h/cpp`, `WmoInstanceExtract.h/cpp`.
-- [ ] `AdtModelExtract.h/cpp`, `WdtModelExtract.h/cpp`.
-- [ ] `UniqueIdGen.h/cpp`.
-- [ ] `GameObjectExtract.h/cpp`.
-- [ ] `VmapExtractorMain.cpp` — CLI + `ParsMapFiles`.
-- [ ] Integration test: extract a small map; `dir_bin` has non-zero records; at least one `.vmo`-raw model file produced; header magic validates.
+### Phase B — Tool 1: server `.map` + `.tilelist` + `Cameras/` (`firelands-map-extractor-vmap`)
+- [x] ADT parse + liquid resolution + height/liquid/area → `MapFileWriter`.
+- [x] WDT iteration + per-tile ADT load + `IsDeepWaterIgnored` parity.
+- [x] `MapExtractorTask` — world + locale MPQ chain, `Map.dbc` + liquid DBCs.
+- [x] CLI `map_extractor_main.cpp`.
+- [x] **Cinematic cameras:** `CinematicCamera.dbc` → extract listed M2 into `Cameras/` (DBC field 1, `.mdx`→`.m2`, world MPQ read).
+- [ ] **Parity / integration:** hex or fixture diff of one tile (e.g. map 0, 32,32) vs reference extractor output; document acceptable deltas.
+- [ ] **Optional:** extra DB2 dump paths if runtime tooling requires them.
 
-### Phase D — Tool 3: vmap4 assembler (`vmaps/`)
-- [ ] `WorldModelRaw.h/cpp` — `GroupModel_Raw::Read`, `WorldModel_Raw::Read`.
-- [ ] `WorldModel.h/cpp` — `GroupModel`, `WorldModel`, `WmoLiquid`, `writeFile`.
-- [ ] `TileAssembler.h/cpp` — `readMapSpawns`, `calculateTransformedBound`, `convertWorld2`, `convertRawFile`, `exportGameobjectModels`.
-- [ ] `AssemblerMain.cpp` — CLI defaults (`Buildings` → `vmaps`).
-- [ ] Integration test: assemble a small map set; validate `.vmtree` magic + NODE/SIDX structure; validate at least one `.vmo` header; validate `.vmtile` nSpawns matches `dir_bin` record count for that tile.
+### Phase C — Tool 2: vmap4 extractor (`firelands-vmap4-extractor` → `Buildings/`)
+- [x] Executable + ref-derived sources (`vmapexport`, ADT/WDT/WMO/M2 paths).
+- [ ] **Hardening:** scripted `--help`, consistent `-d/-o` UX with Tool 1, deterministic error codes.
+- [ ] **Integration test** (CI or manual recipe in doc): small map extract → non-empty `dir_bin` + at least one raw model with `RAW_VMAP_MAGIC`.
 
-### Phase E — Runtime wiring (server side)
-- [ ] Port or adapt `VMapManager2` + `StaticMapTree` + `ModelInstance` into `src/infrastructure/world/` (or a new `src/infrastructure/collision/`).
-- [ ] Remove `MapCollisionQueriesStub`, wire real `IMapCollisionQueries` implementation.
-- [ ] `worldserver.yaml` — `Collision.DataRoot` path.
-- [ ] End-to-end test: server loads vmaps for a map, raycast to ground returns plausible Z.
+### Phase D — Tool 3: vmap4 assembler (`vmaps/`) — **blocking for mmap + runtime**
+- [x] `tools/vmap/vmap4_assembler/` + CMake target **`firelands-vmap4-assembler`**.
+- [x] Raw model read path — `GroupModel_Raw::Read`, `WorldModel_Raw::Read` (embedded in `TileAssembler.cpp`, ref-aligned).
+- [x] `WorldModelWrite.h/cpp` — `GroupModel`, `WorldModel`, `WmoLiquid`, `writeFile` (assembler write subset; no runtime ray queries).
+- [x] `TileAssembler.h/cpp` — `readMapSpawns`, `calculateTransformedBound`, `convertWorld2`, `convertRawFile`, `exportGameobjectModels`.
+- [x] `assembler_main.cpp` — CLI: `[Buildings] [vmaps]` (defaults match ref).
+- [ ] **Integration test:** `.vmtree` / `.vmtile` / `.vmo` magic and structural checks per §9.
+
+### Phase E — Runtime wiring (server) — **collision “done” for gameplay**
+- [ ] Port `VMapManager2` + `StaticMapTree` + related collision types into `src/infrastructure/` (dedicated `collision/` subdir recommended).
+- [ ] Replace `MapCollisionQueriesStub` with real `IMapCollisionQueries` (LoS / height / queries used by packets & scripts).
+- [ ] `worldserver.yaml` — `Collision.DataRoot` (and document layout: `vmaps/` + optional `maps/` beside it).
+- [ ] **E2E:** LoS blocked where a wall exists; ground height non-trivial on a known coordinate.
+
+### Phase F — MMAP generator (`mmaps/`) — **pathfinding dataset**
+- [ ] Add **`firelands-mmap-generator`** (or equivalent name): port reference **`mmaps_generator`** (Recast + Detour tile build).
+- [ ] CMake: `FetchContent` (or submodule) for **RecastNavigation** matching ref expectations; isolate to this target.
+- [ ] Inputs: Tool 1 `maps/`, Tool 3 `vmaps/`, same `Map.dbc` / tile bounds assumptions as ref.
+- [ ] Output: `mmaps/` tree byte-compatible with ref (validate against ref output on 1–2 maps).
+- [ ] Extend runtime (Phase E) with **Detour navmesh load** where `IMapCollisionQueries::IsNavMeshDataAvailable` becomes true.
+
+### Phase G — Launcher, CLI ergonomics, operator docs — **“extractores cerrados” UX**
+- [ ] `firelands-extractors` TUI: tasks for **DBC**, **raw maps**, **map-extractor-vmap**, **vmap4-extractor**, **vmap4-assembler**, **mmap-generator** (invoke binaries or shared libs with captured logs).
+- [ ] Single **documented recipe** in `docs/EN/extractors.md`: paths, order, disk layout, troubleshooting (MPQ not found, locale, build id).
+- [ ] Align `docs/EN/STORM_LIB_ROADMAP.md` §7 with this checklist (or add “see master plan §6” and avoid duplicate schedules).
+
+### Phase H — Release criteria (“tema extractores cerrado”)
+- [ ] All targets in §0 build on Linux + macOS CI (Windows when tier-1).
+- [ ] At least one **automated** test from phases A–D and one **documented manual** mmap smoke (until CI has client fixtures).
+- [ ] No remaining `Placeholder` / `Stub` for collision on paths where data exists (feature-flag OK if data missing).
 
 ---
 
@@ -394,20 +475,26 @@ These are four functions totalling ~50 lines; implement in `tools/vmap/common/Ma
 | **G3D math removal** | Validate `fromEulerAnglesZYX` against a known WMO transform; compare output `dir_bin` bytes for one doodad set. |
 | **Deep-water ignore list** | Copy exact grid cell list from `IsDeepWaterIgnored()` verbatim; table-driven, not procedural. |
 | **`dir_bin` has no magic** | Assembler relies on sequential read until EOF; ensure writer always closes cleanly and never leaves partial records. |
+| **Recast / Detour version skew** | Pin the same Recast commit as ref; diff one `.mmtile` header after generator port. |
+| **MMAP build without vmaps** | Enforce CLI validation: refuse to run Tool 4 if `vmaps/` or `maps/` layout missing. |
 
 ---
 
 ## 9. Testing strategy (by phase)
 
 | Phase | Test type | What to check |
-|-------|-----------|--------------|
+|-------|-----------|---------------|
 | A | Unit | BIH: build 10 AABoxes, write, read, verify bounds + objects. |
 | A | Unit | ModelSpawn: write one with MOD_HAS_BOUND, read back, field equality. |
-| B | Integration | Extract map 0 tile (32,32); open output in hex editor; validate "MAPS" header, MHGT min/max plausible (near sea level). |
-| C | Integration | `dir_bin` non-empty; at least one `.vmo`-raw file; open, check "VMAP048" at offset 0. |
-| D | Integration | `vmaps/000.vmtree` exists; open, "VMAP_4.8" at offset 0, then "NODE". |
-| D | Integration | `vmaps/000_32_32.vmtile` exists; nSpawns > 0. |
-| E | Runtime | Server LOS query on a coordinate known to be blocked by a building returns false (manual test or automated with fixture). |
+| B | Integration | Extract map 0 tile (32,32); validate `"MAPS"` header; MHGT min/max plausible; optional byte-diff vs ref. |
+| B | Integration | After run, `Cameras/` contains `.m2` files; count roughly matches ref extractor for same client. |
+| C | Integration | `dir_bin` non-empty; at least one `.vmo`-raw file; `"VMAP048"` at offset 0. |
+| D | Integration | `vmaps/000.vmtree` exists; `"VMAP_4.8"` at offset 0, then `"NODE"`. |
+| D | Integration | `vmaps/000_32_32.vmtile` exists; `nSpawns > 0`. |
+| E | Runtime | LoS / height: blocked vs open samples; graceful behavior when `DataRoot` missing. |
+| F | Integration | One mmap tile generated; runtime reports nav data available; optional poly walk test. |
+| G | Manual | TUI can drive full pipeline or documents equivalent shell script. |
+| H | CI | `ctest` runs vmap units; CMake exposes all extractor targets. |
 
 ---
 
@@ -416,11 +503,16 @@ These are four functions totalling ~50 lines; implement in `tools/vmap/common/Ma
 | Decision | Resolution |
 |----------|------------|
 | Port vs wrap | **Full C++ port** — no wrapped binaries. |
-| One binary vs three | **Three separate executables** (mirrors ref; lower memory per process; clear separation of concerns). |
+| Collision tools | **Four executables** — map (server) → vmap extract → vmap assemble → mmap generate (plus existing DBC/raw-map tools in `tools/extractors/`). |
 | G3D dependency | **Remove** — inline minimal math in `Mat3.h`. |
 | Boost.Filesystem | **Remove** — use `std::filesystem`. |
-| Interactive launcher | Prefer **`firelands-extractors`** (TUI); dedicated tools stay CLI-only (`--help` / flags). |
+| Interactive launcher | Prefer **`firelands-extractors`** (TUI) for operators; each tool remains invocable CLI-only for scripts (`--help` / flags). Full pipeline wiring = Phase G. |
 
 ---
 
-*Implementation starts with Phase A. Do not merge Phase C until Phase A unit tests pass. Do not run the assembler (Phase D) until Phase C produces a valid `Buildings/dir_bin`.*
+### Implementation order (guard rails)
+
+1. Phases **A–C** are largely in place; keep unit tests green when changing shared code.  
+2. Do **not** ship or rely on **Phase F** until **Phase D** produces valid `vmaps/` from real `Buildings/`.  
+3. Do **not** remove `MapCollisionQueriesStub` until **Phase E** loads real data and tests cover failure modes.  
+4. Treat **Phase H** as the definition of “extractores cerrados” for release branches.

@@ -82,6 +82,16 @@ struct AaBox3 {
         hi.z = std::max(hi.z, o.hi.z);
     }
 
+    /// Expand the box to contain point `p` (used by vmap4 assembler bounds merge).
+    void merge(Vec3 const& p) {
+        lo.x = std::min(lo.x, p.x);
+        lo.y = std::min(lo.y, p.y);
+        lo.z = std::min(lo.z, p.z);
+        hi.x = std::max(hi.x, p.x);
+        hi.y = std::max(hi.y, p.y);
+        hi.z = std::max(hi.z, p.z);
+    }
+
     // Used in G3D-style code: bounds.low() / bounds.high()
     Vec3 const& low()  const { return lo; }
     Vec3 const& high() const { return hi; }

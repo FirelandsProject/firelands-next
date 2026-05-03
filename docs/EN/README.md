@@ -2,6 +2,20 @@
 
 This folder contains the English documentation for **firelands-next**.
 
+## Getting Started
+
+- [Developer Setup Guide](DEVELOPER_SETUP.md) - Environment setup, build instructions, and first run
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute code, commit conventions, and best practices
+- [Testing Guide](TESTING.md) - How to write and run tests with GoogleTest
+
+## Database
+
+- [Database Schema Guide](DATABASE_SCHEMA.md) - Complete reference for SQL tables, migrations, and C++ integration
+
+## Scripting
+
+- [LUA Scripting Guide](LUA_SCRIPTING.md) - How to write gameplay scripts in Lua
+
 ## Module guides
 
 - [Modules index](modules/README.md)
