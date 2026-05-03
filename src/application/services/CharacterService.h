@@ -65,7 +65,7 @@ inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
       {12064u, INVTYPE_HEAD},   // Gamemaster Hood
       {2586u, INVTYPE_ROBE},    // Gamemaster's Robe (chest slot)
       {11508u, INVTYPE_FEET},   // Gamemaster's Slippers
-      {12063u, INVTYPE_WEAPON}, // Gamemaster Sword (glow / "light" look)
+      {12063u, INVTYPE_2HWEAPON}, // Monster - Trident, Wicked (two-hand polearm)
   };
   std::unordered_set<uint32_t> existing;
   existing.reserve(grants.size());
@@ -74,8 +74,14 @@ inline void AppendGmStarterItems(std::vector<StarterItemGrant> &grants) {
       existing.insert(g.itemId);
   }
   for (GmStarterItem const &item : kGmItems) {
-    if (existing.insert(item.itemId).second)
-      grants.push_back(StarterItemGrant{item.itemId, 1u, item.invType});
+    if (existing.insert(item.itemId).second) {
+      StarterItemGrant g;
+      g.itemId = item.itemId;
+      g.count = 1u;
+      g.invType = item.invType;
+      g.bagOnly = true;
+      grants.push_back(g);
+    }
   }
 }
 

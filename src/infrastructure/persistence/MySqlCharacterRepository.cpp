@@ -2,6 +2,7 @@
 #include <domain/models/Character.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <shared/game/Bag0InventoryData.h>
+#include <shared/game/EquipmentCache.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/ItemEquipSlots.h>
 #include <shared/Logger.h>
@@ -11,7 +12,9 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace Firelands {
 
@@ -20,6 +23,7 @@ namespace {
 struct ItemProtoRow {
   uint8 inventoryType = 0;
   uint32 buyCount = 1;
+  uint32 displayId = 0;
 };
 
 float FiniteOrZero(float v) { return std::isfinite(v) ? v : 0.f; }
@@ -232,23 +236,44 @@ bool SaveInventoryToDb(std::shared_ptr<sql::Connection> conn, uint32_t charGuid,
   }
 }
 
-std::optional<ItemProtoRow> FetchItemProto(std::shared_ptr<sql::Connection> conn,
-                                            uint32_t itemEntry) {
+std::optional<ItemProtoRow> FetchItemProto(
+    std::shared_ptr<sql::Connection> conn, uint32_t itemEntry,
+    CharStartOutfitDbc const *charStartOutfitDbc,
+    ItemDb2Wdb2 const *itemDb2) {
   try {
     std::shared_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
-        "SELECT InventoryType, BuyCount FROM firelands_world.item_template "
-        "WHERE entry = ? LIMIT 1"));
+        "SELECT InventoryType AS ity, BuyCount AS bct, displayid AS did "
+        "FROM firelands_world.item_template WHERE entry = ? LIMIT 1"));
     ps->setUInt(1, itemEntry);
     std::unique_ptr<sql::ResultSet> rs(ps->executeQuery());
     if (rs->next()) {
       ItemProtoRow row;
-      row.inventoryType = static_cast<uint8>(rs->getUInt("InventoryType"));
+      row.inventoryType = static_cast<uint8>(rs->getUInt("ity"));
       row.buyCount =
-          std::max(1u, static_cast<uint32_t>(rs->getInt("BuyCount")));
+          std::max(1u, static_cast<uint32_t>(rs->getInt("bct")));
+      row.displayId = rs->getUInt("did");
       return row;
     }
   } catch (sql::SQLException const &e) {
     LOG_WARN("FetchItemProto failed for entry {}: {}", itemEntry, e.what());
+  }
+  if (itemDb2 && itemDb2->IsLoaded()) {
+    if (auto client = itemDb2->Lookup(itemEntry)) {
+      ItemProtoRow row;
+      row.inventoryType = client->inventoryType;
+      row.buyCount = 1u;
+      row.displayId = client->displayId;
+      return row;
+    }
+  }
+  if (charStartOutfitDbc) {
+    if (auto visual = charStartOutfitDbc->GetItemVisualByEntry(itemEntry)) {
+      ItemProtoRow row;
+      row.inventoryType = visual->invType;
+      row.buyCount = 1;
+      row.displayId = visual->displayId;
+      return row;
+    }
   }
   return std::nullopt;
 }
@@ -371,20 +396,94 @@ Bag0InventoryData LoadBag0Inventory(std::shared_ptr<sql::Connection> conn,
   return out;
 }
 
+/// Roster (`SMSG_CHAR_ENUM`) visuals: `character_inventory` + `item_template`, then
+/// optional client `Item.db2`, then CharStartOutfit.dbc.
+std::string BuildCharEnumEquipmentFromInventory(
+    Bag0InventoryData const &bag0,
+    std::shared_ptr<sql::Connection> itemProtoConn,
+    std::unordered_map<uint32_t, ItemProtoRow> &protoByEntry,
+    CharStartOutfitDbc const *charStartOutfitDbc,
+    ItemDb2Wdb2 const *itemDb2) {
+  EquipmentCache::VisualArray merged{};
+  for (size_t slot = 0; slot < kEquipmentSlotCount; ++slot) {
+    uint32_t const entry = bag0.equipEntries[slot];
+    if (entry == 0)
+      continue;
+
+    ItemProtoRow proto{};
+    auto cached = protoByEntry.find(entry);
+    if (cached != protoByEntry.end()) {
+      proto = cached->second;
+    } else if (auto fetched = FetchItemProto(itemProtoConn, entry,
+                                             charStartOutfitDbc, itemDb2)) {
+      proto = *fetched;
+      protoByEntry.emplace(entry, proto);
+    } else {
+      continue;
+    }
+
+    merged[slot].invType = proto.inventoryType;
+    merged[slot].displayId = proto.displayId;
+    merged[slot].displayEnchantId = 0;
+  }
+
+  return EquipmentCache::SerializeVisualArray(merged);
+}
+
+/// Snapshot of `characters` row — must be read fully before any other query on the same
+/// connection; nested statements while a `ResultSet` is open leave behavior undefined.
+struct AccountCharacterRow {
+  uint32_t guid = 0;
+  uint32_t account = 0;
+  std::string name;
+  uint8_t race = 0;
+  uint8_t klass = 0;
+  uint8_t gender = 0;
+  uint8_t skin = 0;
+  uint8_t face = 0;
+  uint8_t hairStyle = 0;
+  uint8_t hairColor = 0;
+  uint8_t facialHair = 0;
+  uint8_t level = 0;
+  uint16_t zoneId = 0;
+  uint16_t mapId = 0;
+  float x = 0.f;
+  float y = 0.f;
+  float z = 0.f;
+  float orientation = 0.f;
+  uint32_t guildId = 0;
+  uint32_t characterFlags = 0;
+  uint32_t customizationFlags = 0;
+  bool firstLogin = false;
+  uint8_t outfitId = 0;
+  std::string dbEquipmentCache;
+  uint32_t money = 0;
+};
+
 } // namespace
 
 MySqlCharacterRepository::MySqlCharacterRepository(
-    std::shared_ptr<sql::Connection> connection)
-    : _connection(std::move(connection)) {
+    std::shared_ptr<sql::Connection> characterConnection,
+    std::shared_ptr<sql::Connection> worldConnection)
+    : _connection(std::move(characterConnection)),
+      _worldConnection(std::move(worldConnection)) {
   EnsureCharactersOrientationColumn(_connection);
   EnsureCharactersMoneyColumn(_connection);
   EnsureCharacterSpellTable(_connection);
+  _charStartOutfitLoaded =
+      _charStartOutfitDbc.Load("data/dbc/CharStartOutfit.dbc");
+  if (!_charStartOutfitLoaded) {
+    LOG_WARN("MySqlCharacterRepository: could not load data/dbc/CharStartOutfit.dbc; "
+             "item visual fallback disabled.");
+  }
+  _itemDb2.Load("data/dbc/Item.db2");
 }
 
 std::vector<std::shared_ptr<Character>>
 MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
   std::vector<std::shared_ptr<Character>> characters;
   try {
+    std::unordered_map<uint32_t, ItemProtoRow> itemProtoByEntry;
     std::shared_ptr<sql::PreparedStatement> stmnt(_connection->prepareStatement(
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
@@ -395,35 +494,60 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
 
     std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery());
 
+    std::vector<AccountCharacterRow> rows;
     while (res->next()) {
-      characters.push_back(std::make_shared<Character>(
-          res->getUInt("guid"), res->getUInt("account"),
-          std::string(res->getString("name")),
-          static_cast<uint8>(res->getUInt("race")),
-          static_cast<uint8>(res->getUInt("class")),
-          static_cast<uint8>(res->getUInt("gender")),
-          static_cast<uint8>(res->getUInt("skin")),
-          static_cast<uint8>(res->getUInt("face")),
-          static_cast<uint8>(res->getUInt("hairStyle")),
-          static_cast<uint8>(res->getUInt("hairColor")),
-          static_cast<uint8>(res->getUInt("facialHair")),
-          static_cast<uint8>(res->getUInt("level")),
-          static_cast<uint16>(res->getUInt("zoneId")),
-          static_cast<uint16>(res->getUInt("mapId")),
-          ResultSetWorldFloat(*res, "x"), ResultSetWorldFloat(*res, "y"),
-          ResultSetWorldFloat(*res, "z"), ResultSetWorldFloat(*res, "orientation"),
-          res->getUInt("guildId"), res->getUInt("characterFlags"),
-          res->getUInt("customizationFlags"), res->getBoolean("firstLogin"),
-          static_cast<uint8>(res->getUInt("outfitId")),
+      AccountCharacterRow row;
+      row.guid = res->getUInt("guid");
+      row.account = res->getUInt("account");
+      row.name = std::string(res->getString("name"));
+      row.race = static_cast<uint8>(res->getUInt("race"));
+      row.klass = static_cast<uint8>(res->getUInt("class"));
+      row.gender = static_cast<uint8>(res->getUInt("gender"));
+      row.skin = static_cast<uint8>(res->getUInt("skin"));
+      row.face = static_cast<uint8>(res->getUInt("face"));
+      row.hairStyle = static_cast<uint8>(res->getUInt("hairStyle"));
+      row.hairColor = static_cast<uint8>(res->getUInt("hairColor"));
+      row.facialHair = static_cast<uint8>(res->getUInt("facialHair"));
+      row.level = static_cast<uint8>(res->getUInt("level"));
+      row.zoneId = static_cast<uint16>(res->getUInt("zoneId"));
+      row.mapId = static_cast<uint16>(res->getUInt("mapId"));
+      row.x = ResultSetWorldFloat(*res, "x");
+      row.y = ResultSetWorldFloat(*res, "y");
+      row.z = ResultSetWorldFloat(*res, "z");
+      row.orientation = ResultSetWorldFloat(*res, "orientation");
+      row.guildId = res->getUInt("guildId");
+      row.characterFlags = res->getUInt("characterFlags");
+      row.customizationFlags = res->getUInt("customizationFlags");
+      row.firstLogin = res->getBoolean("firstLogin");
+      row.outfitId = static_cast<uint8>(res->getUInt("outfitId"));
+      row.dbEquipmentCache =
           res->isNull("equipmentCache") ? ""
-                                        : std::string(res->getString("equipmentCache")),
+                                        : std::string(res->getString("equipmentCache"));
+      row.money = res->getUInt("money");
+      rows.push_back(std::move(row));
+    }
+    res.reset();
+
+    for (AccountCharacterRow const &r : rows) {
+      Bag0InventoryData const bag0 = LoadBag0Inventory(_connection, r.guid);
+      std::string const equipmentCacheForRoster =
+          BuildCharEnumEquipmentFromInventory(
+              bag0, itemTemplateConnection(), itemProtoByEntry,
+              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+              &_itemDb2);
+
+      characters.push_back(std::make_shared<Character>(
+          r.guid, r.account, r.name, r.race, r.klass, r.gender, r.skin, r.face,
+          r.hairStyle, r.hairColor, r.facialHair, r.level, r.zoneId, r.mapId,
+          r.x, r.y, r.z, r.orientation, r.guildId, r.characterFlags,
+          r.customizationFlags, r.firstLogin, r.outfitId, equipmentCacheForRoster,
           std::array<uint32_t, kEquipmentSlotCount>{},
           std::array<uint32_t, kEquipmentSlotCount>{},
           std::array<uint32_t, kEquipmentSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
-          res->getUInt("money")));
+          r.money));
     }
   } catch (sql::SQLException &e) {
     LOG_ERROR("Database error in GetCharactersByAccount: {}", e.what());
@@ -499,7 +623,10 @@ bool MySqlCharacterRepository::GrantStarterItems(
       if (grant.itemId == 0)
         continue;
 
-      auto proto = FetchItemProto(_connection, grant.itemId);
+      auto proto = FetchItemProto(itemTemplateConnection(), grant.itemId,
+                                  _charStartOutfitLoaded ? &_charStartOutfitDbc
+                                                         : nullptr,
+                                  &_itemDb2);
       uint8_t inventoryType = 0;
       uint32_t count = grant.count;
       if (proto) {
@@ -520,10 +647,13 @@ bool MySqlCharacterRepository::GrantStarterItems(
       uint8_t slot = 0;
       bool placed = false;
 
-      if (auto equipSlot = equipAllocator.TryEquipSlot(inventoryType)) {
-        slot = *equipSlot;
-        placed = true;
-      } else {
+      if (!grant.bagOnly) {
+        if (auto equipSlot = equipAllocator.TryEquipSlot(inventoryType)) {
+          slot = *equipSlot;
+          placed = true;
+        }
+      }
+      if (!placed) {
         for (unsigned s = INVENTORY_SLOT_ITEM_START;
              s < INVENTORY_SLOT_ITEM_END; ++s) {
           uint8_t bs = static_cast<uint8_t>(s);
@@ -656,32 +786,44 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
     std::unique_ptr<sql::ResultSet> res(stmnt->executeQuery());
 
     if (res->next()) {
-      uint32_t lowGuid = res->getUInt("guid");
-      auto bag0 = LoadBag0Inventory(_connection, lowGuid);
-      return Character(
-          lowGuid, res->getUInt("account"),
-          std::string(res->getString("name")),
-          static_cast<uint8>(res->getUInt("race")),
-          static_cast<uint8>(res->getUInt("class")),
-          static_cast<uint8>(res->getUInt("gender")),
-          static_cast<uint8>(res->getUInt("skin")),
-          static_cast<uint8>(res->getUInt("face")),
-          static_cast<uint8>(res->getUInt("hairStyle")),
-          static_cast<uint8>(res->getUInt("hairColor")),
-          static_cast<uint8>(res->getUInt("facialHair")),
-          static_cast<uint8>(res->getUInt("level")),
-          static_cast<uint16>(res->getUInt("zoneId")),
-          static_cast<uint16>(res->getUInt("mapId")),
-          ResultSetWorldFloat(*res, "x"), ResultSetWorldFloat(*res, "y"),
-          ResultSetWorldFloat(*res, "z"), ResultSetWorldFloat(*res, "orientation"),
-          res->getUInt("guildId"), res->getUInt("characterFlags"),
-          res->getUInt("customizationFlags"), res->getBoolean("firstLogin"),
-          static_cast<uint8>(res->getUInt("outfitId")),
+      uint32_t const lowGuid = res->getUInt("guid");
+      uint32_t const account = res->getUInt("account");
+      std::string const name = std::string(res->getString("name"));
+      uint8_t const race = static_cast<uint8>(res->getUInt("race"));
+      uint8_t const klass = static_cast<uint8>(res->getUInt("class"));
+      uint8_t const gender = static_cast<uint8>(res->getUInt("gender"));
+      uint8_t const skin = static_cast<uint8>(res->getUInt("skin"));
+      uint8_t const face = static_cast<uint8>(res->getUInt("face"));
+      uint8_t const hairStyle = static_cast<uint8>(res->getUInt("hairStyle"));
+      uint8_t const hairColor = static_cast<uint8>(res->getUInt("hairColor"));
+      uint8_t const facialHair = static_cast<uint8>(res->getUInt("facialHair"));
+      uint8_t const level = static_cast<uint8>(res->getUInt("level"));
+      uint16_t const zoneId = static_cast<uint16>(res->getUInt("zoneId"));
+      uint16_t const mapId = static_cast<uint16>(res->getUInt("mapId"));
+      float const px = ResultSetWorldFloat(*res, "x");
+      float const py = ResultSetWorldFloat(*res, "y");
+      float const pz = ResultSetWorldFloat(*res, "z");
+      float const po = ResultSetWorldFloat(*res, "orientation");
+      uint32_t const guildId = res->getUInt("guildId");
+      uint32_t const characterFlags = res->getUInt("characterFlags");
+      uint32_t const customizationFlags = res->getUInt("customizationFlags");
+      bool const firstLogin = res->getBoolean("firstLogin");
+      uint8_t const outfitId = static_cast<uint8>(res->getUInt("outfitId"));
+      std::string const equipmentCache =
           res->isNull("equipmentCache") ? ""
-                                        : std::string(res->getString("equipmentCache")),
-          bag0.equipEntries, bag0.equipGuids, bag0.equipStacks,
-          bag0.packEntries, bag0.packGuids, bag0.packStacks,
-          res->getUInt("money"));
+                                        : std::string(res->getString("equipmentCache"));
+      uint32_t const money = res->getUInt("money");
+      // Read the full row before nested queries; do not `res.reset()` here — closing
+      // the result set early has been observed to upset the same connection/session
+      // for the inventory query on some MariaDB connector builds.
+
+      Bag0InventoryData const bag0 = LoadBag0Inventory(_connection, lowGuid);
+      return Character(lowGuid, account, name, race, klass, gender, skin, face,
+                       hairStyle, hairColor, facialHair, level, zoneId, mapId, px,
+                       py, pz, po, guildId, characterFlags, customizationFlags,
+                       firstLogin, outfitId, equipmentCache, bag0.equipEntries,
+                       bag0.equipGuids, bag0.equipStacks, bag0.packEntries,
+                       bag0.packGuids, bag0.packStacks, money);
     }
     return std::nullopt;
   } catch (sql::SQLException &e) {
@@ -807,7 +949,9 @@ bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
     LOG_WARN("GrantItemToBag0 slot scan failed: {}", e.what());
   }
 
-  auto proto = FetchItemProto(_connection, itemEntry);
+  auto proto = FetchItemProto(itemTemplateConnection(), itemEntry,
+                              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+                              &_itemDb2);
   uint32_t grantCount = count;
   if (proto) {
     if (grantCount == 0)
@@ -886,7 +1030,9 @@ bool MySqlCharacterRepository::AutoEquipFromBag0Slot(
              srcSlot);
     return false;
   }
-  auto proto = FetchItemProto(_connection, entry);
+  auto proto = FetchItemProto(itemTemplateConnection(), entry,
+                              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+                              &_itemDb2);
   uint8_t inventoryType = 0;
   if (proto) {
     inventoryType = proto->inventoryType;

@@ -39,6 +39,7 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
 
   m_visuals.clear();
   m_itemGrants.clear();
+  m_itemVisualByEntry.clear();
 
   for (uint32_t rec = 0; rec < reader.GetRecordCount(); ++rec) {
     uint8_t race = reader.ReadUInt8(rec, 1, offs);
@@ -53,6 +54,8 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
 
     for (int j = 0; j < 24; ++j) {
       int32_t rawItem = reader.ReadInt32(rec, static_cast<uint32_t>(5 + j), offs);
+      int32_t displayRaw =
+          reader.ReadInt32(rec, static_cast<uint32_t>(29 + j), offs);
       int32_t invRaw = reader.ReadInt32(rec, static_cast<uint32_t>(53 + j), offs);
       uint8_t invType = invRaw > 0 ? static_cast<uint8_t>(invRaw) : 0;
       if (rawItem > 0) {
@@ -61,10 +64,13 @@ bool CharStartOutfitDbc::Load(std::string const &dbcPath) {
         grant.count = 0; // resolved later from DB proto when available
         grant.invType = invType;
         itemGrants.push_back(grant);
+        if (displayRaw > 0 && invRaw > 0) {
+          m_itemVisualByEntry.try_emplace(
+              grant.itemId,
+              ItemVisualInfo{invType, static_cast<uint32_t>(displayRaw)});
+        }
       }
 
-      int32_t displayRaw =
-          reader.ReadInt32(rec, static_cast<uint32_t>(29 + j), offs);
       // DBC uses -1 for "unused". Treat <= 0 as empty.
       if (displayRaw <= 0)
         continue;
@@ -107,6 +113,14 @@ CharStartOutfitDbc::GetStarterItemGrants(uint8 race, uint8 klass,
   if (it != m_itemGrants.end())
     return it->second;
   return {};
+}
+
+std::optional<CharStartOutfitDbc::ItemVisualInfo>
+CharStartOutfitDbc::GetItemVisualByEntry(uint32 itemEntry) const {
+  auto const it = m_itemVisualByEntry.find(itemEntry);
+  if (it == m_itemVisualByEntry.end())
+    return std::nullopt;
+  return it->second;
 }
 
 } // namespace Firelands

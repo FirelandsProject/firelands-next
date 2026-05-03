@@ -18,6 +18,8 @@ struct StarterItemGrant {
   uint32 itemId = 0;
   uint32 count = 1;
   uint8 invType = 0;
+  /// If true, item is placed in backpack slots only (never auto-equipped).
+  bool bagOnly = false;
 };
 
 struct PlayerCreateVisualItem {

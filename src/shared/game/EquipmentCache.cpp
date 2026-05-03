@@ -57,4 +57,20 @@ VisualArray Parse(std::string const &serialized) {
   return parsed;
 }
 
+std::string SerializeVisualArray(VisualArray const &arr) {
+  std::vector<PlayerCreateVisualItem> items;
+  items.reserve(arr.size());
+  for (size_t i = 0; i < arr.size(); ++i) {
+    if (arr[i].displayId == 0 && arr[i].invType == 0)
+      continue;
+    PlayerCreateVisualItem row{};
+    row.slot = static_cast<uint8>(i);
+    row.invType = arr[i].invType;
+    row.displayId = arr[i].displayId;
+    row.displayEnchantId = arr[i].displayEnchantId;
+    items.push_back(row);
+  }
+  return Serialize(items);
+}
+
 } // namespace Firelands::EquipmentCache

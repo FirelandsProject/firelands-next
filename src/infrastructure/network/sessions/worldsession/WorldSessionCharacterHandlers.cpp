@@ -72,7 +72,8 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
     response.Append<uint8>(ch->GetClass());
 
     const auto visualItems = EquipmentCache::Parse(ch->GetEquipmentCache());
-    // Equipment (VisualItems) - 23 slots in Cata
+    // Equipment (VisualItems) — 23 slots for 4.3.4.15595. Per-slot order is
+    // invType, displayId, enchantVisual (differs from Trinity 3.3.5 wire order).
     for (int slot = 0; slot < 23; ++slot) {
       auto const &visualSlot = visualItems[slot];
       response.Append<uint8>(visualSlot.invType);

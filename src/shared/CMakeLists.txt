@@ -3,6 +3,7 @@ add_library(FirelandsShared STATIC
     system/SystemClipboard.cpp
     dbc/DbcReader.cpp
     dbc/CharStartOutfitDbc.cpp
+    dbc/ItemDb2Wdb2.cpp
     dbc/LanguagesDbc.cpp
     dbc/SpellDbc.cpp
     dbc/GtOctCombatDbc.cpp

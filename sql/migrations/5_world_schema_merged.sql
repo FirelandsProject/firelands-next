@@ -129,15 +129,21 @@ CREATE TABLE IF NOT EXISTS `playercreateinfo_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- === 9_firelands_world_item_template.sql ===
+-- Parity with firelands-cata-ref `data/sql/base/db_hotfixes/item.sql` (DB2 Item.db2):
+--   ID->entry, ClassID->class, SubclassID->subclass, SoundOverrideSubclassID,
+--   Material, DisplayInfoID->displayid, InventoryType, SheatheType, VerifiedBuild.
+-- `BuyCount` is server-side (not in DB2 item); kept for inventory/equip logic.
 CREATE TABLE IF NOT EXISTS `item_template` (
-  `entry` int(10) unsigned NOT NULL,
-  `class` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `subclass` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `InventoryType` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `displayid` int(10) unsigned NOT NULL DEFAULT '0',
-  `BuyCount` int(11) NOT NULL DEFAULT '1',
-  `Material` tinyint(4) NOT NULL DEFAULT '0',
-  `SheatheType` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `entry` int unsigned NOT NULL,
+  `class` tinyint unsigned NOT NULL DEFAULT 0,
+  `subclass` tinyint unsigned NOT NULL DEFAULT 0,
+  `sound_override_subclass` int NOT NULL DEFAULT 0,
+  `Material` int NOT NULL DEFAULT 0,
+  `displayid` int unsigned NOT NULL DEFAULT 0,
+  `InventoryType` tinyint unsigned NOT NULL DEFAULT 0,
+  `SheatheType` tinyint unsigned NOT NULL DEFAULT 0,
+  `verified_build` smallint NOT NULL DEFAULT 0,
+  `BuyCount` int NOT NULL DEFAULT 1,
   PRIMARY KEY (`entry`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -207,15 +213,15 @@ INSERT IGNORE INTO `playercreateinfo` (`race`, `class`, `map`, `zone`, `position
 (7,7,1,2158,2779.67,-767.128,0.649066,0),
 (7,8,1,2158,2779.67,-767.128,0.649066,0),
 (7,9,1,2158,2779.67,-767.128,0.649066,0),
-(8,1,0,3439,10326.3,830.625,5.48879,0),
-(8,2,0,3439,10326.3,830.625,5.48879,0),
-(8,3,0,3439,10326.3,830.625,5.48879,0),
-(8,4,0,3439,10326.3,830.625,5.48879,0),
-(8,5,0,3439,10326.3,830.625,5.48879,0),
+(8,1,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,2,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,3,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,4,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,5,1,5691,-1171.45,-5263.65,0.847728,5.78945),
 (8,6,609,4298,2356.21,-5662.21,426.026,3.93485),
-(8,7,0,3439,10326.3,830.625,5.48879,0),
-(8,8,0,3439,10326.3,830.625,5.48879,0),
-(8,9,0,3439,10326.3,830.625,5.48879,0),
+(8,7,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,8,1,5691,-1171.45,-5263.65,0.847728,5.78945),
+(8,9,1,5691,-1171.45,-5263.65,0.847728,5.78945),
 (10,1,1,2158,2779.67,-767.128,0.649066,0),
 (10,2,1,2158,2779.67,-767.128,0.649066,0),
 (10,3,1,2158,2779.67,-767.128,0.649066,0),

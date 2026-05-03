@@ -4,6 +4,8 @@
 #include <domain/repositories/ICharacterRepository.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <shared/Common.h>
+#include <shared/dbc/CharStartOutfitDbc.h>
+#include <shared/dbc/ItemDb2Wdb2.h>
 #include <conncpp.hpp>
 #include <memory>
 
@@ -11,7 +13,11 @@ namespace Firelands {
 
     class MySqlCharacterRepository : public ICharacterRepository {
     public:
-        explicit MySqlCharacterRepository(std::shared_ptr<sql::Connection> connection);
+        /// `characterConnection` — `firelands_characters`. `worldConnection` — optional
+        /// `firelands_world` for `item_template` (recommended; falls back to character DB).
+        explicit MySqlCharacterRepository(
+            std::shared_ptr<sql::Connection> characterConnection,
+            std::shared_ptr<sql::Connection> worldConnection = nullptr);
 
         std::vector<std::shared_ptr<Character>> GetCharactersByAccount(uint32_t accountId) override;
         std::optional<uint32_t> CreateCharacter(const Character& character) override;
@@ -41,6 +47,13 @@ namespace Firelands {
                            Bag0InventoryData const &invData) override;
     private:
         std::shared_ptr<sql::Connection> _connection;
+        std::shared_ptr<sql::Connection> _worldConnection;
+        CharStartOutfitDbc _charStartOutfitDbc;
+        bool _charStartOutfitLoaded = false;
+        ItemDb2Wdb2 _itemDb2;
+        std::shared_ptr<sql::Connection> itemTemplateConnection() const {
+            return _worldConnection ? _worldConnection : _connection;
+        }
     };
 
 } // namespace Firelands

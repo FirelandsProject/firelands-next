@@ -21,4 +21,7 @@ std::string Serialize(std::vector<PlayerCreateVisualItem> const &items);
 
 VisualArray Parse(std::string const &serialized);
 
+/// Build the semicolon cache string from a full -slot visual array (omits empty slots).
+std::string SerializeVisualArray(VisualArray const &arr);
+
 } // namespace Firelands::EquipmentCache
