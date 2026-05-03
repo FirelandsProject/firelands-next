@@ -431,8 +431,9 @@ TEST(SpellManagerTests, CastTablesFillSpellStartCastTime) {
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
-  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartDeferred);
   EXPECT_EQ(ReadSpellStartCastTimeMs(out.spellStart), 3200u);
+  EXPECT_EQ(out.deferredCastTimeMs, 3200u);
 }
 
 TEST(SpellManagerTests, RangeExceeded_ReturnsOutOfRange) {

@@ -63,6 +63,16 @@ void SendPlayerCreateToNotifier(
     std::optional<std::pair<uint32, uint32>> const &healthOverride = std::nullopt,
     std::optional<std::pair<uint32, uint32>> const &power1Override = std::nullopt);
 
+/// Minimal `TYPEID_UNIT` field map for GM-spawned NPCs (no DB creature_template yet).
+/// \param npcFlags `UNIT_NPC_FLAGS` mask (e.g. gossip bit `0x1`).
+std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
+                                                         uint32 creatureEntry,
+                                                         uint32 displayId,
+                                                         uint32 health,
+                                                         uint32 maxHealth,
+                                                         uint8 level,
+                                                         uint32 npcFlags = 0);
+
 } // namespace WorldSessionObjectUpdate
 
 } // namespace Firelands

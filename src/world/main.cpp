@@ -16,6 +16,7 @@
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
+#include <infrastructure/persistence/MySqlNpcTemplateSearchRepository.h>
 #include <infrastructure/persistence/MySqlPlayerCreateInfoRepository.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
 #include <infrastructure/dbc/SpellCastTablesDbc.h>
@@ -232,16 +233,20 @@ int main(int argc, char **argv) {
     auto spellManager =
         std::make_shared<SpellManager>(spellDefinitions, spellCastTables);
 
+    auto npcTemplateSearchRepo =
+        std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
+
     auto sessionFactory = [authService, charService, commandService,
                            accountDataRepo, languagesDbc, spellDefinitions,
                            realmRepo, onlineCharRegistry, gmTicketService,
-                           itemDbHotfix, spellManager](
+                           itemDbHotfix, spellManager, npcTemplateSearchRepo](
                               boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
                                      commandService, accountDataRepo,
                                      languagesDbc, spellDefinitions, realmRepo,
                                      onlineCharRegistry, gmTicketService,
-                                     itemDbHotfix, spellManager)
+                                     itemDbHotfix, spellManager,
+                                     npcTemplateSearchRepo)
           ->Start();
     };
 

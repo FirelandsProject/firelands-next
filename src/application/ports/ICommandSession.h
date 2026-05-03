@@ -64,6 +64,25 @@ public:
     return false;
   }
 
+  /// Spawns a creature at this session's map position and facing (world server).
+  virtual bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
+    (void)creatureEntry;
+    (void)displayId;
+    return false;
+  }
+
+  /// Despawns a creature on this session's current map (`TryGetCreature`).
+  virtual bool GmDeleteNpcByObjectGuid(uint64 objectGuid) {
+    (void)objectGuid;
+    return false;
+  }
+
+  /// GM NPC template search: prints styled matches to system chat (no gossip UI).
+  virtual bool GmNpcSearchPrintResults(std::string const &nameQuery) {
+    (void)nameQuery;
+    return false;
+  }
+
   /// Client `CMSG_SET_SELECTION` target (0 = none). Used by GM item commands in-game.
   virtual uint64_t GetClientSelectionGuid() const { return 0; }
   /// World `ObjectGuid` for the logged-in character (0 when not in world / console).

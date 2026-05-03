@@ -542,5 +542,95 @@ void SendPlayerCreateToNotifier(
   target->SendPacket(pkt);
 }
 
+std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
+                                                         uint32 creatureEntry,
+                                                         uint32 displayId,
+                                                         uint32 health,
+                                                         uint32 maxHealth,
+                                                         uint8 level,
+                                                         uint32 npcFlags) {
+  auto const packF = [](float v) {
+    uint32 b = 0;
+    std::memcpy(&b, &v, sizeof(b));
+    return b;
+  };
+
+  std::map<uint16, uint32> fields;
+  fields[OBJECT_FIELD_GUID] = static_cast<uint32>(objectGuid & 0xFFFFFFFFu);
+  fields[OBJECT_FIELD_GUID + 1] = static_cast<uint32>(objectGuid >> 32);
+  fields[OBJECT_FIELD_TYPE] =
+      (1u << TYPEID_OBJECT) | (1u << TYPEID_UNIT);
+  fields[OBJECT_FIELD_ENTRY] = creatureEntry;
+  fields[OBJECT_FIELD_SCALE_X] = packF(1.0f);
+  fields[OBJECT_FIELD_PADDING] = 0;
+
+  uint8 bytes0[4] = {1, 8, 0, 0}; // Human Mage, male, mana (creature visuals only)
+  std::memcpy(&fields[UNIT_FIELD_BYTES_0], bytes0, 4);
+
+  fields[UNIT_FIELD_HEALTH] = health;
+  fields[UNIT_FIELD_MAXHEALTH] = maxHealth;
+  fields[UNIT_FIELD_POWER1] = 100;
+  fields[UNIT_FIELD_POWER2] = 0;
+  fields[UNIT_FIELD_POWER3] = 0;
+  fields[UNIT_FIELD_POWER4] = 0;
+  fields[UNIT_FIELD_POWER5] = 0;
+  fields[UNIT_FIELD_MAXPOWER1] = 100;
+  fields[UNIT_FIELD_MAXPOWER2] = 0;
+  fields[UNIT_FIELD_MAXPOWER3] = 0;
+  fields[UNIT_FIELD_MAXPOWER4] = 0;
+  fields[UNIT_FIELD_MAXPOWER5] = 0;
+
+  fields[UNIT_FIELD_LEVEL] = level;
+  fields[UNIT_FIELD_FACTIONTEMPLATE] = 35;
+  fields[UNIT_VIRTUAL_ITEM_SLOT_ID] = 0;
+  fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 1)] = 0;
+  fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 2)] = 0;
+
+  fields[UNIT_FIELD_FLAGS] = 0;
+  fields[UNIT_FIELD_FLAGS_2] = 0;
+  fields[UNIT_FIELD_AURASTATE] = 0;
+  fields[UNIT_FIELD_BASEATTACKTIME] = 2000;
+  fields[static_cast<uint16>(UNIT_FIELD_BASEATTACKTIME + 1)] = 2000;
+  fields[UNIT_FIELD_RANGEDATTACKTIME] = 2000;
+  fields[UNIT_FIELD_BOUNDINGRADIUS] = packF(0.306f);
+  fields[UNIT_FIELD_COMBATREACH] = packF(1.5f);
+  fields[UNIT_FIELD_DISPLAYID] = displayId;
+  fields[UNIT_FIELD_NATIVEDISPLAYID] = displayId;
+  fields[UNIT_FIELD_MOUNTDISPLAYID] = 0;
+  fields[UNIT_FIELD_MINDAMAGE] = packF(1.0f);
+  fields[UNIT_FIELD_MAXDAMAGE] = packF(2.0f);
+  fields[UNIT_FIELD_MINOFFHANDDAMAGE] = packF(0.0f);
+  fields[UNIT_FIELD_MAXOFFHANDDAMAGE] = packF(0.0f);
+  fields[UNIT_FIELD_BYTES_1] = 0;
+  fields[UNIT_FIELD_PETNUMBER] = 0;
+  fields[UNIT_FIELD_PET_NAME_TIMESTAMP] = 0;
+  fields[UNIT_FIELD_PETEXPERIENCE] = 0;
+  fields[UNIT_FIELD_PETNEXTLEVELEXP] = 0;
+  fields[UNIT_DYNAMIC_FLAGS] = 0;
+  fields[UNIT_MOD_CAST_SPEED] = packF(1.0f);
+  fields[UNIT_MOD_CAST_HASTE] = packF(0.0f);
+  fields[UNIT_CREATED_BY_SPELL] = 0;
+  fields[UNIT_NPC_FLAGS] = npcFlags;
+  fields[UNIT_NPC_EMOTESTATE] = 0;
+
+  for (uint16_t i = 0; i < 5; ++i) {
+    fields[static_cast<uint16>(UNIT_FIELD_STAT0 + i)] = 10;
+    fields[static_cast<uint16>(UNIT_FIELD_POSSTAT0 + i)] = 0;
+    fields[static_cast<uint16>(UNIT_FIELD_NEGSTAT0 + i)] = 0;
+  }
+
+  fields[UNIT_FIELD_BASE_MANA] = 100;
+  fields[UNIT_FIELD_BASE_HEALTH] = maxHealth;
+  fields[UNIT_FIELD_BYTES_2] = 0;
+
+  fields[UNIT_FIELD_ATTACK_POWER] = 0;
+  fields[UNIT_FIELD_ATTACK_POWER_MOD_POS] = 0;
+  fields[UNIT_FIELD_ATTACK_POWER_MOD_NEG] = 0;
+  fields[UNIT_FIELD_ATTACK_POWER_MULTIPLIER] = packF(0.0f);
+  fields[UNIT_FIELD_HOVERHEIGHT] = packF(1.0f);
+
+  return fields;
+}
+
 } // namespace WorldSessionObjectUpdate
 } // namespace Firelands

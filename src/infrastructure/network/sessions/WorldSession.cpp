@@ -1,6 +1,7 @@
 #include <application/ports/IMapNotifier.h>
 #include <application/services/WorldService.h>
 #include <domain/models/Character.h>
+#include <domain/world/Creature.h>
 #include <domain/world/Player.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionMovementChecks.h>
@@ -28,13 +29,14 @@
 #include <domain/repositories/ICharacterRepository.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <algorithm>
+#include <atomic>
+#include <cctype>
 #include <map>
 #include <chrono>
 #include <cstring>
 #include <ctime>
 #include <cmath>
 #include <memory>
-#include <optional>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -75,6 +77,60 @@ void RebuildKnownSpellIdSet(std::vector<uint32> const &ordered,
   outIds.reserve(ordered.size());
   for (uint32 sid : ordered)
     outIds.insert(sid);
+}
+
+std::atomic<uint32_t> g_nextGmSpawnCreatureLow{0x70000000u};
+
+uint64_t AllocateGmSpawnCreatureGuid() {
+  return static_cast<uint64_t>(
+      g_nextGmSpawnCreatureLow.fetch_add(1u, std::memory_order_relaxed));
+}
+
+void BroadcastGmCreatureCreate(uint32 mapId, uint64 creatureGuid,
+                               MovementInfo const &move, uint32 entry,
+                               uint32 displayId, uint32 hp, uint32 maxHp,
+                               uint8 level, uint32 npcFlags = 0) {
+  auto fields = WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
+      creatureGuid, entry, displayId, hp, maxHp, level, npcFlags);
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddCreateObject(creatureGuid, TYPEID_UNIT, move, fields);
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  WorldService::Instance().GetMap(mapId)->BroadcastPacketToNearby(creatureGuid, pkt,
+                                                                  false);
+}
+
+void BroadcastGmCreatureDespawn(uint32 mapId, uint64 creatureGuid) {
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddOutOfRangeObjects({creatureGuid});
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  WorldService::Instance().GetMap(mapId)->BroadcastPacketToNearby(creatureGuid, pkt,
+                                                                  false);
+}
+
+constexpr uint32_t kGmNpcSearchMaxLines = 20;
+
+std::string SanitizeNpcSearchQuery(std::string const &in) {
+  std::string out;
+  out.reserve(std::min<size_t>(in.size(), 48));
+  for (unsigned char uc : in) {
+    char const c = static_cast<char>(uc);
+    if (std::isspace(static_cast<unsigned char>(c))) {
+      if (!out.empty() && out.back() != ' ')
+        out.push_back(' ');
+      continue;
+    }
+    if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' ||
+        c == '\'') {
+      out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    if (out.size() >= 48)
+      break;
+  }
+  while (!out.empty() && out.back() == ' ')
+    out.pop_back();
+  return out;
 }
 
 constexpr uint8_t kMailMessageTypeNormal = 0;
@@ -154,7 +210,8 @@ WorldSession::WorldSession(
     std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharRegistry,
     std::shared_ptr<GmTicketService> gmTicketService,
     std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix,
-    std::shared_ptr<SpellManager> spellManager)
+    std::shared_ptr<SpellManager> spellManager,
+    std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch)
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
       _commandService(std::move(commandService)),
@@ -165,8 +222,10 @@ WorldSession::WorldSession(
       _onlineCharRegistry(std::move(onlineCharRegistry)),
       _gmTicketService(std::move(gmTicketService)),
       _itemDbHotfix(std::move(itemDbHotfix)),
-      _spellManager(std::move(spellManager)), _serverSeed(0),
-      _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()) {}
+      _spellManager(std::move(spellManager)),
+      _npcTemplateSearch(std::move(npcTemplateSearch)), _serverSeed(0),
+      _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()),
+      _pendingSpellCastTimer(_socket.get_executor()) {}
 
 WorldSession::~WorldSession() {
   if (_playerGuid != 0) {
@@ -859,11 +918,107 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
     PublishGmMovementPacketsIfInWorld();
 }
 
+void WorldSession::CancelPendingClientSpellCast() {
+  (void)_pendingSpellCastTimer.cancel();
+}
+
+void WorldSession::ScheduleDeferredSpellCastCompletion(SpellCastOutcome const &out) {
+  (void)_pendingSpellCastTimer.cancel();
+
+  PendingSpellCastFinish finish{};
+  finish.mapId = _mapId;
+  finish.casterGuid = _playerGuid;
+  finish.castId = out.deferredCastId;
+  finish.spellId = out.deferredSpellId;
+  finish.targetFlags = out.deferredTargetFlags;
+  finish.targetUnitGuid = out.deferredTargetUnitGuid;
+  finish.hitGuid = out.deferredHitGuid;
+  finish.hasDirectHealthEffect = out.hasDirectHealthEffect;
+  finish.directHealthTargetGuid = out.directHealthTargetGuid;
+  finish.directHealthDelta = out.directHealthDelta;
+  finish.power1Delta = out.power1Delta;
+  finish.spellCooldownDurationMs = out.spellCooldownDurationMs;
+  finish.spellCategoryCooldownGroup = out.spellCategoryCooldownGroup;
+  finish.spellCategoryCooldownDurationMs = out.spellCategoryCooldownDurationMs;
+
+  _pendingSpellCastTimer.expires_after(std::chrono::milliseconds(
+      static_cast<int64_t>(std::max<uint32_t>(1u, out.deferredCastTimeMs))));
+  auto self = shared_from_this();
+  _pendingSpellCastTimer.async_wait(
+      [self, finish](boost::system::error_code err) {
+        if (err)
+          return;
+        self->CompleteDeferredSpellCast(finish);
+      });
+}
+
+void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finish) {
+  if (_playerGuid != finish.casterGuid || finish.casterGuid == 0 || _mapId != finish.mapId)
+    return;
+
+  uint32 const castFlagsGo = SpellCastWire::CAST_FLAG_UNKNOWN_9;
+  auto const nowGo = std::chrono::steady_clock::now();
+  uint32 const castTimeGo = static_cast<uint32>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          nowGo.time_since_epoch())
+          .count());
+  WorldPacket spellGo;
+  uint64 const hitTargets[1] = {finish.hitGuid};
+  SpellCastWire::BuildSpellGo(spellGo, finish.casterGuid, finish.castId, finish.spellId,
+                              castFlagsGo, 0, castTimeGo, hitTargets, 1,
+                              finish.targetFlags, finish.targetUnitGuid);
+
+  if (auto map = WorldService::Instance().GetMap(finish.mapId)) {
+    map->BroadcastPacketToNearby(finish.casterGuid, spellGo, true);
+    if (finish.hasDirectHealthEffect && finish.directHealthDelta != 0) {
+      if (auto target = map->TryGetPlayer(finish.directHealthTargetGuid)) {
+        target->ApplyHealthDelta(finish.directHealthDelta);
+        WorldPacket hpUpdate;
+        ws_obj::BuildPlayerHealthValuesUpdate(
+            static_cast<uint16>(finish.mapId), finish.directHealthTargetGuid,
+            target->GetLiveHealth(), target->GetLiveMaxHealth(), hpUpdate);
+        map->BroadcastPacketToNearby(finish.directHealthTargetGuid, hpUpdate, true);
+      } else if (auto cr = map->TryGetCreature(finish.directHealthTargetGuid)) {
+        cr->ApplyHealthDelta(finish.directHealthDelta);
+        WorldPacket hpUpdate;
+        ws_obj::BuildPlayerHealthValuesUpdate(
+            static_cast<uint16>(finish.mapId), finish.directHealthTargetGuid,
+            cr->GetLiveHealth(), cr->GetLiveMaxHealth(), hpUpdate);
+        map->BroadcastPacketToNearby(finish.directHealthTargetGuid, hpUpdate, true);
+      }
+    }
+    if (finish.power1Delta != 0) {
+      if (auto casterPl = map->TryGetPlayer(finish.casterGuid)) {
+        casterPl->ApplyPower1Delta(finish.power1Delta);
+        WorldPacket pwUpdate;
+        ws_obj::BuildPlayerPower1ValuesUpdate(
+            static_cast<uint16>(finish.mapId), finish.casterGuid,
+            casterPl->GetLivePower1(), casterPl->GetLiveMaxPower1(), pwUpdate);
+        map->BroadcastPacketToNearby(finish.casterGuid, pwUpdate, true);
+      }
+    }
+    if (finish.spellCooldownDurationMs > 0) {
+      _spellCooldownUntil[finish.spellId] =
+          nowGo + std::chrono::milliseconds(
+                      static_cast<int64_t>(finish.spellCooldownDurationMs));
+    }
+    if (finish.spellCategoryCooldownGroup > 0 &&
+        finish.spellCategoryCooldownDurationMs > 0) {
+      _spellCategoryCooldownUntil[finish.spellCategoryCooldownGroup] =
+          nowGo + std::chrono::milliseconds(static_cast<int64_t>(
+              finish.spellCategoryCooldownDurationMs));
+    }
+  } else {
+    SendPacket(spellGo);
+  }
+}
+
 void WorldSession::FinalizeWorldExit() {
   if (_playerGuid == 0 || _accountId == 0)
     return;
 
   CancelPeriodicTimeSync();
+  CancelPendingClientSpellCast();
 
   uint64 const guid = _playerGuid;
   uint32 const mapId = _mapId;
@@ -1121,6 +1276,8 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
     return;
   }
 
+  CancelPendingClientSpellCast();
+
   SpellCastWire::ClientCastSpellData c;
   if (!SpellCastWire::TryReadClientCastSpell(packet, c)) {
     LOG_DEBUG(
@@ -1245,6 +1402,15 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       SendPacket(out.spellGo);
     }
     _gcdReady = out.newGcdReady;
+    return;
+  case SpellCastOutcome::Kind::SpellStartDeferred:
+    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+      map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
+    } else {
+      SendPacket(out.spellStart);
+    }
+    _gcdReady = out.newGcdReady;
+    ScheduleDeferredSpellCastCompletion(out);
     return;
   case SpellCastOutcome::Kind::None:
   default:
@@ -1404,6 +1570,84 @@ void WorldSession::HandleMoveTimeSkipped(WorldPacket &packet) {
   BitReader br(packet);
   for (int i = 0; i < 8; ++i) { if (br.ReadBit()) packet.Read<uint8>(); }
   LOG_DEBUG("CMSG_MOVE_TIME_SKIPPED: Time: {}", time);
+}
+
+bool WorldSession::GmNpcSearchPrintResults(std::string const &nameQuery) {
+  if (_playerGuid == 0)
+    return false;
+  if (!_npcTemplateSearch) {
+    SendNotification(
+        "|cffff5555[NPC search]|r |cffffffffcreature_template|r not available. Run "
+        "migration |cffFFD20023_world_creature_template_search.sql|r on "
+        "|cfffffffffirelands_world|r.");
+    return false;
+  }
+
+  std::string const q = SanitizeNpcSearchQuery(nameQuery);
+  if (q.empty()) {
+    SendNotification("|cff664422================================================|r");
+    SendNotification("|cffFFD200 NPC template search|r |cffAAAAAA(GM)|r");
+    SendNotification("|cff664422------------------------------------------------|r");
+    SendNotification("|cffAAAAAAUsage:|r     |cffffffff.npc search <name fragment>|r");
+    SendNotification("|cffAAAAAAExample:|r   |cffffffff.npc search kobold|r");
+    SendNotification("|cffAAAAAASpawn:|r      |cffffffff.npc add|r |cff00CED1<entry>|r "
+                       "|cffAAAAAA<displayId>|r");
+    SendNotification("|cff664422================================================|r");
+    return true;
+  }
+
+  auto rows =
+      _npcTemplateSearch->SearchNameSubstring(q, kGmNpcSearchMaxLines + 1u, 0);
+  bool truncated = rows.size() > kGmNpcSearchMaxLines;
+  if (truncated)
+    rows.resize(kGmNpcSearchMaxLines);
+
+  SendNotification("|cff664422================================================|r");
+  SendNotification("|cff00FF96NPC search|r  |cff555555>|r  |cffffffff" + q + "|r");
+  SendNotification("|cff664422------------------------------------------------|r");
+
+  if (rows.empty()) {
+    SendNotification("|cffff9966  No matches.|r Try a shorter or different fragment.");
+    SendNotification("|cff664422================================================|r");
+    return true;
+  }
+
+  uint32_t idx = 0;
+  for (NpcTemplateSearchRow const &row : rows) {
+    ++idx;
+    std::string line = "|cff7EB87C";
+    line += std::to_string(idx);
+    line += ".|r  ";
+    line += "|cff00CED1[";
+    line += std::to_string(row.entry);
+    line += "]|r  ";
+    line += "|cffffffff";
+    line += row.name;
+    line += "|r";
+    if (!row.subname.empty()) {
+      line += "  |cff9AA7B8";
+      line += row.subname;
+      line += "|r";
+    }
+    line += "   |cffC79C6E.npc add ";
+    line += std::to_string(row.entry);
+    line += " <displayId>|r";
+    if (line.size() > 255)
+      line = line.substr(0, 252) + "|r...";
+    SendNotification(line);
+  }
+
+  SendNotification("|cff664422------------------------------------------------|r");
+  SendNotification("|cffAAAAAAShowing:|r |cffffffff" + std::to_string(rows.size()) +
+                   "|r rows   "
+                   "|cffAAAAAA(|cff00CED1teal brackets|r |cffAAAAAA= template "
+                   "entry)|r");
+  if (truncated) {
+    SendNotification("|cffFF8040  First " + std::to_string(kGmNpcSearchMaxLines) +
+                     " rows only — narrow your search to see fewer hits.|r");
+  }
+  SendNotification("|cff664422================================================|r");
+  return true;
 }
 
 void WorldSession::HandleGossipHello(WorldPacket &packet) {
@@ -1751,6 +1995,50 @@ bool WorldSession::GmLearnSpell(uint32 spellId) {
   _knownSpellIds.insert(spellId);
   SendLearnedSpell(spellId);
   SendNotification("Learned spell " + std::to_string(spellId) + ".");
+  return true;
+}
+
+bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
+  if (_playerGuid == 0 || creatureEntry == 0 || displayId == 0)
+    return false;
+
+  uint64 const guid = AllocateGmSpawnCreatureGuid();
+  constexpr uint32_t kSeedHp = 100u;
+  auto spawned = std::make_shared<Creature>(guid, creatureEntry, displayId, kSeedHp);
+  spawned->SetPosition(_position);
+  WorldService::Instance().AddCreatureToMap(_mapId, std::move(spawned));
+
+  auto map = WorldService::Instance().GetMap(_mapId);
+  auto cr = map->TryGetCreature(guid);
+  if (!cr)
+    return false;
+
+  BroadcastGmCreatureCreate(_mapId, guid, cr->GetPosition(), creatureEntry, displayId,
+                            cr->GetLiveHealth(), cr->GetLiveMaxHealth(), 1);
+  SendNotification("Spawned NPC entry=" + std::to_string(creatureEntry) +
+                   " display=" + std::to_string(displayId) + " guid=" +
+                   std::to_string(guid) + ".");
+  return true;
+}
+
+bool WorldSession::GmDeleteNpcByObjectGuid(uint64 objectGuid) {
+  if (_playerGuid == 0 || objectGuid == 0)
+    return false;
+  if (objectGuid == _playerGuid) {
+    SendNotification("Cannot delete your own player with .npc del.");
+    return false;
+  }
+
+  auto map = WorldService::Instance().GetMap(_mapId);
+  if (!map->TryGetCreature(objectGuid)) {
+    SendNotification(
+        "That target is not a creature on your current map (guid mismatch?).");
+    return false;
+  }
+
+  BroadcastGmCreatureDespawn(_mapId, objectGuid);
+  map->RemoveObject(objectGuid);
+  SendNotification("Removed NPC guid=" + std::to_string(objectGuid) + ".");
   return true;
 }
 

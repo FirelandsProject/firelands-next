@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <vector>
 #include <shared/network/BitWriter.h>
 #include <shared/network/ByteBuffer.h>
 #include <shared/network/MovementInfo.h>
@@ -136,6 +137,17 @@ public:
     }
 
     AppendUpdateFieldValues(fields);
+  }
+
+  /// `UPDATETYPE_OUT_OF_RANGE_OBJECTS` — removes object visibility for nearby clients.
+  void AddOutOfRangeObjects(std::vector<uint64> const &guids) {
+    if (guids.empty())
+      return;
+    _count++;
+    _data.Append<uint8>(UPDATETYPE_OUT_OF_RANGE_OBJECTS);
+    _data.Append<uint32>(static_cast<uint32>(guids.size()));
+    for (uint64 const g : guids)
+      _data.WritePackedGuid(g);
   }
 
   /// `UPDATETYPE_VALUES` block (no movement). Used for inventory slot refreshes after swaps.

@@ -41,9 +41,8 @@ Database:
     URI: "jdbc:mariadb://127.0.0.1:3306/firelands_world"
 
 Log:
-  Level: "Info"
+  Level: "Debug"
   File: "logs/firelands-world.log"
-  # true = fixed banner (ANSI scroll region); false = normal terminal scrollback
   StickyBanner: true
 
 Motd:

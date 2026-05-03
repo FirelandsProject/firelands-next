@@ -24,6 +24,9 @@ namespace Firelands {
 
 namespace {
 
+/// Blood Elf Female civilian — usable placeholder when `.npc add` omits displayId.
+constexpr uint32_t kDefaultGmNpcDisplayId = 15688u;
+
 class DelegatingCommandSession final : public ICommandSession {
   std::shared_ptr<ICommandSession> _subject;
   std::shared_ptr<ICommandSession> _operatorSession;
@@ -91,6 +94,18 @@ public:
   }
 
   bool GmSetLevel(uint8 level) override { return _subject->GmSetLevel(level); }
+
+  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) override {
+    return _subject->GmSpawnNpc(creatureEntry, displayId);
+  }
+
+  bool GmDeleteNpcByObjectGuid(uint64 objectGuid) override {
+    return _subject->GmDeleteNpcByObjectGuid(objectGuid);
+  }
+
+  bool GmNpcSearchPrintResults(std::string const &nameQuery) override {
+    return _subject->GmNpcSearchPrintResults(nameQuery);
+  }
 
   uint64_t GetClientSelectionGuid() const override {
     return _operatorSession ? _operatorSession->GetClientSelectionGuid() : 0;
@@ -355,6 +370,10 @@ CommandService::CommandService(
       "server", {[this](auto s, auto a, auto o) { return HandleServer(s, a, o); },
                  ToMask(Permission::ServerControl), CommandAvailability::Both,
                  ConsoleArgLayout::SameAsInGame});
+  RegisterCommand(
+      "npc", {[this](auto s, auto a, auto o) { return HandleNpc(s, a, o); },
+             ToMask(Permission::ServerControl), CommandAvailability::Both,
+             ConsoleArgLayout::TargetOnlineCharacterFirst});
 }
 
 void CommandService::RegisterCommand(const std::string &name, CommandEntry entry) {
@@ -609,6 +628,17 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cffffffff.speed reset|r");
 
   notifyHelp(
+      "|cffFFD200· NPC spawn (Administrator)|r\n"
+      "|cffCCCCCC.npc search|r |cff888888—|r Search creature_template by name; results "
+      "print as colored lines in |cffffffffsystem chat|r. "
+      "|cffffffff.npc search <fragment>|r  "
+      "|cff666666Console:|r |cffffffff.npc Char search wolf|r\n"
+      "|cffCCCCCC.npc add|r |cff888888—|r Spawn creature template entry at your "
+      "coordinates and facing. Optional display id (until creature_template is wired).  "
+      "|cff666666e.g.|r |cffffffff.npc add 2575|r |cff666666or|r "
+      "|cffffffff.npc add 2575 15688|r\n"
+      "|cffCCCCCC.npc del|r |cff888888—|r Remove targeted creature (select NPC "
+      "first).  |cff666666Console:|r |cffffffff.npc CharName del <guid>|r\n"
       "|cffFFD200· World console only|r\n"
       "|cffAAAAAA(Type these in the world server terminal, not in-game chat.)|r\n"
       "|cffCCCCCC.account create|r |cff888888—|r Create an auth DB account.  "
@@ -1421,6 +1451,100 @@ bool CommandService::HandleTicket(std::shared_ptr<ICommandSession> session,
 
 void CommandService::SetShutdownRequestHandler(std::function<void()> handler) {
   _shutdownRequestHandler = std::move(handler);
+}
+
+bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
+                               const std::vector<std::string> &args,
+                               PrivilegeOrigin origin) {
+  if (args.empty()) {
+    session->SendNotification(
+        "Usage: .npc search [nameFragment]  |  .npc add <creatureEntry> [displayId]  "
+        "|  .npc del\n"
+        "Administrator (access 3) only. `.npc search <fragment>` prints colored matches "
+        "to system chat (no gossip).\n"
+        "Console: .npc <OnlineChar> search [fragment]  |  same add/del patterns.\n"
+        "Optional displayId defaults to " +
+        std::to_string(kDefaultGmNpcDisplayId) +
+        " when omitted (creature_template not loaded yet).");
+    return false;
+  }
+
+  if (AsciiEqualsLower(args[0], "search")) {
+    std::string const q = JoinArgs(args.begin() + 1, args.end());
+    if (!session->GmNpcSearchPrintResults(q)) {
+      session->SendNotification(
+          "|cffff5555[NPC search]|r Failed (must be in world with creature_template "
+          "configured).");
+      return false;
+    }
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[0], "add")) {
+    if (args.size() < 2) {
+      session->SendNotification(
+          "Usage: .npc add <creatureEntry> [displayId]  (defaults displayId=" +
+          std::to_string(kDefaultGmNpcDisplayId) + ")");
+      return false;
+    }
+    uint32 entry = 0;
+    uint32 displayId = kDefaultGmNpcDisplayId;
+    try {
+      entry = static_cast<uint32>(std::stoul(args[1]));
+      if (args.size() >= 3)
+        displayId = static_cast<uint32>(std::stoul(args[2]));
+    } catch (const std::exception &) {
+      session->SendNotification("Invalid creatureEntry or displayId.");
+      return false;
+    }
+    if (entry == 0 || displayId == 0) {
+      session->SendNotification("creatureEntry and displayId must be non-zero.");
+      return false;
+    }
+    if (!session->GmSpawnNpc(entry, displayId)) {
+      session->SendNotification("NPC spawn failed (you must be in world on a character).");
+      return false;
+    }
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[0], "del")) {
+    if (origin == PrivilegeOrigin::ServerConsole) {
+      if (args.size() < 2) {
+        session->SendNotification(
+            "Usage (console): .npc <OnlineChar> del <creatureGuid>  (decimal guid "
+            "from spawn message)");
+        return false;
+      }
+      uint64 guid = 0;
+      try {
+        guid = std::stoull(args[1]);
+      } catch (const std::exception &) {
+        session->SendNotification("Invalid creatureGuid.");
+        return false;
+      }
+      if (!session->GmDeleteNpcByObjectGuid(guid)) {
+        session->SendNotification("NPC delete failed.");
+        return false;
+      }
+      return true;
+    }
+
+    uint64 const sel = session->GetClientSelectionGuid();
+    if (sel == 0) {
+      session->SendNotification("Target an NPC in-game, then use .npc del.");
+      return false;
+    }
+    if (!session->GmDeleteNpcByObjectGuid(sel)) {
+      session->SendNotification(
+          "NPC delete failed (selection is not a creature on your map).");
+      return false;
+    }
+    return true;
+  }
+
+  session->SendNotification("Unknown .npc subcommand (use search, add, or del).");
+  return false;
 }
 
 bool CommandService::HandleEmail(std::shared_ptr<ICommandSession> session,

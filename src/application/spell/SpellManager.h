@@ -61,7 +61,9 @@ struct SpellCastRequest {
 /// Result of `SpellManager::ProcessCastRequest`: packets to send and new GCD time.
 /// Caller performs `SendPacket` / map broadcast. Hot path: avoid heap allocs here.
 struct SpellCastOutcome {
-  enum class Kind : uint8 { None, SpellFailure, SpellStartAndGo };
+  /// `SpellStartDeferred`: only `spellStart` is sent initially; `SMSG_SPELL_GO` and combat
+  /// effects run after `deferredCastTimeMs` (session-scheduled). Matches client cast-bar timing.
+  enum class Kind : uint8 { None, SpellFailure, SpellStartAndGo, SpellStartDeferred };
   Kind kind = Kind::None;
   WorldPacket failurePacket;
   WorldPacket spellStart;
@@ -78,6 +80,14 @@ struct SpellCastOutcome {
   /// If non-zero with `spellCategoryCooldownDurationMs`, caller updates category CD map.
   uint32 spellCategoryCooldownGroup = 0;
   uint32 spellCategoryCooldownDurationMs = 0;
+  /// When `kind == SpellStartDeferred`, session waits `deferredCastTimeMs` then sends GO + applies
+  /// health/power/cooldown fields below.
+  uint32 deferredCastTimeMs = 0;
+  uint8 deferredCastId = 0;
+  uint32 deferredSpellId = 0;
+  uint32 deferredTargetFlags = 0;
+  uint64 deferredTargetUnitGuid = 0;
+  uint64 deferredHitGuid = 0;
 };
 
 /// Centralizes spell cast validation and server-side spell wire output (Phase A+).

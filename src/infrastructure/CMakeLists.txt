@@ -7,6 +7,7 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlCharacterRepository.cpp
     persistence/MySqlGmTicketRepository.cpp
     persistence/MySqlPlayerCreateInfoRepository.cpp
+    persistence/MySqlNpcTemplateSearchRepository.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
     network/sessions/worldsession/WorldSessionDispatcher.cpp

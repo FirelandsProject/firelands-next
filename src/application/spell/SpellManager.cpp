@@ -73,6 +73,12 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   out->spellCooldownDurationMs = 0;
   out->spellCategoryCooldownGroup = 0;
   out->spellCategoryCooldownDurationMs = 0;
+  out->deferredCastTimeMs = 0;
+  out->deferredCastId = 0;
+  out->deferredSpellId = 0;
+  out->deferredTargetFlags = 0;
+  out->deferredTargetUnitGuid = 0;
+  out->deferredHitGuid = 0;
 
   uint32 const spellId = static_cast<uint32>(req.client.spellId);
   if (!IsSpellKnown(spellId, req.knownSpells)) {
@@ -236,22 +242,32 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
     out->power1Delta = -static_cast<int32>(def->manaCost);
 
   uint32 const castFlagsStart = SpellCastWire::CAST_FLAG_HAS_TRAJECTORY;
-  uint32 const castFlagsGo = SpellCastWire::CAST_FLAG_UNKNOWN_9;
-  uint32 const castTimeGo = static_cast<uint32>(
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          req.now.time_since_epoch())
-          .count());
 
   SpellCastWire::BuildSpellStart(out->spellStart, req.casterGuid, req.client.castId,
                                  spellId, castFlagsStart, 0, castTimeStart, targetFlags,
                                  targetUnitGuid);
 
-  uint64 const hitTargets[1] = {hitGuid};
-  SpellCastWire::BuildSpellGo(out->spellGo, req.casterGuid, req.client.castId, spellId,
-                              castFlagsGo, 0, castTimeGo, hitTargets, 1, targetFlags,
-                              targetUnitGuid);
-
-  out->kind = SpellCastOutcome::Kind::SpellStartAndGo;
+  bool const resolveInstantly = (castTimeStart == 0u);
+  if (resolveInstantly) {
+    uint32 const castFlagsGo = SpellCastWire::CAST_FLAG_UNKNOWN_9;
+    uint32 const castTimeGo = static_cast<uint32>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            req.now.time_since_epoch())
+            .count());
+    uint64 const hitTargets[1] = {hitGuid};
+    SpellCastWire::BuildSpellGo(out->spellGo, req.casterGuid, req.client.castId, spellId,
+                                castFlagsGo, 0, castTimeGo, hitTargets, 1, targetFlags,
+                                targetUnitGuid);
+    out->kind = SpellCastOutcome::Kind::SpellStartAndGo;
+  } else {
+    out->kind = SpellCastOutcome::Kind::SpellStartDeferred;
+    out->deferredCastTimeMs = castTimeStart;
+    out->deferredCastId = req.client.castId;
+    out->deferredSpellId = spellId;
+    out->deferredTargetFlags = targetFlags;
+    out->deferredTargetUnitGuid = targetUnitGuid;
+    out->deferredHitGuid = hitGuid;
+  }
 }
 
 } // namespace Firelands

@@ -8,6 +8,7 @@
 #include <application/services/AuthService.h>
 #include <application/services/CharacterService.h>
 #include <application/spell/SpellManager.h>
+#include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <boost/asio.hpp>
 #include <deque>
 #include <memory>
@@ -67,7 +68,9 @@ public:
           nullptr,
       std::shared_ptr<GmTicketService> gmTicketService = nullptr,
       std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix = nullptr,
-      std::shared_ptr<SpellManager> spellManager = nullptr);
+      std::shared_ptr<SpellManager> spellManager = nullptr,
+      std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch =
+          nullptr);
 
   ~WorldSession();
 
@@ -108,6 +111,9 @@ public:
   bool GmRemoveItem(uint32 itemEntry, uint32 count) override;
   bool GmSetLevel(uint8 level) override;
 
+  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) override;
+  bool GmDeleteNpcByObjectGuid(uint64 objectGuid) override;
+
   uint64_t GetClientSelectionGuid() const override { return _clientSelectionGuid; }
   uint64_t GetActiveCharacterObjectGuid() const override { return _playerGuid; }
 
@@ -118,11 +124,13 @@ public:
 
   void OpenGmMailboxUi() override;
 
+  bool GmNpcSearchPrintResults(std::string const &nameQuery) override;
+
   PlayerGmAppearanceForUpdates GetGmAppearanceForPlayerUpdates() const {
     return _gmAppearance;
   }
 
-private:
+ private:
   void ResetGmStateForLogout();
   void PublishGmVisualPatchIfInWorld();
   void PublishGmMovementPacketsIfInWorld();
@@ -251,6 +259,28 @@ private:
   void FinalizeWorldExit();
   void PublishSelfCoinageUpdate();
 
+  /// Payload for `SpellCastOutcome::SpellStartDeferred` timer completion (`SMSG_SPELL_GO` + effects).
+  struct PendingSpellCastFinish {
+    uint32 mapId = 0;
+    uint64 casterGuid = 0;
+    uint8 castId = 0;
+    uint32 spellId = 0;
+    uint32 targetFlags = 0;
+    uint64 targetUnitGuid = 0;
+    uint64 hitGuid = 0;
+    bool hasDirectHealthEffect = false;
+    uint64 directHealthTargetGuid = 0;
+    int32 directHealthDelta = 0;
+    int32 power1Delta = 0;
+    uint32 spellCooldownDurationMs = 0;
+    uint32 spellCategoryCooldownGroup = 0;
+    uint32 spellCategoryCooldownDurationMs = 0;
+  };
+
+  void CancelPendingClientSpellCast();
+  void ScheduleDeferredSpellCastCompletion(SpellCastOutcome const &out);
+  void CompleteDeferredSpellCast(PendingSpellCastFinish const &finish);
+
   tcp::socket _socket;
   std::shared_ptr<AuthService> _authService;
   std::shared_ptr<CharacterService> _charService;
@@ -263,6 +293,8 @@ private:
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::shared_ptr<ItemDbHotfixStore const> _itemDbHotfix;
   std::shared_ptr<SpellManager> _spellManager;
+  std::shared_ptr<INpcTemplateSearchRepository const> _npcTemplateSearch;
+
   /// Filled when the character is registered for console targeting; empty at
   /// character select / disconnected.
   std::string _activeCharacterName;
@@ -303,6 +335,7 @@ private:
   uint32 _timeSyncNextCounter = 0;
 
   boost::asio::steady_timer _timeSyncPeriodicTimer;
+  boost::asio::steady_timer _pendingSpellCastTimer;
 
   /// Filled while handling CMSG_AUTH_SESSION; consumed by SendAddonInfo (SMSG_ADDON_INFO).
   std::vector<AuthSecureAddonEntry> _authSecureAddons;

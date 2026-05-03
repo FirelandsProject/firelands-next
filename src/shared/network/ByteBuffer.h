@@ -47,6 +47,13 @@ public:
     }
   }
 
+  /// Length-prefixed UTF-8 with trailing null; length includes the `\0` byte.
+  /// Same convention as `AppendSmsgMessageChatPayload` (Cataclysm 4.3.x strings).
+  void WriteCataclysmSizedCString(std::string const &str) {
+    Append<uint32>(static_cast<uint32>(str.size() + 1));
+    WriteString(str);
+  }
+
   void Append(const std::string &str) { WriteString(str); }
 
   void Append(const char *str) { WriteString(str); }
