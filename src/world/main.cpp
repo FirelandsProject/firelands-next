@@ -187,13 +187,15 @@ int main(int argc, char **argv) {
     std::shared_ptr<ISpellDefinitionStore const> spellDefinitions;
     {
       auto store = std::make_shared<SpellEntryDbcStore>();
-      if (!store->Load(dbcBasePath + "/Spell.dbc")) {
-        LOG_WARN("Spell.dbc not loaded from {}; known spells are not filtered "
-                 "against client data.",
+      bool const spellDbcOk = store->Load(dbcBasePath + "/Spell.dbc");
+      if (!spellDbcOk) {
+        LOG_WARN("Spell.dbc not loaded from {}; definitions come only from "
+                 "`spell_dbc` if present.",
                  dbcBasePath + "/Spell.dbc");
-      } else {
-        spellDefinitions = std::move(store);
       }
+      store->MergeSpellDbcRows(worldConn);
+      if (spellDbcOk || store->DefinitionCount() > 0u)
+        spellDefinitions = std::move(store);
     }
 
     std::shared_ptr<ISpellCastTables const> spellCastTables;
