@@ -130,6 +130,8 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     HandleMoveTimeSkipped(packet);
     break;
   case CMSG_SET_SELECTION:
+    HandleSetSelection(packet);
+    break;
   case CMSG_AREA_TRIGGER:
   case CMSG_STAND_STATE_CHANGE:
   case CMSG_SET_SHEATHED:

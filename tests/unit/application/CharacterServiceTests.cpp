@@ -28,7 +28,12 @@ public:
     MOCK_METHOD(std::vector<uint32_t>, GetCharacterSpellIds, (uint32_t),
                 (override));
     MOCK_METHOD(bool, AddCharacterSpell, (uint32_t, uint32_t), (override));
-    MOCK_METHOD(bool, GrantItemToBag0, (uint32_t, uint32_t, uint32_t),
+    MOCK_METHOD(bool, HasItemTemplate, (uint32_t), (const, override));
+    MOCK_METHOD(bool, GrantItemToBag0,
+                (uint32_t, uint32_t, uint32_t, uint32_t *, uint8_t *), (override));
+    MOCK_METHOD(bool, SendGmMailWithItem, (uint32_t, uint32_t, uint32_t),
+                (override));
+    MOCK_METHOD(uint32_t, RemoveBag0ItemsByEntry, (uint32_t, uint32_t, uint32_t),
                 (override));
     MOCK_METHOD(AccessLevel, GetAccountAccessLevel, (uint32_t), (override));
     MOCK_METHOD(bool, AutoEquipFromBag0Slot,

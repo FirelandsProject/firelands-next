@@ -196,7 +196,7 @@ void WorldSession::SendAuthChallenge() {
 void WorldSession::UnregisterFromOnlineCharacterRegistryIfNeeded() {
   if (!_onlineCharRegistry || _activeCharacterName.empty())
     return;
-  _onlineCharRegistry->Unregister(_activeCharacterName, this);
+  _onlineCharRegistry->Unregister(_activeCharacterName, _playerGuid, this);
   _activeCharacterName.clear();
 }
 
@@ -718,7 +718,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
     if (auto ch = _charService->GetCharacterByGuid(guid)) {
       _activeCharacterName = ch->GetName();
       _onlineCharRegistry->Register(
-          _activeCharacterName,
+          _activeCharacterName, guid,
           std::weak_ptr<ICommandSession>(
               std::static_pointer_cast<ICommandSession>(shared_from_this())));
     }
@@ -785,6 +785,7 @@ if (!_charService->SaveCharacterOnLogout(_accountId, charGuidLow, mapIdDb,
   UnregisterFromOnlineCharacterRegistryIfNeeded();
 
   _playerGuid = 0;
+  _clientSelectionGuid = 0;
   _activeCharacterGuid = 0;
   _playerRace = 0;
   _knownSpells.clear();
@@ -1055,6 +1056,14 @@ void WorldSession::HandlePing(WorldPacket &packet) {
   WorldPacket pong(SMSG_PONG);
   pong.Append<uint32>(serial);
   SendPacket(pong);
+}
+
+void WorldSession::HandleSetSelection(WorldPacket &packet) {
+  if (packet.Size() - packet.GetReadPos() < 1) {
+    _clientSelectionGuid = 0;
+    return;
+  }
+  _clientSelectionGuid = packet.ReadPackedGuid();
 }
 
 void WorldSession::HandleSwapInvItem(WorldPacket &packet) {
@@ -1460,9 +1469,63 @@ bool WorldSession::GmAddItem(uint32 itemEntry, uint32 count) {
   if (_playerGuid == 0)
     return false;
   uint32 const c = std::max(1u, count);
-  if (!_charService->GrantItemToBag0(static_cast<uint32>(_playerGuid), itemEntry,
-                                       c)) {
-    SendNotification("Could not add item (full bags or DB error).");
+  if (!_charService->HasItemTemplate(itemEntry)) {
+    SendNotification("Item does not exist (no template for entry " +
+                     std::to_string(itemEntry) + ").");
+    return false;
+  }
+  bool mailed = false;
+  uint32_t newItemGuidLow = 0;
+  uint8_t newBag0Slot = 0;
+  if (!_charService->GrantItemToBag0OrMail(static_cast<uint32>(_playerGuid),
+                                           itemEntry, c, &mailed, &newItemGuidLow,
+                                           &newBag0Slot)) {
+    SendNotification("Could not add item (backpack full and mail failed, or database "
+                     "error).");
+    return false;
+  }
+  if (!mailed) {
+    auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
+    if (!refreshed)
+      return false;
+    uint32_t stackShown = c;
+    if (newBag0Slot >= INVENTORY_SLOT_ITEM_START &&
+        newBag0Slot < INVENTORY_SLOT_ITEM_END) {
+      size_t const pi =
+          static_cast<size_t>(newBag0Slot - INVENTORY_SLOT_ITEM_START);
+      if (pi < kPackSlotCount)
+        stackShown = refreshed->GetPackItemStackCount(pi);
+    }
+    UpdateData update(_mapId);
+    MovementInfo itemMove{};
+    uint64 const itemOg = MakeItemObjectGuid(newItemGuidLow);
+    update.AddCreateObject(itemOg, TYPEID_ITEM, itemMove,
+                           ws_obj::BuildItemCreateFields(itemOg, _playerGuid, itemEntry,
+                                                         stackShown));
+    update.AddValuesUpdate(_playerGuid,
+                           ws_obj::BuildPlayerBag0InventoryValues(*refreshed));
+    WorldPacket pkt(SMSG_UPDATE_OBJECT);
+    update.Build(pkt);
+    SendPacket(pkt);
+    SendNotification("Item " + std::to_string(itemEntry) + " x" + std::to_string(c) +
+                     " added to backpack.");
+  } else {
+    SendNotification("Backpack full; item " + std::to_string(itemEntry) + " x" +
+                     std::to_string(c) +
+                     " was sent to your mailbox (retrieve at a mailbox when mail is "
+                     "enabled on the client).");
+  }
+  return true;
+}
+
+bool WorldSession::GmRemoveItem(uint32 itemEntry, uint32 count) {
+  if (_playerGuid == 0)
+    return false;
+  uint32 const c = std::max(1u, count);
+  uint32_t const removed = _charService->RemoveBag0ItemsByEntry(
+      _accountId, static_cast<uint32>(_playerGuid), itemEntry, c);
+  if (removed == 0) {
+    SendNotification("No matching items in the main backpack (bag slots only).");
     return false;
   }
   auto refreshed = _charService->GetCharacterByGuid(_playerGuid);
@@ -1474,8 +1537,8 @@ bool WorldSession::GmAddItem(uint32 itemEntry, uint32 count) {
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
-  SendNotification("Item " + std::to_string(itemEntry) + " x" + std::to_string(c) +
-                   " added to backpack.");
+  SendNotification("Removed item " + std::to_string(itemEntry) + " x" +
+                   std::to_string(removed) + " from backpack.");
   return true;
 }
 

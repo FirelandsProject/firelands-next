@@ -143,6 +143,43 @@ bool EnsureStarterInventoryTables(std::shared_ptr<sql::Connection> conn) {
   }
 }
 
+bool EnsureMailTables(std::shared_ptr<sql::Connection> conn) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS firelands_characters.mail ("
+        "id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
+        "receiver_guid INT UNSIGNED NOT NULL,"
+        "sender_guid INT UNSIGNED NOT NULL DEFAULT 0,"
+        "subject VARCHAR(200) NOT NULL DEFAULT 'Item delivery',"
+        "body TEXT NULL,"
+        "deliver_time INT UNSIGNED NOT NULL DEFAULT 0,"
+        "expire_time INT UNSIGNED NOT NULL DEFAULT 0,"
+        "checked TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+        "PRIMARY KEY (id),"
+        "KEY idx_receiver (receiver_guid),"
+        "CONSTRAINT fk_mail_receiver FOREIGN KEY (receiver_guid) REFERENCES "
+        "characters(guid) ON DELETE CASCADE"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS firelands_characters.mail_items ("
+        "mail_id BIGINT UNSIGNED NOT NULL,"
+        "item_guid INT UNSIGNED NOT NULL,"
+        "receiver_guid INT UNSIGNED NOT NULL,"
+        "PRIMARY KEY (item_guid),"
+        "KEY idx_mail (mail_id),"
+        "CONSTRAINT fk_mail_items_mail FOREIGN KEY (mail_id) REFERENCES mail(id) "
+        "ON DELETE CASCADE,"
+        "CONSTRAINT fk_mail_items_receiver FOREIGN KEY (receiver_guid) REFERENCES "
+        "characters(guid) ON DELETE CASCADE"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    return true;
+  } catch (sql::SQLException &e) {
+    LOG_ERROR("EnsureMailTables failed: {}", e.what());
+    return false;
+  }
+}
+
 bool SaveInventoryToDb(std::shared_ptr<sql::Connection> conn, uint32_t charGuid,
                   Bag0InventoryData const &invData) {
   if (!EnsureStarterInventoryTables(conn))
@@ -925,13 +962,32 @@ bool MySqlCharacterRepository::AddCharacterSpell(uint32_t characterGuid,
   }
 }
 
+bool MySqlCharacterRepository::HasItemTemplate(uint32_t itemEntry) const {
+  if (itemEntry == 0)
+    return false;
+  return FetchItemProto(itemTemplateConnection(), itemEntry,
+                        _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+                        &_itemDb2)
+      .has_value();
+}
+
 bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
-                                               uint32_t itemEntry,
-                                               uint32_t count) {
+                                               uint32_t itemEntry, uint32_t count,
+                                               uint32_t *outItemGuidLow,
+                                               uint8_t *outBag0Slot) {
   if (itemEntry == 0 || count == 0)
     return false;
   if (!EnsureStarterInventoryTables(_connection))
     return false;
+
+  auto proto = FetchItemProto(itemTemplateConnection(), itemEntry,
+                              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+                              &_itemDb2);
+  if (!proto) {
+    LOG_WARN("GrantItemToBag0: item {} has no template (item_template / DB2 / outfit).",
+             itemEntry);
+    return false;
+  }
 
   std::unordered_set<uint8_t> usedPackSlots;
   try {
@@ -949,17 +1005,9 @@ bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
     LOG_WARN("GrantItemToBag0 slot scan failed: {}", e.what());
   }
 
-  auto proto = FetchItemProto(itemTemplateConnection(), itemEntry,
-                              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
-                              &_itemDb2);
   uint32_t grantCount = count;
-  if (proto) {
-    if (grantCount == 0)
-      grantCount = proto->buyCount;
-  } else {
-    grantCount = std::max(1u, grantCount);
-    LOG_WARN("GrantItemToBag0: item {} missing template/proto.", itemEntry);
-  }
+  if (grantCount == 0)
+    grantCount = proto->buyCount;
   grantCount = std::max(1u, grantCount);
 
   uint8_t bag = 0;
@@ -1007,9 +1055,86 @@ bool MySqlCharacterRepository::GrantItemToBag0(uint32_t characterGuid,
     insInv->setUInt(3, slot);
     insInv->setUInt64(4, itemGuid);
     insInv->executeUpdate();
+    if (outItemGuidLow)
+      *outItemGuidLow = static_cast<uint32_t>(itemGuid);
+    if (outBag0Slot)
+      *outBag0Slot = slot;
     return true;
   } catch (sql::SQLException const &e) {
     LOG_ERROR("GrantItemToBag0 failed: {}", e.what());
+    return false;
+  }
+}
+
+bool MySqlCharacterRepository::SendGmMailWithItem(uint32_t receiverCharacterGuid,
+                                                 uint32_t itemEntry,
+                                                 uint32_t count) {
+  if (receiverCharacterGuid == 0 || itemEntry == 0 || count == 0)
+    return false;
+  if (!EnsureStarterInventoryTables(_connection) || !EnsureMailTables(_connection))
+    return false;
+
+  auto proto = FetchItemProto(itemTemplateConnection(), itemEntry,
+                              _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
+                              &_itemDb2);
+  if (!proto) {
+    LOG_WARN("SendGmMailWithItem: item {} has no template (item_template / DB2 / outfit).",
+             itemEntry);
+    return false;
+  }
+  uint32_t grantCount = count;
+  if (grantCount == 0)
+    grantCount = proto->buyCount;
+  grantCount = std::max(1u, grantCount);
+
+  try {
+    std::shared_ptr<sql::PreparedStatement> insItem(_connection->prepareStatement(
+        "INSERT INTO item_instance (itemEntry, owner_guid, creatorGuid, "
+        "giftCreatorGuid, count, duration, charges, flags, enchantments, "
+        "randomPropertyType, randomPropertyId, durability, creationTime, "
+        "text) VALUES (?, ?, 0, 0, ?, 0, '', 0, '', 0, 0, 0, UNIX_TIMESTAMP(), NULL)"));
+    insItem->setUInt(1, itemEntry);
+    insItem->setUInt(2, receiverCharacterGuid);
+    insItem->setUInt(3, grantCount);
+    insItem->executeUpdate();
+
+    uint64_t itemGuid = 0;
+    {
+      std::unique_ptr<sql::Statement> st(_connection->createStatement());
+      std::unique_ptr<sql::ResultSet> rs(st->executeQuery("SELECT LAST_INSERT_ID()"));
+      if (!rs->next())
+        return false;
+      itemGuid = rs->getUInt64(1);
+    }
+
+    std::string const body =
+        "Your backpack was full; this item was attached to this mail message.";
+    std::shared_ptr<sql::PreparedStatement> insMail(_connection->prepareStatement(
+        "INSERT INTO mail (receiver_guid, sender_guid, subject, body, deliver_time, "
+        "expire_time, checked) VALUES (?, 0, 'Item delivery', ?, UNIX_TIMESTAMP(), "
+        "0, 0)"));
+    insMail->setUInt(1, receiverCharacterGuid);
+    insMail->setString(2, body);
+    insMail->executeUpdate();
+
+    uint64_t mailId = 0;
+    {
+      std::unique_ptr<sql::Statement> st(_connection->createStatement());
+      std::unique_ptr<sql::ResultSet> rs(st->executeQuery("SELECT LAST_INSERT_ID()"));
+      if (!rs->next())
+        return false;
+      mailId = rs->getUInt64(1);
+    }
+
+    std::shared_ptr<sql::PreparedStatement> insLink(_connection->prepareStatement(
+        "INSERT INTO mail_items (mail_id, item_guid, receiver_guid) VALUES (?, ?, ?)"));
+    insLink->setUInt64(1, mailId);
+    insLink->setUInt64(2, itemGuid);
+    insLink->setUInt(3, receiverCharacterGuid);
+    insLink->executeUpdate();
+    return true;
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("SendGmMailWithItem failed: {}", e.what());
     return false;
   }
 }
@@ -1157,6 +1282,48 @@ bool MySqlCharacterRepository::DestroyBag0BackpackItem(uint32_t characterGuid,
     LOG_ERROR("DestroyBag0BackpackItem failed: {}", e.what());
     return false;
   }
+}
+
+uint32_t MySqlCharacterRepository::RemoveBag0ItemsByEntry(uint32_t characterGuid,
+                                                          uint32_t itemEntry,
+                                                          uint32_t wantRemove) {
+  if (characterGuid == 0 || itemEntry == 0 || wantRemove == 0)
+    return 0;
+  if (!EnsureStarterInventoryTables(_connection))
+    return 0;
+  uint32_t removed = 0;
+  while (removed < wantRemove) {
+    uint8_t slot = 0;
+    uint32_t stack = 0;
+    bool found = false;
+    try {
+      std::shared_ptr<sql::PreparedStatement> q(_connection->prepareStatement(
+          "SELECT ci.slot, ii.count FROM character_inventory ci "
+          "INNER JOIN item_instance ii ON ii.guid = ci.item "
+          "WHERE ci.guid = ? AND ci.bag = 0 AND ci.slot >= ? AND ci.slot < ? "
+          "AND ii.itemEntry = ? ORDER BY ci.slot LIMIT 1"));
+      q->setUInt(1, characterGuid);
+      q->setUInt(2, INVENTORY_SLOT_ITEM_START);
+      q->setUInt(3, INVENTORY_SLOT_ITEM_END);
+      q->setUInt(4, itemEntry);
+      std::unique_ptr<sql::ResultSet> rs(q->executeQuery());
+      if (!rs->next())
+        break;
+      slot = static_cast<uint8_t>(rs->getUInt("slot"));
+      stack = std::max(1u, static_cast<uint32_t>(rs->getUInt("count")));
+      found = true;
+    } catch (sql::SQLException const &e) {
+      LOG_WARN("RemoveBag0ItemsByEntry query failed: {}", e.what());
+      break;
+    }
+    if (!found)
+      break;
+    uint32_t const take = std::min(stack, wantRemove - removed);
+    if (!DestroyBag0BackpackItem(characterGuid, slot, take))
+      break;
+    removed += take;
+  }
+  return removed;
 }
 
 bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t srcSlot,

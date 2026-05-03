@@ -37,8 +37,14 @@ namespace Firelands {
                                    uint8_t level) override;
         std::vector<uint32_t> GetCharacterSpellIds(uint32_t characterGuid) override;
         bool AddCharacterSpell(uint32_t characterGuid, uint32_t spellId) override;
-        bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
-                             uint32_t count) override;
+        bool HasItemTemplate(uint32_t itemEntry) const override;
+        bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry, uint32_t count,
+                             uint32_t *outItemGuidLow = nullptr,
+                             uint8_t *outBag0Slot = nullptr) override;
+        bool SendGmMailWithItem(uint32_t receiverCharacterGuid, uint32_t itemEntry,
+                                uint32_t count) override;
+        uint32_t RemoveBag0ItemsByEntry(uint32_t characterGuid, uint32_t itemEntry,
+                                       uint32_t count) override;
         AccessLevel GetAccountAccessLevel(uint32_t accountId) override;
         bool AutoEquipFromBag0Slot(
             uint32_t characterGuid, uint8_t srcSlot,

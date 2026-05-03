@@ -73,3 +73,27 @@ CREATE TABLE IF NOT EXISTS `gm_ticket` (
   KEY `idx_assigned` (`assigned_account_id`, `status`),
   CONSTRAINT `fk_gm_ticket_character` FOREIGN KEY (`character_guid`) REFERENCES `characters` (`guid`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `mail` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `receiver_guid` int unsigned NOT NULL,
+  `sender_guid` int unsigned NOT NULL DEFAULT '0',
+  `subject` varchar(200) NOT NULL DEFAULT 'Item delivery',
+  `body` text,
+  `deliver_time` int unsigned NOT NULL DEFAULT '0',
+  `expire_time` int unsigned NOT NULL DEFAULT '0',
+  `checked` tinyint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_receiver` (`receiver_guid`),
+  CONSTRAINT `fk_mail_receiver` FOREIGN KEY (`receiver_guid`) REFERENCES `characters` (`guid`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `mail_items` (
+  `mail_id` bigint unsigned NOT NULL,
+  `item_guid` int unsigned NOT NULL,
+  `receiver_guid` int unsigned NOT NULL,
+  PRIMARY KEY (`item_guid`),
+  KEY `idx_mail` (`mail_id`),
+  CONSTRAINT `fk_mail_items_mail` FOREIGN KEY (`mail_id`) REFERENCES `mail` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_mail_items_receiver` FOREIGN KEY (`receiver_guid`) REFERENCES `characters` (`guid`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -225,9 +225,46 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
     return m_repository->AddCharacterSpell(characterGuid, spellId);
   }
 
-  bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
-                       uint32_t count) {
-    return m_repository->GrantItemToBag0(characterGuid, itemEntry, count);
+  bool HasItemTemplate(uint32_t itemEntry) const {
+    return m_repository->HasItemTemplate(itemEntry);
+  }
+
+  bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry, uint32_t count,
+                       uint32_t *outItemGuidLow = nullptr,
+                       uint8_t *outBag0Slot = nullptr) {
+    return m_repository->GrantItemToBag0(characterGuid, itemEntry, count, outItemGuidLow,
+                                          outBag0Slot);
+  }
+
+  /// Tries backpack first; on full bags queues a single-stack mail row (see `mail` tables).
+  bool GrantItemToBag0OrMail(uint32_t characterGuid, uint32_t itemEntry, uint32_t count,
+                             bool *sentToMailOut = nullptr,
+                             uint32_t *outItemGuidLow = nullptr,
+                             uint8_t *outBag0Slot = nullptr) {
+    if (sentToMailOut)
+      *sentToMailOut = false;
+    if (outItemGuidLow)
+      *outItemGuidLow = 0;
+    if (outBag0Slot)
+      *outBag0Slot = 0;
+    if (m_repository->GrantItemToBag0(characterGuid, itemEntry, count, outItemGuidLow,
+                                      outBag0Slot))
+      return true;
+    if (m_repository->SendGmMailWithItem(characterGuid, itemEntry, count)) {
+      if (sentToMailOut)
+        *sentToMailOut = true;
+      return true;
+    }
+    return false;
+  }
+
+  /// Returns how many items were removed from the main backpack (bag 0 grid only).
+  uint32_t RemoveBag0ItemsByEntry(uint32_t accountId, uint32_t characterGuid,
+                                  uint32_t itemEntry, uint32_t count) {
+    auto ch = m_repository->GetCharacterByGuid(characterGuid);
+    if (!ch || ch->GetAccount() != accountId)
+      return 0;
+    return m_repository->RemoveBag0ItemsByEntry(characterGuid, itemEntry, count);
   }
 
   bool AutoEquipFromBag0(uint32_t accountId, uint32_t characterGuid, uint8_t bag,

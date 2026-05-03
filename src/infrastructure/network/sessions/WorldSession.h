@@ -101,7 +101,11 @@ public:
   bool GmLearnSpell(uint32 spellId) override;
   bool GmModifyMoneyCopper(int64 deltaCopper) override;
   bool GmAddItem(uint32 itemEntry, uint32 count) override;
+  bool GmRemoveItem(uint32 itemEntry, uint32 count) override;
   bool GmSetLevel(uint8 level) override;
+
+  uint64_t GetClientSelectionGuid() const override { return _clientSelectionGuid; }
+  uint64_t GetActiveCharacterObjectGuid() const override { return _playerGuid; }
 
   void SendGmResponseReceived(uint32_t ticketId,
                               std::string const &playerMessage,
@@ -144,6 +148,7 @@ private:
   void HandlePlayedTime(WorldPacket &packet);
   void HandleMovement(WorldPacket &packet);
   void HandlePing(WorldPacket &packet);
+  void HandleSetSelection(WorldPacket &packet);
   void HandleTimeSyncResp(WorldPacket &packet);
   void HandleMoveTimeSkipped(WorldPacket &packet);
   void HandleMessageChat(WorldPacket &packet);
@@ -260,6 +265,8 @@ private:
   uint32 _accountId = 0;
   AccessLevel _accountAccessLevel = AccessLevel::Player;
   uint64 _playerGuid = 0;
+  /// Latest `CMSG_SET_SELECTION` unit (0 = cleared / unknown).
+  uint64_t _clientSelectionGuid = 0;
   uint8 _playerRace = 0;
   /// Persisted copper; mirrored on logout and after `.money` GM commands.
   uint32_t _moneyCopper = 0;

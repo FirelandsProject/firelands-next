@@ -2,6 +2,7 @@
 #define FIRELANDS_APPLICATION_SERVICES_ONLINE_CHARACTER_SESSION_REGISTRY_H
 
 #include <application/ports/ICommandSession.h>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -14,11 +15,14 @@ namespace Firelands {
 /// server-console commands that act on a specific online player.
 class OnlineCharacterSessionRegistry {
 public:
-  void Register(std::string const &characterName,
+  void Register(std::string const &characterName, uint64_t objectGuid,
                 std::weak_ptr<ICommandSession> session);
-  void Unregister(std::string const &characterName, ICommandSession *self);
+  void Unregister(std::string const &characterName, uint64_t objectGuid,
+                  ICommandSession *self);
 
   std::shared_ptr<ICommandSession> TryResolve(std::string const &characterName) const;
+  /// In-world client `ObjectGuid` (same as `WorldSession::_playerGuid` while logged in).
+  std::shared_ptr<ICommandSession> TryResolveByObjectGuid(uint64_t objectGuid) const;
 
   /// Sorted list of registry keys (lowercased names) for sessions still online.
   std::vector<std::string> ListOnlineCharacterNames() const;
@@ -34,6 +38,7 @@ private:
 
   mutable std::mutex _mutex;
   std::unordered_map<std::string, std::weak_ptr<ICommandSession>> _byName;
+  std::unordered_map<uint64_t, std::weak_ptr<ICommandSession>> _byObjectGuid;
 };
 
 } // namespace Firelands

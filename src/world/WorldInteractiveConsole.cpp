@@ -49,7 +49,13 @@ public:
 
   bool GmAddItem(uint32 /*itemEntry*/, uint32 /*count*/) override { return false; }
 
+  bool GmRemoveItem(uint32 /*itemEntry*/, uint32 /*count*/) override { return false; }
+
   bool GmSetLevel(uint8 /*level*/) override { return false; }
+
+  uint64_t GetClientSelectionGuid() const override { return 0; }
+
+  uint64_t GetActiveCharacterObjectGuid() const override { return 0; }
 
   AccessLevel GetAccountAccessLevel() const override {
     return AccessLevel::Player;

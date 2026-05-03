@@ -17,30 +17,45 @@ std::string OnlineCharacterSessionRegistry::NormalizeName(std::string const &nam
 }
 
 void OnlineCharacterSessionRegistry::Register(std::string const &characterName,
+                                              uint64_t objectGuid,
                                               std::weak_ptr<ICommandSession> session) {
   std::string const key = NormalizeName(characterName);
   if (key.empty())
     return;
   std::lock_guard<std::mutex> lock(_mutex);
-  _byName[key] = std::move(session);
+  _byName[key] = session;
+  if (objectGuid != 0)
+    _byObjectGuid[objectGuid] = session;
 }
 
 void OnlineCharacterSessionRegistry::Unregister(std::string const &characterName,
+                                                uint64_t objectGuid,
                                                 ICommandSession *self) {
   if (!self)
     return;
   std::string const key = NormalizeName(characterName);
-  if (key.empty())
-    return;
   std::lock_guard<std::mutex> lock(_mutex);
-  auto it = _byName.find(key);
-  if (it == _byName.end())
-    return;
-  if (auto locked = it->second.lock()) {
-    if (locked.get() == self)
-      _byName.erase(it);
-  } else {
-    _byName.erase(it);
+  if (!key.empty()) {
+    auto it = _byName.find(key);
+    if (it != _byName.end()) {
+      if (auto locked = it->second.lock()) {
+        if (locked.get() == self)
+          _byName.erase(it);
+      } else {
+        _byName.erase(it);
+      }
+    }
+  }
+  if (objectGuid != 0) {
+    auto git = _byObjectGuid.find(objectGuid);
+    if (git != _byObjectGuid.end()) {
+      if (auto locked = git->second.lock()) {
+        if (locked.get() == self)
+          _byObjectGuid.erase(git);
+      } else {
+        _byObjectGuid.erase(git);
+      }
+    }
   }
 }
 
@@ -52,6 +67,17 @@ OnlineCharacterSessionRegistry::TryResolve(std::string const &characterName) con
   std::lock_guard<std::mutex> lock(_mutex);
   auto it = _byName.find(key);
   if (it == _byName.end())
+    return nullptr;
+  return it->second.lock();
+}
+
+std::shared_ptr<ICommandSession>
+OnlineCharacterSessionRegistry::TryResolveByObjectGuid(uint64_t objectGuid) const {
+  if (objectGuid == 0)
+    return nullptr;
+  std::lock_guard<std::mutex> lock(_mutex);
+  auto it = _byObjectGuid.find(objectGuid);
+  if (it == _byObjectGuid.end())
     return nullptr;
   return it->second.lock();
 }

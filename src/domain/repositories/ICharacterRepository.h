@@ -41,9 +41,19 @@ public:
                                     uint8_t level) = 0;
   virtual std::vector<uint32_t> GetCharacterSpellIds(uint32_t characterGuid) = 0;
   virtual bool AddCharacterSpell(uint32_t characterGuid, uint32_t spellId) = 0;
+  /// True if `itemEntry` resolves from `item_template`, item DB2 hotfix, or CharStartOutfit DBC.
+  virtual bool HasItemTemplate(uint32_t itemEntry) const = 0;
   /// Creates `item_instance` + `character_inventory` row in bag 0 (equipment or backpack).
-  virtual bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry,
-                               uint32_t count) = 0;
+  /// On success, optionally fills `outItemGuidLow` / `outBag0Slot` (backpack slot 23..38).
+  virtual bool GrantItemToBag0(uint32_t characterGuid, uint32_t itemEntry, uint32_t count,
+                               uint32_t *outItemGuidLow = nullptr,
+                               uint8_t *outBag0Slot = nullptr) = 0;
+  /// Creates `item_instance` + `mail` + `mail_items` (item not placed in inventory).
+  virtual bool SendGmMailWithItem(uint32_t receiverCharacterGuid, uint32_t itemEntry,
+                                  uint32_t count) = 0;
+  /// Removes up to `count` matching items from backpack grid only; returns amount removed.
+  virtual uint32_t RemoveBag0ItemsByEntry(uint32_t characterGuid, uint32_t itemEntry,
+                                          uint32_t count) = 0;
   virtual AccessLevel GetAccountAccessLevel(uint32_t accountId) = 0;
   /// Move an item from backpack grid (`INVENTORY_SLOT_ITEM_*`) to its default equipment slot.
   virtual bool AutoEquipFromBag0Slot(

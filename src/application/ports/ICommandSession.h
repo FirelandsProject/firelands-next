@@ -53,10 +53,21 @@ public:
     (void)count;
     return false;
   }
+  /// Removes up to `count` items matching `itemEntry` from the main backpack (bag 0).
+  virtual bool GmRemoveItem(uint32 itemEntry, uint32 count) {
+    (void)itemEntry;
+    (void)count;
+    return false;
+  }
   virtual bool GmSetLevel(uint8 level) {
     (void)level;
     return false;
   }
+
+  /// Client `CMSG_SET_SELECTION` target (0 = none). Used by GM item commands in-game.
+  virtual uint64_t GetClientSelectionGuid() const { return 0; }
+  /// World `ObjectGuid` for the logged-in character (0 when not in world / console).
+  virtual uint64_t GetActiveCharacterObjectGuid() const { return 0; }
 
   /// Optional GM tooling (no-op for console stub / non-world sessions).
   virtual void SetGmTagEnabled(bool on) { (void)on; }

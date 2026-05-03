@@ -83,7 +83,19 @@ public:
     return _subject->GmAddItem(itemEntry, count);
   }
 
+  bool GmRemoveItem(uint32 itemEntry, uint32 count) override {
+    return _subject->GmRemoveItem(itemEntry, count);
+  }
+
   bool GmSetLevel(uint8 level) override { return _subject->GmSetLevel(level); }
+
+  uint64_t GetClientSelectionGuid() const override {
+    return _operatorSession ? _operatorSession->GetClientSelectionGuid() : 0;
+  }
+
+  uint64_t GetActiveCharacterObjectGuid() const override {
+    return _subject->GetActiveCharacterObjectGuid();
+  }
 
   void SendGmResponseReceived(uint32_t ticketId, std::string const &playerMessage,
                               std::string const &gmResponse) override {
@@ -113,6 +125,16 @@ static bool AsciiEqualsLower(std::string const &a, char const *b) {
         static_cast<unsigned char>(b[i])) {
       return false;
     }
+  }
+  return true;
+}
+
+static bool IsAllDigitAscii(std::string const &s) {
+  if (s.empty())
+    return false;
+  for (unsigned char c : s) {
+    if (!std::isdigit(c))
+      return false;
   }
   return true;
 }
@@ -300,6 +322,10 @@ CommandService::CommandService(
                ConsoleArgLayout::TargetOnlineCharacterFirst});
   RegisterCommand(
       "additem", {[this](auto s, auto a, auto o) { return HandleAdditem(s, a, o); },
+                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
+                  ConsoleArgLayout::TargetOnlineCharacterFirst});
+  RegisterCommand(
+      "delitem", {[this](auto s, auto a, auto o) { return HandleDelitem(s, a, o); },
                   ToMask(Permission::CommandGameplay), CommandAvailability::Both,
                   ConsoleArgLayout::TargetOnlineCharacterFirst});
   RegisterCommand(
@@ -522,10 +548,27 @@ bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
       "|cff666666Console:|r |cffffffff.learn CharName 475|r\n"
       "|cffCCCCCC.money|r |cff888888—|r Add/remove copper (signed).  "
       "|cff666666Console:|r |cffffffff.money CharName 50000|r\n"
-      "|cffCCCCCC.additem|r |cff888888—|r Add to backpack (first free slot).  "
-      "|cff666666Console:|r |cffffffff.additem Char 6948 1|r\n"
       "|cffCCCCCC.level|r |cff888888—|r Set level 1–85.  "
       "|cff666666Console:|r |cffffffff.level Char 60|r");
+
+  notifyHelp(
+      "|cffFFD200· Items (GM)|r |cffAAAAAA—|r |cffCCCCCC.additem|r |cff888888/|r "
+      "|cffCCCCCC.delitem|r\n"
+      "|cffAAAAAAWho receives the command:|r |cff666666In-game:|r select another "
+      "player (target) and use a |cffffffffnumeric|r first argument → item goes to "
+      "that player (|cffffffff.additem 6948 1|r). If the first token is |cffffffffnot|r "
+      "all digits, it is an |cffffffffonline character name|r: "
+      "|cffffffff.additem Annabell 6948 5|r\n"
+      "|cff666666World console:|r character name always first: "
+      "|cffffffff.additem Annabell 6948 1|r\n"
+      "|cffAAAAAAFull main backpack|r |cff666666(slots 23–38)|r |cffAAAAAA→|r "
+      "item is stored in |cffCCCCCCmail|r |cffAAAAAA(DB); client mailbox UI is not "
+      "wired yet.|r\n"
+      "|cffCCCCCC.delitem|r |cff888888—|r Same targeting as |cffCCCCCC.additem|r; "
+      "removes up to |cffffffffcount|r from the |cff666666main backpack only|r "
+      "(not equipped).  |cff666666e.g.|r |cffffffff.delitem 6948|r |cff666666or|r "
+      "|cffffffff.delitem Annabell 6948 10|r |cff666666or|r "
+      "|cffffffff.delitem 6948 1|r |cff666666with target selected.|r");
 
   notifyHelp(
       "|cffFFD200· Tags & visibility|r\n"
@@ -1060,20 +1103,107 @@ bool CommandService::HandleMoney(std::shared_ptr<ICommandSession> session,
 bool CommandService::HandleAdditem(std::shared_ptr<ICommandSession> session,
                                    const std::vector<std::string> &args,
                                    PrivilegeOrigin origin) {
-  (void)origin;
-  if (args.empty()) {
+  std::vector<std::string> itemArgs = args;
+  std::shared_ptr<ICommandSession> subjectFromNameOrTarget;
+
+  if (origin == PrivilegeOrigin::GameClient && _onlineCharacters) {
+    if (!args.empty() && !IsAllDigitAscii(args[0])) {
+      subjectFromNameOrTarget = _onlineCharacters->TryResolve(args[0]);
+      if (!subjectFromNameOrTarget) {
+        session->SendNotification(std::string("Character not online: ") + args[0]);
+        return true;
+      }
+      itemArgs.assign(args.begin() + 1, args.end());
+    } else if (!args.empty() && IsAllDigitAscii(args[0])) {
+      uint64_t const sel = session->GetClientSelectionGuid();
+      if (sel != 0) {
+        if (auto peer = _onlineCharacters->TryResolveByObjectGuid(sel)) {
+          if (peer.get() != session.get())
+            subjectFromNameOrTarget = std::move(peer);
+        }
+      }
+    }
+  }
+
+  std::shared_ptr<ICommandSession> exec = session;
+  if (subjectFromNameOrTarget) {
+    exec = std::make_shared<DelegatingCommandSession>(std::move(subjectFromNameOrTarget),
+                                                    session);
+  }
+
+  if (itemArgs.empty()) {
     session->SendNotification(
-        "Usage: .additem <itemId> [count]  (console: .additem <CharName> <itemId> "
-        "[count]; goes to first free backpack slot)");
+        "Usage: .additem <itemId> [count]  — with another player targeted, OR "
+        ".additem <OnlineCharName> <itemId> [count]\n"
+        "Console: .additem <CharName> <itemId> [count]  (full bags → mail)");
     return false;
   }
   try {
-    uint32 const entry = static_cast<uint32>(std::stoul(args[0]));
+    uint32 const entry = static_cast<uint32>(std::stoul(itemArgs[0]));
     uint32 count = 1;
-    if (args.size() >= 2)
-      count = static_cast<uint32>(std::stoul(args[1]));
-    if (!session->GmAddItem(entry, count)) {
+    if (itemArgs.size() >= 2)
+      count = static_cast<uint32>(std::stoul(itemArgs[1]));
+    if (_characterService && !_characterService->HasItemTemplate(entry)) {
+      session->SendNotification("Item does not exist (no template for entry " +
+                                std::to_string(entry) + ").");
+      return false;
+    }
+    if (!exec->GmAddItem(entry, count)) {
       session->SendNotification("Add item failed.");
+      return false;
+    }
+    return true;
+  } catch (const std::exception &) {
+    session->SendNotification("Invalid item id or count.");
+    return false;
+  }
+}
+
+bool CommandService::HandleDelitem(std::shared_ptr<ICommandSession> session,
+                                   const std::vector<std::string> &args,
+                                   PrivilegeOrigin origin) {
+  std::vector<std::string> itemArgs = args;
+  std::shared_ptr<ICommandSession> subjectFromNameOrTarget;
+
+  if (origin == PrivilegeOrigin::GameClient && _onlineCharacters) {
+    if (!args.empty() && !IsAllDigitAscii(args[0])) {
+      subjectFromNameOrTarget = _onlineCharacters->TryResolve(args[0]);
+      if (!subjectFromNameOrTarget) {
+        session->SendNotification(std::string("Character not online: ") + args[0]);
+        return true;
+      }
+      itemArgs.assign(args.begin() + 1, args.end());
+    } else if (!args.empty() && IsAllDigitAscii(args[0])) {
+      uint64_t const sel = session->GetClientSelectionGuid();
+      if (sel != 0) {
+        if (auto peer = _onlineCharacters->TryResolveByObjectGuid(sel)) {
+          if (peer.get() != session.get())
+            subjectFromNameOrTarget = std::move(peer);
+        }
+      }
+    }
+  }
+
+  std::shared_ptr<ICommandSession> exec = session;
+  if (subjectFromNameOrTarget) {
+    exec = std::make_shared<DelegatingCommandSession>(std::move(subjectFromNameOrTarget),
+                                                    session);
+  }
+
+  if (itemArgs.empty()) {
+    session->SendNotification(
+        "Usage: .delitem <itemId> [count]  — with another player targeted, OR "
+        ".delitem <OnlineCharName> <itemId> [count]\n"
+        "Console: .delitem <CharName> <itemId> [count]  (main backpack only)");
+    return false;
+  }
+  try {
+    uint32 const entry = static_cast<uint32>(std::stoul(itemArgs[0]));
+    uint32 count = 1;
+    if (itemArgs.size() >= 2)
+      count = static_cast<uint32>(std::stoul(itemArgs[1]));
+    if (!exec->GmRemoveItem(entry, count)) {
+      session->SendNotification("Remove item failed (no matching backpack stacks).");
       return false;
     }
     return true;

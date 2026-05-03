@@ -19,7 +19,8 @@ enum class Permission : uint64_t {
   ServerControl = 1ull << 5,
   /// In-game GM appearance / movement helpers (`.gm`, `.visible`, `.fly`, `.speed`).
   CommandGmTools = 1ull << 6,
-  /// Learn spell, money, items, level (`.learn`, `.money`, `.additem`, `.level`).
+  /// Learn spell, money, items, level (`.learn`, `.money`, `.additem`, `.delitem`,
+  /// `.level`).
   CommandGameplay = 1ull << 7,
   /// GM help ticket queue (`.ticket …`).
   ManageGmTickets = 1ull << 8,
