@@ -30,6 +30,6 @@ Esta carpeta contiene la documentación en español de **firelands-next**.
 
 - [Extractors (extractores)](extractors.md)
 - [DevTools](devtools.md)
-- [Roadmap del proyecto](ROADMAP.md)
+- [Roadmap del proyecto](ROADMAP.md) — roadmap, matriz de paridad, estabilidad del cliente y snapshot del workspace
 - [Plan de extracción VMap](VMAP_EXTRACTION_PLAN.md)
 - [Roadmap de StormLib](STORM_LIB_ROADMAP.md)

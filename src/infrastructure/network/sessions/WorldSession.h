@@ -272,7 +272,6 @@ public:
   void SendStopMirrorTimerPacket(int32_t timerType);
 
   /// CMSG_PLAYER_LOGIN sub-steps (keeps `HandlePlayerLogin` readable).
-  void LoginReadPackedPlayerGuid(WorldPacket &packet, uint64 &outGuid);
   void LoginSendAccountDataAndPreMapPackets(uint64 guid, Character const &character);
   void LoginBuildKnownSpellsAndSendSpellbook(Character const &character);
   void LoginSendMotdAndMetaPackets();

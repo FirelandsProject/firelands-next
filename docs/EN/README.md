@@ -32,4 +32,4 @@ This folder contains the English documentation for **firelands-next**.
 - [DevTools](devtools.md)
 - [StormLib roadmap](STORM_LIB_ROADMAP.md)
 - [VMap extraction plan](VMAP_EXTRACTION_PLAN.md)
-- [Roadmap](ROADMAP.md)
+- [Roadmap](ROADMAP.md) — phased roadmap, parity matrix, client stability; Spanish file is SSOT (see link inside)

@@ -5,6 +5,7 @@
 #include <shared/network/BitWriter.h>
 #include <shared/network/packets/MotdPacket.h>
 #include <shared/network/packets/SetProficiencyPacket.h>
+#include <shared/network/packets/server/SimpleOutboundPackets.h>
 #include <shared/network/packets/VerifyWorldPacket.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -15,9 +16,7 @@
 namespace Firelands {
 
 void WorldSession::SendClientCacheVersion(uint32 version) {
-  WorldPacket data(SMSG_CLIENTCACHE_VERSION);
-  data.Append<uint32>(version);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Misc::ClientCacheVersion(version));
 }
 
 void WorldSession::SendTutorialFlagsUnauthenticated() {
@@ -143,9 +142,7 @@ void WorldSession::SendLoginSetTimeSpeed(float speed) {
 
 void WorldSession::SendLearnedDanceMoves() {
   // CharacterHandler.cpp: WorldPacket data(SMSG_LEARNED_DANCE_MOVES); data << uint64(0);
-  WorldPacket data(SMSG_LEARNED_DANCE_MOVES);
-  data.Append<uint64>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Misc::LearnedDanceMoves());
 }
 
 void WorldSession::SendMotd() {
@@ -162,11 +159,7 @@ void WorldSession::SendDungeonDifficulty(bool inGroup) {
 }
 
 void WorldSession::SendHotfixNotifyBlobEmpty() {
-  WorldPacket data(SMSG_HOTFIX_NOTIFY_BLOB);
-  BitWriter bw(data);
-  bw.WriteBits(0, 22);
-  bw.Flush();
-  SendPacket(data);
+  SendPacket(new WorldPackets::Misc::HotfixNotifyBlobEmpty());
 }
 
 void WorldSession::SendKnownSpells(bool initialLogin,
@@ -200,27 +193,16 @@ void WorldSession::SendUnlearnSpellsEmpty() {
 
 void WorldSession::SendContactListEmpty() {
   // SocialMgr.cpp PlayerSocial::SendSocialList — empty list, SOCIAL_FLAG_ALL.
-  constexpr uint32 kSocialFlagAll = 0x01u | 0x02u | 0x04u;
-  WorldPacket data(SMSG_CONTACT_LIST);
-  data.Append<uint32>(kSocialFlagAll);
-  data.Append<uint32>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Social::ContactListEmpty());
 }
 
 void WorldSession::SendAllAchievementDataEmpty() {
   // AchievementMgr.cpp SendAllAchievementData — zero criteria, zero achievements.
-  WorldPacket data(SMSG_ALL_ACHIEVEMENT_DATA);
-  BitWriter bw(data);
-  bw.WriteBits(0, 21);
-  bw.WriteBits(0, 23);
-  bw.Flush();
-  SendPacket(data);
+  SendPacket(new WorldPackets::Achievement::AllDataEmpty());
 }
 
 void WorldSession::SendEquipmentSetListEmpty() {
-  WorldPacket data(SMSG_EQUIPMENT_SET_LIST);
-  data.Append<uint32>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Character::EquipmentSetListEmpty());
 }
 
 void WorldSession::SendInitialActionButtons() {
@@ -240,9 +222,7 @@ void WorldSession::SendInitWorldStates(uint32 mapId, uint32 zoneId, uint32 areaI
 }
 
 void WorldSession::SendSetupCurrency() {
-  WorldPacket data(SMSG_SETUP_CURRENCY);
-  data.Append<uint32>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Character::SetupCurrencyEmpty());
 }
 
 void WorldSession::SendClientControlUpdate(uint64 guid) {

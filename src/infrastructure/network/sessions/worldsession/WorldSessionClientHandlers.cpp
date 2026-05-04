@@ -7,7 +7,10 @@
 #include <shared/game/InventorySlots.h>
 #include <shared/game/Permissions.h>
 #include <shared/network/BitReader.h>
-#include <shared/network/BitWriter.h>
+#include <shared/network/packets/client/PackedPlayerGuidWire.h>
+#include <shared/network/packets/client/SessionOpcodesClient.h>
+#include <shared/network/packets/server/PongPacket.h>
+#include <shared/network/packets/server/SimpleOutboundPackets.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -174,20 +177,14 @@ void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
 }
 
 void WorldSession::HandleCalendarGetNumPending(WorldPacket & /*packet*/) {
-  // Reference: WorldSession implementation
-  WorldPacket data(SMSG_CALENDAR_SEND_NUM_PENDING, 4);
-  data.Append<uint32>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Misc::CalendarSendNumPending(0));
 }
 
 void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
-  // Reference: HandleZoneUpdateOpcode implementation
-  uint32 newZone = 0;
-  if (packet.Size() - packet.GetReadPos() >= sizeof(uint32))
-    newZone = packet.Read<uint32>();
-
-  if (newZone != 0)
-    _zoneId = newZone;
+  WorldPackets::Client::ZoneUpdateRequest z{};
+  WorldPackets::Client::ZoneUpdateRequest::Read(packet, z);
+  if (z.newZoneId != 0)
+    _zoneId = z.newZoneId;
 }
 
 void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*packet*/) {
@@ -195,16 +192,13 @@ void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*pa
   // and Guild.cpp Guild::SendMoneyInfo → SMSG_GUILD_BANK_MONEY_WITHDRAWN(int64).
   //
   // We don't implement guilds yet → respond with 0 so the UI doesn't hang.
-  WorldPacket data(SMSG_GUILD_BANK_MONEY_WITHDRAWN, 8);
-  data.Append<int64>(0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Guild::BankMoneyWithdrawn(0));
 }
 
 void WorldSession::HandleLfgGetStatus(WorldPacket & /*packet*/) {
   // Reference: HandleLfgGetStatus implementation
   // Minimal "not queued / not using LFG" response.
-  WorldPacket data(SMSG_LFG_UPDATE_STATUS_NONE, 0);
-  SendPacket(data);
+  SendPacket(new WorldPackets::Lfg::UpdateStatusNone());
 }
 
 void WorldSession::HandleLfgLockInfoRequest(WorldPacket &packet) {
@@ -223,19 +217,14 @@ void WorldSession::HandleLfgLockInfoRequest(WorldPacket &packet) {
     // - [dungeon entries...]
     // - uint32 blacklistCount
     // - [blacklist slots...]
-    WorldPacket playerInfo(SMSG_LFG_PLAYER_INFO, 1 + 4);
-    playerInfo.Append<uint8>(0);
-    playerInfo.Append<uint32>(0);
-    SendPacket(playerInfo);
+    SendPacket(new WorldPackets::Lfg::PlayerInfoEmpty());
     return;
   }
 
   // SMSG_LFG_PARTY_INFO:
   // - uint8 playerCount
   // - [blacklist entries...]
-  WorldPacket partyInfo(SMSG_LFG_PARTY_INFO, 1);
-  partyInfo.Append<uint8>(0);
-  SendPacket(partyInfo);
+  SendPacket(new WorldPackets::Lfg::PartyInfoEmpty());
 }
 
 void WorldSession::HandleRequestCemeteryList(WorldPacket & /*packet*/) {
@@ -244,12 +233,7 @@ void WorldSession::HandleRequestCemeteryList(WorldPacket & /*packet*/) {
   // - 1 bit  IsGossipTriggered
   // - 24 bits CemeteryID.size()
   // - [uint32 cemeteryId...]
-  WorldPacket response(SMSG_REQUEST_CEMETERY_LIST_RESPONSE, 4);
-  BitWriter bits(response);
-  bits.WriteBit(false);
-  bits.WriteBits(0, 24);
-  bits.Flush();
-  SendPacket(response);
+  SendPacket(new WorldPackets::WorldState::CemeteryListResponseEmpty());
 }
 
 void WorldSession::HandleNameQuery(WorldPacket &packet) {
@@ -304,10 +288,8 @@ void WorldSession::HandleCreatureQuery(WorldPacket &packet) {
 }
 
 void WorldSession::SendQueryTimeResponse() {
-  WorldPacket response(SMSG_QUERY_TIME_RESPONSE);
-  response.Append<uint32>(static_cast<uint32>(std::time(nullptr)));
-  response.Append<uint32>(0); // next daily reset (unknown/not implemented)
-  SendPacket(response);
+  SendPacket(new WorldPackets::Character::QueryTimeResponse(
+      static_cast<uint32_t>(std::time(nullptr)), 0));
 }
 
 void WorldSession::HandleQueryTime(WorldPacket & /*packet*/) {
@@ -321,19 +303,14 @@ void WorldSession::HandlePlayedTime(WorldPacket &packet) {
   if (packet.Size() - packet.GetReadPos() >= 1)
     trigger = packet.Read<uint8>();
 
-  WorldPacket response(SMSG_PLAYED_TIME);
-  // WorldPackets::Character::PlayedTime::Write() uses int32 for both times.
-  response.Append<int32>(0); // total played seconds (not persisted yet)
-  response.Append<int32>(0); // level played seconds (not persisted yet)
-  response.Append<uint8>(trigger ? 1 : 0);
-  SendPacket(response);
+  SendPacket(new WorldPackets::Character::PlayedTime(
+      0, 0, trigger ? static_cast<uint8_t>(1) : static_cast<uint8_t>(0)));
 }
 
 void WorldSession::HandlePing(WorldPacket &packet) {
-  uint32 serial = packet.Read<uint32>();
-  WorldPacket pong(SMSG_PONG);
-  pong.Append<uint32>(serial);
-  SendPacket(pong);
+  WorldPackets::Client::PingRequest ping{};
+  WorldPackets::Client::PingRequest::Read(packet, ping);
+  SendPacket(new WorldPackets::Misc::Pong(ping.serial));
 }
 
 void WorldSession::HandleSetSelection(WorldPacket &packet) {
@@ -349,7 +326,7 @@ void WorldSession::HandleSetSelection(WorldPacket &packet) {
   }
 
   uint64 guid = 0;
-  LoginReadPackedPlayerGuid(packet, guid);
+  WorldPackets::Client::ReadLoginPackedPlayerGuid(packet, guid);
 
   if (packet.GetReadPos() != packet.Size() && rem == sizeof(uint64)) {
     packet.SetReadPos(start);
@@ -430,8 +407,9 @@ void WorldSession::HandleSwapItem(WorldPacket &packet) {
 }
 
 void WorldSession::HandleTimeSyncResp(WorldPacket &packet) {
-  packet.Read<uint32>(); // counter
-  packet.Read<uint32>(); // clientTime
+  WorldPackets::Client::TimeSyncResponse ts{};
+  WorldPackets::Client::TimeSyncResponse::Read(packet, ts);
+  (void)ts;
   // Trinity (MovementHandler.cpp): RESP updates clock skew only; the following
   // SMSG_TIME_SYNC_REQ is sent from SendTimeSync() on a ~5s timer — not here.
 }

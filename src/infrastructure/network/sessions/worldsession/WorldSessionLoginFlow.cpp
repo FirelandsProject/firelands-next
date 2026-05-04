@@ -17,6 +17,7 @@
 #include <shared/game/StarterOpeningCinematic.h>
 #include <shared/game/WowGuid.h>
 #include <shared/network/MovementStateQueries.h>
+#include <shared/network/packets/client/PackedPlayerGuidWire.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -72,7 +73,7 @@ void RebuildKnownSpellIdSet(std::vector<uint32> const &ordered,
 
 void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   uint64 guid = 0;
-  LoginReadPackedPlayerGuid(packet, guid);
+  WorldPackets::Client::ReadLoginPackedPlayerGuid(packet, guid);
 
   _playerGuid = guid;
   _timeSyncNextCounter = 0;
@@ -108,33 +109,6 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   LOG_INFO("Player entered world: Account={} GUID={} Name='{}' Map={} Pos=({},{:.2},{:.2})",
            _accountId, guid, character.GetName(), character.GetMapId(),
            character.GetX(), character.GetY(), character.GetZ());
-}
-
-void WorldSession::LoginReadPackedPlayerGuid(WorldPacket &packet,
-                                             uint64 &outGuid) {
-  uint8 guid_bytes[8] = {0};
-  BitReader br(packet);
-
-  bool g2 = br.ReadBit();
-  bool g3 = br.ReadBit();
-  bool g0 = br.ReadBit();
-  bool g6 = br.ReadBit();
-  bool g4 = br.ReadBit();
-  bool g5 = br.ReadBit();
-  bool g1 = br.ReadBit();
-  bool g7 = br.ReadBit();
-
-  if (g2) guid_bytes[2] = packet.Read<uint8>() ^ 1;
-  if (g7) guid_bytes[7] = packet.Read<uint8>() ^ 1;
-  if (g0) guid_bytes[0] = packet.Read<uint8>() ^ 1;
-  if (g3) guid_bytes[3] = packet.Read<uint8>() ^ 1;
-  if (g5) guid_bytes[5] = packet.Read<uint8>() ^ 1;
-  if (g6) guid_bytes[6] = packet.Read<uint8>() ^ 1;
-  if (g1) guid_bytes[1] = packet.Read<uint8>() ^ 1;
-  if (g4) guid_bytes[4] = packet.Read<uint8>() ^ 1;
-
-  outGuid = 0;
-  std::memcpy(&outGuid, guid_bytes, 8);
 }
 
 void WorldSession::LoginSendAccountDataAndPreMapPackets(

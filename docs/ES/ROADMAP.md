@@ -14,6 +14,14 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 
 ---
 
+## Estado del workspace (documentado 2026-05-03)
+
+- **En curso (cambios locales típicos):** modularización de `WorldSession` en `src/infrastructure/network/sessions/worldsession/*.cpp` (flujo de login, handlers de opcodes cliente, envío de paquetes salientes) para reducir unidades de compilación y acoplamiento.
+- **Capa de paquetes compartida:** nuevos headers bajo `src/shared/network/packets/` — lecturas cliente (`SessionOpcodesClient`: ping/time sync/zone update), **packed player `ObjectGuid`** 4.3.4 (`PackedPlayerGuidWire`), respuestas mínimas servidor (`Pong`, `SimpleOutboundPackets` para varios SMSG auxiliares del login y probes).
+- **Motivo:** acercar el criterio de la matriz **Opcodes / packets** (estructuras tipadas y serialización reusable) sin cambiar el comportamiento observable hasta donde alcance el refactor.
+
+---
+
 ## Roadmap por fases (alto nivel)
 
 ### Phase 1 — Foundations & Auth (COMPLETED)
@@ -85,6 +93,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | 2026-04-29 | Mapeo/ignore de “client probes” post-login + primeros ACKs mínimos (mail/calendar/zoneupdate) |
 | 2026-04-30 | CreateObject cruzado al login (`Map::ForEachPlayer`); checklist battlefield = no-op documentado |
 | 2026-04-30 | CMSG_CAST_SPELL mínimo: wire 4.3.4 (`SpellCastWire`) + broadcast START/GO + GCD 1.5s |
+| 2026-05-03 | Doc: snapshot refactor capa paquetes (`shared/network/packets/*`) + split `WorldSession`; foco siguiente alineado con estabilidad idle / auras |
 
 ---
 
@@ -139,4 +148,6 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 1. ~~Completar **ACKs mínimos**~~ (incl. battlefield = no-op intencional sin cola).
 2. ~~Dos clientes en el mismo mapa~~: CreateObject al login + movement/chat nearby.
 3. ~~Empezar **spells mínimos**~~ (GCD + `SMSG_SPELL_START`/`GO` + fallos básicos); siguiente: **auras / efectos** o datos mínimos de hechizo (DBC/SQL).
+4. **Cerrar el refactor de red** (split `WorldSession` + headers en `shared/network/packets/`): revisar CMake/includes, compilar y commitear; seguir extrayendo lecturas/escrituras repetidas a tipos compartidos donde aporte claridad.
+5. **Estabilidad cliente (Definition of done):** sesión idle **≥ 5 min**, cadencia sana de `SMSG_TIME_SYNC_REQ`, y validación puntual del burst de login vs referencia.
 
