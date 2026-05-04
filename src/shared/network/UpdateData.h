@@ -4,6 +4,7 @@
 #include <vector>
 #include <shared/network/BitWriter.h>
 #include <shared/network/ByteBuffer.h>
+#include <shared/network/MovementFlags.h>
 #include <shared/network/MovementInfo.h>
 #include <shared/network/UpdateFields.h>
 #include <shared/network/WorldPacket.h>
@@ -52,8 +53,9 @@ public:
       guidBytes[i] = (guid >> (i * 8)) & 0xFF;
 
     bool isZeroOrientation = (move.orientation == 0.0f);
-    uint32 movementFlags0 = 0;
-    uint16 movementFlags1 = 0;
+    uint32 const movementFlags0 = move.flags & kMovementFlagsWireMask;
+    uint16 const movementFlags1 =
+        static_cast<uint16>(move.flags2 & kMovementFlags2WireMask);
     bool hasPitch = false;
     bool hasFallData = false;
     bool hasSpline = false;
@@ -83,7 +85,8 @@ public:
       bw.WriteBit(guidBytes[7] != 0);
       bw.WriteBit(guidBytes[3] != 0);
       bw.WriteBit(guidBytes[2] != 0);
-      // movementFlags0 == 0 => no bits written
+      if (movementFlags0 != 0)
+        bw.WriteBits(movementFlags0, 30);
 
       bw.WriteBit(false);     // !Has player spline data (hasSpline && !isPlayer)
       bw.WriteBit(!hasPitch); // !Has pitch
@@ -101,7 +104,8 @@ public:
       bw.WriteBit(guidBytes[1] != 0);
       bw.WriteBit(false);           // HeightChangeFailed
       bw.WriteBit(!movementFlags1); // !Has MoveFlags1
-      // movementFlags1 == 0 => no bits written
+      if (movementFlags1 != 0)
+        bw.WriteBits(movementFlags1, 12);
     }
 
     bw.Flush();

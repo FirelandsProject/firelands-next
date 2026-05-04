@@ -3,6 +3,7 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionMovementChecks.h>
 #include <shared/Logger.h>
 #include <shared/network/BitReader.h>
+#include <shared/network/MovementFlags.h>
 #include <shared/network/MovementTeleportPackets.h>
 #include <shared/network/MovementWire.h>
 
@@ -133,20 +134,34 @@ void WorldSession::HandleMovement(WorldPacket &packet) {
   if (_awaitingTeleportNear)
     return;
 
-  bool const canPersistPosition =
+  bool const trustFullPosition =
       parsed && WsIsTrustedPositionOpcode(op) && WsIsSaneWorldPosition(move);
 
-  if (canPersistPosition)
-    _position = move;
+  bool const mergeMovementState =
+      parsed && !WsIsTrustedPositionOpcode(op) && WsIsClientMovementOpcode(op);
 
-  // Cataclysm expects the server to echo MSG_MOVE_* payloads for these opcodes.
+  if (trustFullPosition) {
+    _position = move;
+  } else if (mergeMovementState) {
+    // Non-heartbeat MSG_MOVE_* share the alternate packed layout; coordinates can be
+    // unreliable, but movement flags/time match the client state machine — merge them
+    // so server-side queries stay in sync between heartbeats.
+    _position.flags = move.flags & kMovementFlagsWireMask;
+    _position.flags2 =
+        static_cast<uint16>(move.flags2 & kMovementFlags2WireMask);
+    _position.time = move.time;
+  }
+
+  // The game client expects the server to echo MSG_MOVE_* payloads for these opcodes.
   // If parsing fails (wrong layout for a given opcode), still echo the raw bytes so
   // the client state machine does not stall; only apply map/DB position when parsed.
   if (WsIsClientMovementOpcode(op)) {
     auto map = WorldService::Instance().GetMap(_mapId);
     if (map) {
-      if (canPersistPosition)
+      if (trustFullPosition)
         map->UpdateObjectPosition(_playerGuid, move);
+      else if (mergeMovementState)
+        map->UpdateObjectPosition(_playerGuid, _position);
       WorldPacket broadcast(packet.GetOpcode(), packet.Size());
       broadcast.Append(packet.GetBuffer(), packet.Size());
       map->BroadcastPacketToNearby(_playerGuid, broadcast);

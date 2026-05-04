@@ -1,6 +1,8 @@
 #include <infrastructure/scripting/LuaGameScriptHost.h>
 
 #include <filesystem>
+#include <shared/dbc/FactionTemplateDbc.h>
+#include <shared/dbc/FactionTemplateHelpers.h>
 #include <shared/Logger.h>
 
 extern "C" {
@@ -10,6 +12,90 @@ extern "C" {
 }
 
 namespace Firelands {
+
+namespace {
+
+int LuaFactionHas(lua_State *L) {
+  auto *host = static_cast<LuaGameScriptHost *>(lua_touserdata(L, lua_upvalueindex(1)));
+  uint32_t const id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+  auto store = host->GetFactionTemplateDbc();
+  if (!store || !store->IsLoaded()) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, store->HasEntry(id) ? 1 : 0);
+  return 1;
+}
+
+int LuaFactionPrimaryFaction(lua_State *L) {
+  auto *host = static_cast<LuaGameScriptHost *>(lua_touserdata(L, lua_upvalueindex(1)));
+  uint32_t const id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+  auto store = host->GetFactionTemplateDbc();
+  if (!store || !store->IsLoaded()) {
+    lua_pushinteger(L, 0);
+    return 1;
+  }
+  auto row = store->TryGet(id);
+  if (!row) {
+    lua_pushinteger(L, 0);
+    return 1;
+  }
+  lua_pushinteger(L, static_cast<lua_Integer>(row->faction));
+  return 1;
+}
+
+int LuaFactionHostile(lua_State *L) {
+  auto *host = static_cast<LuaGameScriptHost *>(lua_touserdata(L, lua_upvalueindex(1)));
+  uint32_t const id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+  auto store = host->GetFactionTemplateDbc();
+  if (!store || !store->IsLoaded()) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  auto row = store->TryGet(id);
+  if (!row) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, FactionTemplateLikelyHostileToPlayers(*row) ? 1 : 0);
+  return 1;
+}
+
+int LuaFactionFriendly(lua_State *L) {
+  auto *host = static_cast<LuaGameScriptHost *>(lua_touserdata(L, lua_upvalueindex(1)));
+  uint32_t const id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+  auto store = host->GetFactionTemplateDbc();
+  if (!store || !store->IsLoaded()) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  auto row = store->TryGet(id);
+  if (!row) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, FactionTemplateLikelyFriendlyToPlayers(*row) ? 1 : 0);
+  return 1;
+}
+
+int LuaFactionNeutral(lua_State *L) {
+  auto *host = static_cast<LuaGameScriptHost *>(lua_touserdata(L, lua_upvalueindex(1)));
+  uint32_t const id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+  auto store = host->GetFactionTemplateDbc();
+  if (!store || !store->IsLoaded()) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  auto row = store->TryGet(id);
+  if (!row) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, FactionTemplateLikelyNeutralToPlayers(*row) ? 1 : 0);
+  return 1;
+}
+
+} // namespace
 
 LuaGameScriptHost::LuaGameScriptHost() = default;
 
@@ -48,6 +134,7 @@ bool LuaGameScriptHost::Init(const std::string &scriptsRoot) {
       }
     }
   }
+  RegisterFactionLuaApi();
   return true;
 }
 
@@ -56,6 +143,7 @@ void LuaGameScriptHost::Shutdown() {
     lua_close(_L);
     _L = nullptr;
   }
+  _factionTemplateDbc.reset();
 }
 
 bool LuaGameScriptHost::RunChunk(const std::string &source,
@@ -118,6 +206,32 @@ void LuaGameScriptHost::FireEvent(const std::string &eventName,
     LOG_WARN("OnScriptEvent failed: {}", msg ? msg : "(no message)");
     lua_pop(_L, 1);
   }
+}
+
+void LuaGameScriptHost::AttachFactionTemplateDbc(
+    std::shared_ptr<FactionTemplateDbc const> store) {
+  _factionTemplateDbc = std::move(store);
+  RegisterFactionLuaApi();
+}
+
+void LuaGameScriptHost::RegisterFactionLuaApi() {
+  if (!_L)
+    return;
+  lua_pushlightuserdata(_L, this);
+  lua_pushcclosure(_L, LuaFactionHas, 1);
+  lua_setglobal(_L, "firelands_faction_template_has");
+  lua_pushlightuserdata(_L, this);
+  lua_pushcclosure(_L, LuaFactionPrimaryFaction, 1);
+  lua_setglobal(_L, "firelands_faction_template_primary_faction");
+  lua_pushlightuserdata(_L, this);
+  lua_pushcclosure(_L, LuaFactionHostile, 1);
+  lua_setglobal(_L, "firelands_faction_template_hostile_to_players");
+  lua_pushlightuserdata(_L, this);
+  lua_pushcclosure(_L, LuaFactionFriendly, 1);
+  lua_setglobal(_L, "firelands_faction_template_friendly_to_players");
+  lua_pushlightuserdata(_L, this);
+  lua_pushcclosure(_L, LuaFactionNeutral, 1);
+  lua_setglobal(_L, "firelands_faction_template_neutral_to_players");
 }
 
 bool LuaGameScriptHost::TryGetGlobalString(const std::string &globalName,

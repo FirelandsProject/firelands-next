@@ -4,6 +4,7 @@
 #include <domain/repositories/ICreatureClassLevelStatsRepository.h>
 #include <domain/repositories/ICreatureSpawnRepository.h>
 #include <domain/world/Creature.h>
+#include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/Logger.h>
 #include <shared/game/WowGuid.h>
 #include <shared/network/MovementInfo.h>
@@ -13,7 +14,8 @@
 namespace Firelands {
 
 std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo,
-                                       ICreatureClassLevelStatsRepository const &statsRepo) {
+                                       ICreatureClassLevelStatsRepository const &statsRepo,
+                                       FactionTemplateDbc const *factionTemplateDbc) {
   std::vector<CreatureSpawnRow> const rows = spawnRepo.LoadAllSpawns();
   if (rows.empty()) {
     LOG_INFO("Database creature spawns: none (or missing creature/creature_template)");
@@ -22,6 +24,7 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
 
   std::mt19937 rng(std::random_device{}());
   std::size_t count = 0;
+  std::size_t zeroDbFactionSpawns = 0;
   for (CreatureSpawnRow const &row : rows) {
     uint8 const unitClass = NormalizeCreatureUnitClass(row.unitClass);
     uint8 const level =
@@ -40,13 +43,30 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
     uint32 const spawnLow =
         static_cast<uint32>(row.guid & 0xFFFFFFFFu);
     uint64 const objectGuid = MakeCreatureObjectGuid(row.entry, spawnLow);
-    auto spawned =
-        std::make_shared<Creature>(objectGuid, row.entry, display, maxHp, level);
+    uint32_t faction = row.factionTemplate;
+    if (faction == 0)
+      ++zeroDbFactionSpawns;
+    if (factionTemplateDbc != nullptr && factionTemplateDbc->IsLoaded() && faction != 0 &&
+        !factionTemplateDbc->HasEntry(faction)) {
+      LOG_WARN(
+          "creature guid={} entry={} has faction {} not present in FactionTemplate.dbc; "
+          "using server fallback",
+          row.guid, row.entry, faction);
+      faction = 0;
+    }
+    auto spawned = std::make_shared<Creature>(objectGuid, row.entry, display, maxHp, level,
+                                                faction);
     spawned->SetPosition(mi);
     WorldService::Instance().AddCreatureToMap(row.mapId, std::move(spawned));
     ++count;
   }
 
+  if (zeroDbFactionSpawns != 0) {
+    LOG_WARN(
+        "{} creature spawn(s) use creature_template.faction=0 (common on minimal seeds); "
+        "server applies fallback FactionTemplate id {} until you set real faction values.",
+        zeroDbFactionSpawns, Creature::kDefaultFactionTemplate);
+  }
   LOG_INFO("Database creature spawns: loaded {} NPC(s)", count);
   return count;
 }

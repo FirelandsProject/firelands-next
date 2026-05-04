@@ -25,7 +25,9 @@ inline bool WsIsSaneWorldPosition(MovementInfo const &m) {
          std::fabs(m.z) <= kWsMapCoordLimit;
 }
 
-/// Only heartbeat uses trusted packed layout; other MSG_MOVE_* can mis-read Z.
+/// Only heartbeat uses the trusted position layout for X/Y/Z; other MSG_MOVE_* can
+/// mis-read coordinates — `WorldSession::HandleMovement` merges flags/time from those
+/// opcodes while keeping the last heartbeat position.
 inline bool WsIsTrustedPositionOpcode(WorldOpcode opcode) {
   return opcode == MSG_MOVE_HEARTBEAT;
 }
@@ -55,6 +57,8 @@ inline bool WsIsClientMovementOpcode(WorldOpcode opcode) {
   case MSG_MOVE_JUMP:
   case MSG_MOVE_SET_FACING:
   case MSG_MOVE_FALL_LAND:
+  case CMSG_MOVE_SET_CAN_FLY:
+  case CMSG_MOVE_SET_CAN_FLY_ACK:
     return true;
   default:
     return false;

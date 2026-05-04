@@ -7,9 +7,9 @@
 namespace Firelands {
 
 /// Decode client movement payloads into \a move for the wire layout the server
-/// currently implements (see \c MovementWire.cpp). When the protocol changes
-/// between expansions, add a new decoder or branch here rather than renaming
-/// this module.
+/// currently implements (see \c MovementWire.cpp). When the client layout changes,
+/// extend the decoder in `ClientMovementMse` / opcode sequences rather than
+/// renaming this entry point.
 bool TryReadClientMovement(WorldPacket &packet, WorldOpcode opcode,
                            MovementInfo &move);
 

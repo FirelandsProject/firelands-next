@@ -40,6 +40,23 @@ TEST(LuaGameScriptHost, FireGossipSelectSetsContextGlobals) {
   EXPECT_EQ(cap, "77:100:200");
 }
 
+TEST(LuaGameScriptHost, FactionTemplateGlobalsExistWithoutDbcStore) {
+  LuaGameScriptHost host;
+  ASSERT_TRUE(host.Init(""));
+  host.AttachFactionTemplateDbc(nullptr);
+  std::string err;
+  ASSERT_TRUE(host.RunChunk(R"(
+    assert(type(firelands_faction_template_has) == "function")
+    assert(firelands_faction_template_has(1) == false)
+    assert(firelands_faction_template_hostile_to_players(1) == false)
+    assert(firelands_faction_template_friendly_to_players(1) == false)
+    assert(firelands_faction_template_neutral_to_players(1) == false)
+    assert(firelands_faction_template_primary_faction(1) == 0)
+  )",
+                            &err))
+      << err;
+}
+
 TEST(LuaGameScriptHost, FireEventInvokesGlobal) {
   LuaGameScriptHost host;
   ASSERT_TRUE(host.Init(""));

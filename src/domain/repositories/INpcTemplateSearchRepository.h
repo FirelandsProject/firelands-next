@@ -12,6 +12,8 @@ struct NpcTemplateSearchRow {
   uint32_t entry = 0;
   std::string name;
   std::string subname;
+  /// `creature_template.faction` (FactionTemplate.dbc); 0 if column null / missing.
+  uint32_t factionTemplate = 0;
   /// For `SMSG_CREATURE_QUERY_RESPONSE` model slots; slot 0 derived from
   /// `creature.modelid` when present, otherwise a safe client fallback.
   std::array<uint32_t, 4> displayIds{};

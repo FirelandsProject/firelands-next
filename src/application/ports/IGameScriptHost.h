@@ -2,9 +2,12 @@
 #define FIRELANDS_APPLICATION_PORTS_I_GAME_SCRIPT_HOST_H
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace Firelands {
+
+class FactionTemplateDbc;
 
 /// Port for gameplay scripting (Lua implementation lives in infrastructure).
 /// Keeps domain/world code free of script engine types.
@@ -38,6 +41,12 @@ public:
   /// Reads a global as UTF-8 string (for tests and admin tooling).
   virtual bool TryGetGlobalString(const std::string &globalName,
                                   std::string *out) const = 0;
+
+  /// Optional: after `FactionTemplate.dbc` is loaded, registers Lua helpers (`firelands_*`).
+  virtual void AttachFactionTemplateDbc(
+      std::shared_ptr<FactionTemplateDbc const> store) {
+    (void)store;
+  }
 };
 
 } // namespace Firelands

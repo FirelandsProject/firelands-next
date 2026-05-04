@@ -34,6 +34,7 @@
 #include "WorldFtxuiConsole.h"
 #include "WorldInteractiveConsole.h"
 #include <shared/dbc/ItemDbHotfixStore.h>
+#include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/dbc/SpellDifficultyDbc.h>
 #include <shared/Logger.h>
@@ -236,25 +237,40 @@ int main(int argc, char **argv) {
     auto spellManager =
         std::make_shared<SpellManager>(spellDefinitions, spellCastTables);
 
+    std::shared_ptr<FactionTemplateDbc> factionTemplateDbcOwned =
+        std::make_shared<FactionTemplateDbc>();
+    if (!factionTemplateDbcOwned->Load(dbcBasePath + "/FactionTemplate.dbc")) {
+      LOG_WARN("FactionTemplate.dbc not loaded from {}; faction ids are not "
+               "server-validated (place client DBCs under Data.DbcPath).",
+               dbcBasePath + "/FactionTemplate.dbc");
+      factionTemplateDbcOwned.reset();
+    }
+    std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc =
+        factionTemplateDbcOwned;
+
+    if (auto script = WorldService::Instance().GetScriptHost())
+      script->AttachFactionTemplateDbc(factionTemplateDbc);
+
     auto npcTemplateSearchRepo =
         std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
     auto creatureStatsRepo =
         std::make_shared<MySqlCreatureClassLevelStatsRepository>(worldConn);
     auto creatureSpawnRepo =
         std::make_shared<MySqlCreatureSpawnRepository>(worldConn);
-    LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo);
+    LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo,
+                               factionTemplateDbc.get());
 
     auto sessionFactory = [authService, charService, commandService,
                            accountDataRepo, languagesDbc, spellDefinitions,
                            realmRepo, onlineCharRegistry, gmTicketService,
-                           itemDbHotfix, spellManager, npcTemplateSearchRepo](
-                              boost::asio::ip::tcp::socket socket) {
+                           itemDbHotfix, spellManager, npcTemplateSearchRepo,
+                           factionTemplateDbc](boost::asio::ip::tcp::socket socket) {
       std::make_shared<WorldSession>(std::move(socket), authService, charService,
                                      commandService, accountDataRepo,
                                      languagesDbc, spellDefinitions, realmRepo,
                                      onlineCharRegistry, gmTicketService,
                                      itemDbHotfix, spellManager,
-                                     npcTemplateSearchRepo)
+                                     npcTemplateSearchRepo, factionTemplateDbc)
           ->Start();
     };
 

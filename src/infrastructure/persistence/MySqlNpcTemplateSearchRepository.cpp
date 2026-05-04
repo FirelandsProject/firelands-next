@@ -45,7 +45,7 @@ std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEn
     return std::nullopt;
   try {
     std::unique_ptr<sql::PreparedStatement> pstmt(m_connection->prepareStatement(
-        "SELECT ct.`entry`, ct.`name`, ct.`subname`, "
+        "SELECT ct.`entry`, ct.`name`, ct.`subname`, ct.`faction`, "
         "(SELECT MIN(NULLIF(c.`modelid`, 0)) FROM `creature` c WHERE c.`id` = "
         "ct.`entry`) AS `spawn_modelid`, "
         "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4` "
@@ -58,6 +58,8 @@ std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEn
     row.entry = res->getUInt("entry");
     row.name = res->getString("name");
     row.subname = res->getString("subname");
+    if (!res->isNull("faction"))
+      row.factionTemplate = res->getUInt("faction");
     uint32_t spawnModel = 0;
     if (!res->isNull("spawn_modelid"))
       spawnModel = res->getUInt("spawn_modelid");

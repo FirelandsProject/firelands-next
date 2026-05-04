@@ -24,6 +24,7 @@ void WorldSession::ResetGmStateForLogout() {
   _gmFlyEnabled = false;
   _gmRunSpeed = kDefaultRunSpeed;
   _moveCounterForGmPackets = 0;
+  _forcedFactionReactions.clear();
 }
 
 void WorldSession::SetGmTagEnabled(bool on) {

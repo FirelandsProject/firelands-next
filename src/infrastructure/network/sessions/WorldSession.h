@@ -27,6 +27,7 @@
 #include <shared/network/WorldPacket.h>
 #include <array>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -50,6 +51,7 @@ class IRealmRepository;
 class OnlineCharacterSessionRegistry;
 class GmTicketService;
 class ISpellDefinitionStore;
+class FactionTemplateDbc;
 
 class WorldSession : public IAuthSession,
                      public IMapNotifier,
@@ -70,7 +72,8 @@ public:
       std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix = nullptr,
       std::shared_ptr<SpellManager> spellManager = nullptr,
       std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch =
-          nullptr);
+          nullptr,
+      std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc = nullptr);
 
   ~WorldSession();
 
@@ -111,8 +114,16 @@ public:
   bool GmRemoveItem(uint32 itemEntry, uint32 count) override;
   bool GmSetLevel(uint8 level) override;
 
-  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) override;
+  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
+                  uint32 factionTemplateOrZeroDefault = 0) override;
   bool GmDeleteNpcByObjectGuid(uint64 objectGuid) override;
+
+  bool GmSetForcedFactionReaction(uint32 factionDbcId,
+                                  uint8 reputationRank) override;
+  bool GmClearForcedFactionReaction(uint32 factionDbcId) override;
+  bool GmClearAllForcedFactionReactions() override;
+  bool GmSetOwnFactionTemplate(uint32 factionTemplate) override;
+  bool GmSetSelectedCreatureFactionTemplate(uint32 factionTemplate) override;
 
   uint64_t GetClientSelectionGuid() const override { return _clientSelectionGuid; }
   uint64_t GetActiveCharacterObjectGuid() const override { return _playerGuid; }
@@ -278,6 +289,7 @@ public:
   /// in-world fields. Requires `_playerGuid != 0`.
   void FinalizeWorldExit();
   void PublishSelfCoinageUpdate();
+  void PublishUnitFactionTemplateUpdate(uint64 unitGuid, uint32 factionTemplate);
 
   /// Payload for `SpellCastOutcome::SpellStartDeferred` timer completion (`SMSG_SPELL_GO` + effects).
   struct PendingSpellCastFinish {
@@ -314,6 +326,7 @@ public:
   std::shared_ptr<ItemDbHotfixStore const> _itemDbHotfix;
   std::shared_ptr<SpellManager> _spellManager;
   std::shared_ptr<INpcTemplateSearchRepository const> _npcTemplateSearch;
+  std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
 
   /// Filled when the character is registered for console targeting; empty at
   /// character select / disconnected.
@@ -385,6 +398,9 @@ public:
   float _teleportPendingY = 0.f;
   float _teleportPendingZ = 0.f;
   float _teleportPendingO = 0.f;
+
+  /// Faction.dbc id → forced `ReputationRank` for `SMSG_SET_FORCED_REACTIONS` (quest/script overrides).
+  std::map<uint32, uint32> _forcedFactionReactions;
 };
 
 } // namespace Firelands

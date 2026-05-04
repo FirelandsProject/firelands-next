@@ -2,11 +2,14 @@
 #define FIRELANDS_INFRASTRUCTURE_SCRIPTING_LUA_GAME_SCRIPT_HOST_H
 
 #include <application/ports/IGameScriptHost.h>
+#include <memory>
 #include <string>
 
 struct lua_State;
 
 namespace Firelands {
+
+class FactionTemplateDbc;
 
 class LuaGameScriptHost final : public IGameScriptHost {
 public:
@@ -26,9 +29,19 @@ public:
   bool TryGetGlobalString(const std::string &globalName,
                           std::string *out) const override;
 
+  void AttachFactionTemplateDbc(
+      std::shared_ptr<FactionTemplateDbc const> store) override;
+
+  std::shared_ptr<FactionTemplateDbc const> GetFactionTemplateDbc() const {
+    return _factionTemplateDbc;
+  }
+
 private:
+  void RegisterFactionLuaApi();
+
   std::string _scriptsRoot;
   lua_State *_L = nullptr;
+  std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
 };
 
 } // namespace Firelands

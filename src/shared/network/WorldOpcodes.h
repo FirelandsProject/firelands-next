@@ -164,6 +164,11 @@ enum WorldOpcode : uint32 {
   MSG_MOVE_TELEPORT = 0x55A0,
   MSG_MOVE_TELEPORT_ACK = 0x390C,
   SMSG_MOVE_UPDATE_TELEPORT = 0x50B2,
+  /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs` — client applies
+  /// `SMSG_MOVE_SET_CAN_FLY` (movement blob, same family as heartbeat layout).
+  CMSG_MOVE_SET_CAN_FLY = 0x720E,
+  /// Alternate fly-apply ack layout (int32 prefix after first float).
+  CMSG_MOVE_SET_CAN_FLY_ACK = 0x790C,
 
   /// Channel join request (e.g. General/Trade on login).
   CMSG_JOIN_CHANNEL = 0x0156,

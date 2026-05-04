@@ -5,6 +5,7 @@
 #include <domain/models/PlayerCreateInfo.h>
 #include <shared/Common.h>
 #include <shared/dbc/CharStartOutfitDbc.h>
+#include <shared/dbc/ChrRacesDbc.h>
 #include <shared/dbc/ItemDb2Wdb2.h>
 #include <conncpp.hpp>
 #include <array>
@@ -59,10 +60,14 @@ namespace Firelands {
         bool SaveInventory(uint32_t characterGuid,
                            Bag0InventoryData const &invData) override;
         std::vector<MailInboxRow> LoadMailInbox(uint32_t receiverGuid) override;
+
     private:
+        void ApplyInitialFactionTemplate(Character &character, uint8_t race) const;
+
         std::shared_ptr<sql::Connection> _connection;
         std::shared_ptr<sql::Connection> _worldConnection;
         CharStartOutfitDbc _charStartOutfitDbc;
+        ChrRacesDbc _chrRacesDbc;
         bool _charStartOutfitLoaded = false;
         ItemDb2Wdb2 _itemDb2;
         std::shared_ptr<sql::Connection> itemTemplateConnection() const {

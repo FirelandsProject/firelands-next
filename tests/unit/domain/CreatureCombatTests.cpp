@@ -7,6 +7,14 @@ TEST(CreatureCombatTests, DefaultConstructor_FullHealth) {
   Creature c(1ull, 1u, 1u);
   EXPECT_EQ(c.GetLiveMaxHealth(), 100u);
   EXPECT_EQ(c.GetLiveHealth(), 100u);
+  EXPECT_EQ(c.GetFactionTemplate(), Creature::kDefaultFactionTemplate);
+}
+
+TEST(CreatureCombatTests, CustomFactionTemplate) {
+  Creature c(9ull, 1u, 1u, 50u, 3u, 190u);
+  EXPECT_EQ(c.GetFactionTemplate(), 190u);
+  c.SetFactionTemplate(0);
+  EXPECT_EQ(c.GetFactionTemplate(), Creature::kDefaultFactionTemplate);
 }
 
 TEST(CreatureCombatTests, CustomMaxHealth_InitializedFull) {

@@ -43,8 +43,14 @@ public:
         m_packItemGuids(packItemGuids), m_packItemStacks(packItemStacks),
         m_moneyCopper(moneyCopper), m_xp(xp), m_tutorialMask(tutorialMask),
         m_health(100), m_maxHealth(100),
-        m_factionTemplate(1), m_displayId(GetDefaultDisplayId(race, gender)),
+        m_factionTemplate(1),
+        m_displayId(GetDefaultDisplayId(race, gender)),
         m_primaryStats(GetDefaultPrimaryStats(klass)) {}
+
+  /// `UNIT_FIELD_FACTIONTEMPLATE` from `ChrRaces.dbc` FactionID (or safe fallback).
+  void SetInitialFactionTemplateFromServer(uint32 factionTemplate) {
+    m_factionTemplate = factionTemplate;
+  }
 
   static uint32 GetDefaultDisplayId(uint8 race, uint8 gender) {
     switch (race) {

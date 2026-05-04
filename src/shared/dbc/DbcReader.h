@@ -36,6 +36,11 @@ public:
   /// `fieldCount`/`recordSize` may not match a single `f` fmt column).
   float ReadFirstFloatInRecord(uint32_t recordIndex) const;
 
+  /// Raw little-endian `uint32` at `byteOffset` from the start of `recordIndex`
+  /// (used when a DBC row has mixed `x`/`i` layout but the first columns are stable).
+  uint32_t ReadUInt32AtRecordByteOffset(uint32_t recordIndex,
+                                        uint32_t byteOffsetFromRecordStart) const;
+
   bool VerifyFormat(std::string_view fmt) const {
     return static_cast<uint32_t>(fmt.size()) == m_fieldCount;
   }

@@ -117,6 +117,8 @@ private:
                    const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleNpc(std::shared_ptr<ICommandSession> session,
                  const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleFaction(std::shared_ptr<ICommandSession> session,
+                     const std::vector<std::string> &args, PrivilegeOrigin origin);
 
   std::shared_ptr<OnlineCharacterSessionRegistry> _onlineCharacters;
   std::shared_ptr<IAccountRepository> _accountRepo;

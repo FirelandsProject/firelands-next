@@ -23,6 +23,8 @@
 #include <shared/game/InventorySlots.h>
 #include <shared/game/PlayerFactionTeam.h>
 #include <shared/game/PlayerGmAppearance.h>
+#include <shared/game/ReputationRank.h>
+#include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/dbc/GtPlayerStatGameTables.h>
 #include <shared/game/WowGuid.h>
 #include <shared/game/Permissions.h>
@@ -92,9 +94,11 @@ uint64_t AllocateGmSpawnCreatureGuid(uint32_t creatureEntry) {
 void BroadcastGmCreatureCreate(uint32 mapId, uint64 creatureGuid,
                                MovementInfo const &move, uint32 entry,
                                uint32 displayId, uint32 hp, uint32 maxHp,
-                               uint8 level, uint32 npcFlags = 0) {
+                               uint8 level, uint32 npcFlags = 0,
+                               uint32 factionTemplate = Creature::kDefaultFactionTemplate) {
   auto fields = WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
-      creatureGuid, entry, displayId, hp, maxHp, level, npcFlags);
+      creatureGuid, entry, displayId, hp, maxHp, level, npcFlags,
+      factionTemplate);
   UpdateData update(static_cast<uint16>(mapId));
   update.AddCreateObject(creatureGuid, TYPEID_UNIT, move, fields);
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
@@ -214,7 +218,8 @@ WorldSession::WorldSession(
     std::shared_ptr<GmTicketService> gmTicketService,
     std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix,
     std::shared_ptr<SpellManager> spellManager,
-    std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch)
+    std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch,
+    std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc)
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
       _commandService(std::move(commandService)),
@@ -226,7 +231,8 @@ WorldSession::WorldSession(
       _gmTicketService(std::move(gmTicketService)),
       _itemDbHotfix(std::move(itemDbHotfix)),
       _spellManager(std::move(spellManager)),
-      _npcTemplateSearch(std::move(npcTemplateSearch)), _serverSeed(0),
+      _npcTemplateSearch(std::move(npcTemplateSearch)),
+      _factionTemplateDbc(std::move(factionTemplateDbc)), _serverSeed(0),
       _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()),
       _pendingSpellCastTimer(_socket.get_executor()) {}
 
@@ -852,7 +858,7 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
   map->ForEachCreatureNear(x, y, 1, [&](std::shared_ptr<Creature> const &cr) {
     auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
         cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
-        cr->GetLiveMaxHealth(), cr->GetLevel(), 0u);
+        cr->GetLiveMaxHealth(), cr->GetLevel(), 0u, cr->GetFactionTemplate());
     batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
                           npcFields);
     ++inBatch;
@@ -879,6 +885,7 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
       guid, character, statGt, selfNextXp, TryLivePlayerHealth(_mapId, guid),
       TryLivePlayerPower1(_mapId, guid));
   MergeGmAppearanceIntoPlayerFields(selfFields, GetGmAppearanceForPlayerUpdates());
+  ws_obj::ApplyMovementHintsToPlayerCreateFields(selfFields, move);
   update.AddCreateObject(guid, TYPEID_PLAYER, move, selfFields);
 
   MovementInfo itemMove{};
@@ -2088,7 +2095,11 @@ void WorldSession::SendLoadCUFProfiles() {
 
 void WorldSession::SendForcedReactions() {
   WorldPacket data(SMSG_SET_FORCED_REACTIONS);
-  data.Append<uint32>(0);
+  data.Append<uint32>(static_cast<uint32>(_forcedFactionReactions.size()));
+  for (auto const &kv : _forcedFactionReactions) {
+    data.Append<uint32>(kv.first);
+    data.Append<uint32>(kv.second);
+  }
   SendPacket(data);
 }
 
@@ -2172,13 +2183,30 @@ bool WorldSession::GmLearnSpell(uint32 spellId) {
   return true;
 }
 
-bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
+bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
+                              uint32 factionTemplateOrZeroDefault) {
   if (_playerGuid == 0 || creatureEntry == 0 || displayId == 0)
     return false;
 
+  uint32 factionForCreature = factionTemplateOrZeroDefault;
+  if (factionForCreature == 0 && _npcTemplateSearch) {
+    if (auto const tpl = _npcTemplateSearch->TryGetByEntry(creatureEntry)) {
+      if (tpl->factionTemplate != 0)
+        factionForCreature = tpl->factionTemplate;
+    }
+  }
+  if (factionForCreature != 0 && _factionTemplateDbc &&
+      _factionTemplateDbc->IsLoaded() &&
+      !_factionTemplateDbc->HasEntry(factionForCreature)) {
+    LOG_WARN("GM spawn entry {} faction {} not in FactionTemplate.dbc; using fallback",
+             creatureEntry, factionForCreature);
+    factionForCreature = 0;
+  }
+
   uint64 const guid = AllocateGmSpawnCreatureGuid(creatureEntry);
   constexpr uint32_t kSeedHp = 100u;
-  auto spawned = std::make_shared<Creature>(guid, creatureEntry, displayId, kSeedHp);
+  auto spawned = std::make_shared<Creature>(guid, creatureEntry, displayId, kSeedHp, 1u,
+                                              factionForCreature);
   spawned->SetPosition(_position);
   WorldService::Instance().AddCreatureToMap(_mapId, std::move(spawned));
 
@@ -2189,10 +2217,107 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
 
   BroadcastGmCreatureCreate(_mapId, guid, cr->GetPosition(), creatureEntry, displayId,
                             cr->GetLiveHealth(), cr->GetLiveMaxHealth(),
-                            cr->GetLevel());
+                            cr->GetLevel(), 0u, cr->GetFactionTemplate());
   SendNotification("Spawned NPC entry=" + std::to_string(creatureEntry) +
                    " display=" + std::to_string(displayId) + " guid=" +
-                   std::to_string(guid) + ".");
+                   std::to_string(guid) +
+                   " factionTemplate=" + std::to_string(cr->GetFactionTemplate()) + ".");
+  return true;
+}
+
+void WorldSession::PublishUnitFactionTemplateUpdate(uint64 unitGuid,
+                                                    uint32 factionTemplate) {
+  if (unitGuid == 0)
+    return;
+  WorldPacket pkt;
+  WorldSessionObjectUpdate::BuildUnitFactionTemplateValuesUpdate(
+      static_cast<uint16>(_mapId), unitGuid, factionTemplate, pkt);
+  if (auto map = WorldService::Instance().GetMap(_mapId))
+    map->BroadcastPacketToNearby(unitGuid, pkt, true);
+}
+
+bool WorldSession::GmSetForcedFactionReaction(uint32 factionDbcId,
+                                              uint8 reputationRank) {
+  if (_playerGuid == 0)
+    return false;
+  if (factionDbcId == 0) {
+    SendNotification("faction id must be non-zero (Faction.dbc id).");
+    return false;
+  }
+  if (!IsValidReputationRankValue(static_cast<uint32_t>(reputationRank))) {
+    SendNotification("reputationRank must be 0..7 (hated..exalted).");
+    return false;
+  }
+  _forcedFactionReactions[factionDbcId] = static_cast<uint32_t>(reputationRank);
+  SendForcedReactions();
+  return true;
+}
+
+bool WorldSession::GmClearForcedFactionReaction(uint32 factionDbcId) {
+  if (_playerGuid == 0)
+    return false;
+  _forcedFactionReactions.erase(factionDbcId);
+  SendForcedReactions();
+  return true;
+}
+
+bool WorldSession::GmClearAllForcedFactionReactions() {
+  if (_playerGuid == 0)
+    return false;
+  _forcedFactionReactions.clear();
+  SendForcedReactions();
+  return true;
+}
+
+bool WorldSession::GmSetOwnFactionTemplate(uint32 factionTemplate) {
+  if (_playerGuid == 0)
+    return false;
+  if (factionTemplate == 0) {
+    SendNotification("factionTemplate must be non-zero.");
+    return false;
+  }
+  if (_factionTemplateDbc && _factionTemplateDbc->IsLoaded() &&
+      !_factionTemplateDbc->HasEntry(factionTemplate)) {
+    SendNotification("factionTemplate id not found in FactionTemplate.dbc.");
+    return false;
+  }
+  auto map = WorldService::Instance().GetMap(_mapId);
+  if (!map)
+    return false;
+  auto pl = map->TryGetPlayer(_playerGuid);
+  if (!pl)
+    return false;
+  pl->SetFactionTemplate(factionTemplate);
+  PublishUnitFactionTemplateUpdate(_playerGuid, factionTemplate);
+  return true;
+}
+
+bool WorldSession::GmSetSelectedCreatureFactionTemplate(uint32 factionTemplate) {
+  if (_playerGuid == 0)
+    return false;
+  if (_clientSelectionGuid == 0) {
+    SendNotification("Select a creature first (target NPC).");
+    return false;
+  }
+  if (factionTemplate == 0) {
+    SendNotification("factionTemplate must be non-zero.");
+    return false;
+  }
+  if (_factionTemplateDbc && _factionTemplateDbc->IsLoaded() &&
+      !_factionTemplateDbc->HasEntry(factionTemplate)) {
+    SendNotification("factionTemplate id not found in FactionTemplate.dbc.");
+    return false;
+  }
+  auto map = WorldService::Instance().GetMap(_mapId);
+  if (!map)
+    return false;
+  auto cr = map->TryGetCreature(_clientSelectionGuid);
+  if (!cr) {
+    SendNotification("Selection is not a creature on this map.");
+    return false;
+  }
+  cr->SetFactionTemplate(factionTemplate);
+  PublishUnitFactionTemplateUpdate(_clientSelectionGuid, cr->GetFactionTemplate());
   return true;
 }
 

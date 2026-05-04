@@ -18,6 +18,7 @@ public:
                            uint32 maxPower1);
   /// Race / faction template mirror `Character` for server-side targeting hints (spell range).
   void SetRaceAndFaction(uint8 race, uint32 factionTemplate);
+  void SetFactionTemplate(uint32 factionTemplate);
   uint8 GetRace() const { return m_race; }
   uint32 GetFactionTemplate() const { return m_factionTemplate; }
 

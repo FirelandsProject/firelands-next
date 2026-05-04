@@ -145,4 +145,20 @@ float DbcReader::ReadFirstFloatInRecord(uint32_t recordIndex) const {
   return f;
 }
 
+uint32_t DbcReader::ReadUInt32AtRecordByteOffset(
+    uint32_t recordIndex, uint32_t byteOffsetFromRecordStart) const {
+  if (recordIndex >= m_recordCount)
+    return 0;
+  size_t const pos = m_recordsOffset +
+                     static_cast<size_t>(recordIndex) * m_recordSize +
+                     static_cast<size_t>(byteOffsetFromRecordStart);
+  if (pos + sizeof(uint32_t) > m_data.size() ||
+      byteOffsetFromRecordStart + sizeof(uint32_t) > m_recordSize)
+    return 0;
+  return static_cast<uint32_t>(m_data[pos]) |
+         (static_cast<uint32_t>(m_data[pos + 1]) << 8) |
+         (static_cast<uint32_t>(m_data[pos + 2]) << 16) |
+         (static_cast<uint32_t>(m_data[pos + 3]) << 24);
+}
+
 } // namespace Firelands

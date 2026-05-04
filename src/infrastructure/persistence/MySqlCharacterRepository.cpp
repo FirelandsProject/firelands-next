@@ -5,6 +5,7 @@
 #include <shared/game/EquipmentCache.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/ItemEquipSlots.h>
+#include <shared/game/PlayerFactionTeam.h>
 #include <shared/Logger.h>
 #include <cmath>
 #include <limits>
@@ -595,6 +596,18 @@ struct AccountCharacterRow {
 
 } // namespace
 
+void MySqlCharacterRepository::ApplyInitialFactionTemplate(Character &character,
+                                                          uint8_t race) const {
+  if (_chrRacesDbc.IsLoaded()) {
+    if (auto f = _chrRacesDbc.FactionTemplateIdForRace(race)) {
+      character.SetInitialFactionTemplateFromServer(*f);
+      return;
+    }
+  }
+  character.SetInitialFactionTemplateFromServer(
+      SafePlayerFactionTemplateWithoutChrRaces(race));
+}
+
 MySqlCharacterRepository::MySqlCharacterRepository(
     std::shared_ptr<sql::Connection> characterConnection,
     std::shared_ptr<sql::Connection> worldConnection)
@@ -614,6 +627,12 @@ MySqlCharacterRepository::MySqlCharacterRepository(
              "item visual fallback disabled.");
   }
   _itemDb2.Load("data/dbc/Item.db2");
+  if (!_chrRacesDbc.Load("data/dbc/ChrRaces.dbc")) {
+    LOG_WARN(
+        "MySqlCharacterRepository: ChrRaces.dbc not loaded from data/dbc/ (copy from a "
+        "4.3.4.15595 client); player FactionTemplate falls back to generic Alliance=1 "
+        "Horde=2 until the file is present.");
+  }
 }
 
 std::vector<std::shared_ptr<Character>>
@@ -684,7 +703,7 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
               _charStartOutfitLoaded ? &_charStartOutfitDbc : nullptr,
               &_itemDb2);
 
-      characters.push_back(std::make_shared<Character>(
+      auto ch = std::make_shared<Character>(
           r.guid, r.account, r.name, r.race, r.klass, r.gender, r.skin, r.face,
           r.hairStyle, r.hairColor, r.facialHair, r.level, r.zoneId, r.mapId,
           r.x, r.y, r.z, r.orientation, r.guildId, r.characterFlags,
@@ -695,7 +714,9 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
-          r.money, r.xp, r.tutorialMask));
+          r.money, r.xp, r.tutorialMask);
+      ApplyInitialFactionTemplate(*ch, r.race);
+      characters.push_back(std::move(ch));
     }
   } catch (sql::SQLException &e) {
     LOG_ERROR("Database error in GetCharactersByAccount: {}", e.what());
@@ -991,6 +1012,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                    outfitId, equipmentCache, bag0.equipEntries, bag0.equipGuids,
                    bag0.equipStacks, bag0.packEntries, bag0.packGuids,
                    bag0.packStacks, money, xp, tutorialMask);
+      ApplyInitialFactionTemplate(ch, race);
       std::optional<uint32> liveH;
       std::optional<uint32> liveP1;
       if (!res->isNull("live_health"))

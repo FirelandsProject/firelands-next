@@ -246,6 +246,12 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case MSG_MOVE_TELEPORT_ACK:
     HandleMoveTeleportAck(packet);
     break;
+  case CMSG_MOVE_SET_CAN_FLY:
+  case CMSG_MOVE_SET_CAN_FLY_ACK:
+    // Client state after `SMSG_MOVE_SET_CAN_FLY`; echo raw payload like other
+    // movement packets (decoder not wired — position stays on heartbeat).
+    HandleMovement(packet);
+    break;
   default:
     LOG_DEBUG("[PACKET] Unknown/unhandled opcode: 0x{:04X} (size: {})", opcode,
               packet.Size());

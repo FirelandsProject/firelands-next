@@ -65,15 +65,42 @@ public:
   }
 
   /// Spawns a creature at this session's map position and facing (world server).
-  virtual bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) {
+  /// \param factionTemplateOrZeroDefault `FactionTemplate.dbc` id. `0` uses
+  /// `creature_template.faction` for `creatureEntry` when the world DB has that column/row;
+  /// if still unknown, falls back to `Creature::kDefaultFactionTemplate`.
+  virtual bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
+                          uint32 factionTemplateOrZeroDefault = 0) {
     (void)creatureEntry;
     (void)displayId;
+    (void)factionTemplateOrZeroDefault;
     return false;
   }
 
   /// Despawns a creature on this session's current map (`TryGetCreature`).
   virtual bool GmDeleteNpcByObjectGuid(uint64 objectGuid) {
     (void)objectGuid;
+    return false;
+  }
+
+  /// `SMSG_SET_FORCED_REACTIONS`: force how the client treats `factionDbcId` (0–7 = `ReputationRank`).
+  virtual bool GmSetForcedFactionReaction(uint32 factionDbcId, uint8 reputationRank) {
+    (void)factionDbcId;
+    (void)reputationRank;
+    return false;
+  }
+  virtual bool GmClearForcedFactionReaction(uint32 factionDbcId) {
+    (void)factionDbcId;
+    return false;
+  }
+  virtual bool GmClearAllForcedFactionReactions() { return false; }
+  /// `UNIT_FIELD_FACTIONTEMPLATE` for this session's player (broadcast to self + observers).
+  virtual bool GmSetOwnFactionTemplate(uint32 factionTemplate) {
+    (void)factionTemplate;
+    return false;
+  }
+  /// Same as `GmSetOwnFactionTemplate` but for `CMSG_SET_SELECTION` creature on this map.
+  virtual bool GmSetSelectedCreatureFactionTemplate(uint32 factionTemplate) {
+    (void)factionTemplate;
     return false;
   }
 

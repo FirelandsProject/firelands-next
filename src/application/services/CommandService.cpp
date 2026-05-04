@@ -96,12 +96,35 @@ public:
 
   bool GmSetLevel(uint8 level) override { return _subject->GmSetLevel(level); }
 
-  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId) override {
-    return _subject->GmSpawnNpc(creatureEntry, displayId);
+  bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
+                  uint32 factionTemplateOrZeroDefault) override {
+    return _subject->GmSpawnNpc(creatureEntry, displayId,
+                               factionTemplateOrZeroDefault);
   }
 
   bool GmDeleteNpcByObjectGuid(uint64 objectGuid) override {
     return _subject->GmDeleteNpcByObjectGuid(objectGuid);
+  }
+
+  bool GmSetForcedFactionReaction(uint32 factionDbcId,
+                                  uint8 reputationRank) override {
+    return _subject->GmSetForcedFactionReaction(factionDbcId, reputationRank);
+  }
+
+  bool GmClearForcedFactionReaction(uint32 factionDbcId) override {
+    return _subject->GmClearForcedFactionReaction(factionDbcId);
+  }
+
+  bool GmClearAllForcedFactionReactions() override {
+    return _subject->GmClearAllForcedFactionReactions();
+  }
+
+  bool GmSetOwnFactionTemplate(uint32 factionTemplate) override {
+    return _subject->GmSetOwnFactionTemplate(factionTemplate);
+  }
+
+  bool GmSetSelectedCreatureFactionTemplate(uint32 factionTemplate) override {
+    return _subject->GmSetSelectedCreatureFactionTemplate(factionTemplate);
   }
 
   bool GmNpcSearchPrintResults(std::string const &nameQuery) override {
@@ -371,6 +394,11 @@ CommandService::CommandService(
       "npc", {[this](auto s, auto a, auto o) { return HandleNpc(s, a, o); },
              ToMask(Permission::ServerControl), CommandAvailability::Both,
              ConsoleArgLayout::TargetOnlineCharacterFirst});
+  RegisterCommand(
+      "faction",
+      {[this](auto s, auto a, auto o) { return HandleFaction(s, a, o); },
+       ToMask(Permission::CommandGameplay), CommandAvailability::Both,
+       ConsoleArgLayout::TargetOnlineCharacterFirst});
 }
 
 void CommandService::RegisterCommand(const std::string &name, CommandEntry entry) {
@@ -715,7 +743,8 @@ Tags & movement
      "|cffFFD200· NPC & server|r |cff666666(Administrator)|r\n"
      "|cffCCCCCC.npc search|r |cff888888—|r |cff666666Console:|r "
      "|cffffffff.npc Char search wolf|r\n"
-     "|cffCCCCCC.npc add|r |cff888888—|r |cff666666e.g.|r |cffffffff.npc add 2575|r\n"
+     "|cffCCCCCC.npc add|r |cff888888—|r |cff666666e.g.|r |cffffffff.npc add 2575 "
+     "[displayId] [factionTemplate]|r\n"
      "|cffCCCCCC.npc del|r |cff888888—|r |cff666666Console:|r "
      "|cffffffff.npc CharName del <guid>|r\n"
      "|cffCCCCCC.server restart|r |cff888888—|r Delay |cffffffff30s|r / "
@@ -725,7 +754,9 @@ NPC & server  (Administrator)
 --------------------------------------------------------------------------------
 
   .npc search <fragment>   (console: .npc <CharName> search <fragment>)
-  .npc add <entry> [displayId]
+  .npc add <entry> [displayId] [factionTemplate]
+  .faction forced set <factionDbcId> <0-7> | forced clear <id> | forced clearall
+  .faction template self|target <factionTemplate>
   .npc del   (in-game: select NPC; console: .npc <CharName> del <guid>)
 
   .server restart <delay>   e.g. 30s, 5m
@@ -1602,14 +1633,15 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
                                PrivilegeOrigin origin) {
   if (args.empty()) {
     session->SendNotification(
-        "Usage: .npc search [nameFragment]  |  .npc add <creatureEntry> [displayId]  "
-        "|  .npc del\n"
+        "Usage: .npc search [nameFragment]  |  .npc add <creatureEntry> [displayId] "
+        "[factionTemplate]  |  .npc del\n"
         "Administrator (access 3) only. `.npc search <fragment>` prints colored matches "
         "to system chat (no gossip).\n"
         "Console: .npc <OnlineChar> search [fragment]  |  same add/del patterns.\n"
         "Optional displayId defaults to " +
         std::to_string(kDefaultGmNpcDisplayId) +
-        " when omitted (creature_template not loaded yet).");
+        " when omitted. Optional factionTemplate: 0 reads `creature_template.faction` for "
+        "that entry when the world DB exposes it.");
     return false;
   }
 
@@ -1627,25 +1659,31 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
   if (AsciiEqualsLower(args[0], "add")) {
     if (args.size() < 2) {
       session->SendNotification(
-          "Usage: .npc add <creatureEntry> [displayId]  (defaults displayId=" +
-          std::to_string(kDefaultGmNpcDisplayId) + ")");
+          "Usage: .npc add <creatureEntry> [displayId] [factionTemplate]  (defaults "
+          "displayId=" +
+          std::to_string(kDefaultGmNpcDisplayId) +
+          "; factionTemplate 0 = use `creature_template.faction` from world DB when "
+          "available, else server fallback)");
       return false;
     }
     uint32 entry = 0;
     uint32 displayId = kDefaultGmNpcDisplayId;
+    uint32 factionTemplate = 0;
     try {
       entry = static_cast<uint32>(std::stoul(args[1]));
       if (args.size() >= 3)
         displayId = static_cast<uint32>(std::stoul(args[2]));
+      if (args.size() >= 4)
+        factionTemplate = static_cast<uint32>(std::stoul(args[3]));
     } catch (const std::exception &) {
-      session->SendNotification("Invalid creatureEntry or displayId.");
+      session->SendNotification("Invalid creatureEntry, displayId, or factionTemplate.");
       return false;
     }
     if (entry == 0 || displayId == 0) {
       session->SendNotification("creatureEntry and displayId must be non-zero.");
       return false;
     }
-    if (!session->GmSpawnNpc(entry, displayId)) {
+    if (!session->GmSpawnNpc(entry, displayId, factionTemplate)) {
       session->SendNotification("NPC spawn failed (you must be in world on a character).");
       return false;
     }
@@ -1688,6 +1726,114 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
   }
 
   session->SendNotification("Unknown .npc subcommand (use search, add, or del).");
+  return false;
+}
+
+bool CommandService::HandleFaction(std::shared_ptr<ICommandSession> session,
+                                   const std::vector<std::string> &args,
+                                   PrivilegeOrigin origin) {
+  (void)origin;
+  if (args.size() < 2) {
+    session->SendNotification(
+        "Usage: .faction forced set <factionDbcId> <rank0-7>  |  .faction forced clear "
+        "<factionDbcId>  |  .faction forced clearall  |  .faction template self "
+        "<factionTemplate>  |  .faction template target <factionTemplate>\n"
+        "Ranks: 0=hated 1=hostile 2=unfriendly 3=neutral 4=friendly 5=honored 6=revered "
+        "7=exalted");
+    return false;
+  }
+
+  if (AsciiEqualsLower(args[0], "forced")) {
+    if (args.size() >= 2 && AsciiEqualsLower(args[1], "clearall")) {
+      if (!session->GmClearAllForcedFactionReactions()) {
+        session->SendNotification("Failed (must be in world on a character).");
+        return false;
+      }
+      session->SendNotification("Forced faction reactions cleared.");
+      return true;
+    }
+    if (args.size() >= 3 && AsciiEqualsLower(args[1], "clear")) {
+      uint32 factionId = 0;
+      try {
+        factionId = static_cast<uint32>(std::stoul(args[2]));
+      } catch (const std::exception &) {
+        session->SendNotification("Invalid factionDbcId.");
+        return false;
+      }
+      if (!session->GmClearForcedFactionReaction(factionId)) {
+        session->SendNotification("Failed (must be in world on a character).");
+        return false;
+      }
+      session->SendNotification("Forced reaction cleared for faction id " +
+                                std::to_string(factionId) + ".");
+      return true;
+    }
+    if (args.size() >= 4 && AsciiEqualsLower(args[1], "set")) {
+      uint32 factionId = 0;
+      uint32 rank = 0;
+      try {
+        factionId = static_cast<uint32>(std::stoul(args[2]));
+        rank = static_cast<uint32>(std::stoul(args[3]));
+      } catch (const std::exception &) {
+        session->SendNotification("Invalid factionDbcId or rank.");
+        return false;
+      }
+      if (rank > 7u) {
+        session->SendNotification("rank must be 0..7.");
+        return false;
+      }
+      if (!session->GmSetForcedFactionReaction(factionId,
+                                              static_cast<uint8>(rank))) {
+        session->SendNotification("Failed (must be in world on a character).");
+        return false;
+      }
+      session->SendNotification("Forced reaction set: faction " +
+                                std::to_string(factionId) + " rank " +
+                                std::to_string(rank) + ".");
+      return true;
+    }
+    session->SendNotification("Unknown .faction forced subcommand.");
+    return false;
+  }
+
+  if (AsciiEqualsLower(args[0], "template")) {
+    if (args.size() < 3) {
+      session->SendNotification(
+          "Usage: .faction template self <factionTemplate>  |  .faction template target "
+          "<factionTemplate>");
+      return false;
+    }
+    uint32 tpl = 0;
+    try {
+      tpl = static_cast<uint32>(std::stoul(args[2]));
+    } catch (const std::exception &) {
+      session->SendNotification("Invalid factionTemplate.");
+      return false;
+    }
+    if (AsciiEqualsLower(args[1], "self")) {
+      if (!session->GmSetOwnFactionTemplate(tpl)) {
+        session->SendNotification("Failed (in world only; factionTemplate must be non-zero).");
+        return false;
+      }
+      session->SendNotification("Player faction template set to " + std::to_string(tpl) +
+                                ".");
+      return true;
+    }
+    if (AsciiEqualsLower(args[1], "target")) {
+      if (!session->GmSetSelectedCreatureFactionTemplate(tpl)) {
+        session->SendNotification(
+            "Failed (select a creature on this map; factionTemplate must be non-zero).");
+        return false;
+      }
+      session->SendNotification("Creature faction template set to " + std::to_string(tpl) +
+                                ".");
+      return true;
+    }
+    session->SendNotification("Unknown .faction template mode (use self or target).");
+    return false;
+  }
+
+  session->SendNotification("Unknown .faction branch (use forced or template).");
   return false;
 }
 

@@ -7,6 +7,7 @@
 #include <shared/game/StatFormulas.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
+#include <shared/network/MovementStateQueries.h>
 #include <shared/network/WorldOpcodes.h>
 
 #include <algorithm>
@@ -275,6 +276,32 @@ void AddBaselineDefenseAndResistanceFields(
 
 } // namespace
 
+void ApplyMovementHintsToPlayerCreateFields(std::map<uint16, uint32> &fields,
+                                            MovementInfo const &move) {
+  /// `UnitDefines` / client: swim-capable player (shows swim animation in liquid).
+  constexpr uint32 kUnitFlagCanSwim = 0x00008000u;
+
+  uint32 uf = 0;
+  if (auto it = fields.find(static_cast<uint16>(UNIT_FIELD_FLAGS));
+      it != fields.end())
+    uf = it->second;
+  uf |= kUnitFlagCanSwim;
+  fields[static_cast<uint16>(UNIT_FIELD_FLAGS)] = uf;
+
+  uint8 const stand = 0;
+  uint8 const petTalents = 0;
+  uint8 const visFlags = 0;
+  uint8 animTier = 0;
+  if (MovementIsSwimming(move))
+    animTier = 1;
+  else if (MovementIsAirborneTier(move))
+    animTier = 3;
+  uint32 const bytes1 =
+      uint32(stand) | (uint32(petTalents) << 8) | (uint32(visFlags) << 16) |
+      (uint32(animTier) << 24);
+  fields[static_cast<uint16>(UNIT_FIELD_BYTES_1)] = bytes1;
+}
+
 std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
   switch (classId) {
   case 1: // Warrior
@@ -502,6 +529,16 @@ void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power
   update.Build(outPacket);
 }
 
+void BuildUnitFactionTemplateValuesUpdate(uint16 mapId, uint64 unitGuid,
+                                          uint32 factionTemplate,
+                                          WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  fields[UNIT_FIELD_FACTIONTEMPLATE] = factionTemplate;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(unitGuid, fields);
+  update.Build(outPacket);
+}
+
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName) {
   dst.WriteString(ch.GetName());
@@ -537,6 +574,7 @@ void SendPlayerCreateToNotifier(
                                         nextLevelXpFromWorld, healthOverride,
                                         power1Override);
   MergeGmAppearanceIntoPlayerFields(fields, gmAppearance);
+  ApplyMovementHintsToPlayerCreateFields(fields, move);
   UpdateData update(mapId);
   update.AddCreateObject(objectGuid, TYPEID_PLAYER, move, fields);
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
@@ -550,7 +588,8 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 health,
                                                          uint32 maxHealth,
                                                          uint8 level,
-                                                         uint32 npcFlags) {
+                                                         uint32 npcFlags,
+                                                         uint32 factionTemplate) {
   auto const packF = [](float v) {
     uint32 b = 0;
     std::memcpy(&b, &v, sizeof(b));
@@ -583,7 +622,7 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[UNIT_FIELD_MAXPOWER5] = 0;
 
   fields[UNIT_FIELD_LEVEL] = level;
-  fields[UNIT_FIELD_FACTIONTEMPLATE] = 35;
+  fields[UNIT_FIELD_FACTIONTEMPLATE] = factionTemplate;
   fields[UNIT_VIRTUAL_ITEM_SLOT_ID] = 0;
   fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 1)] = 0;
   fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 2)] = 0;

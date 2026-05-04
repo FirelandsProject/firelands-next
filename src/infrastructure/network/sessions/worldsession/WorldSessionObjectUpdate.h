@@ -3,6 +3,7 @@
 
 #include <application/ports/IMapNotifier.h>
 #include <domain/models/Character.h>
+#include <domain/world/Creature.h>
 #include <shared/game/PlayerGmAppearance.h>
 #include <shared/network/MovementInfo.h>
 #include <shared/network/WorldPacket.h>
@@ -43,12 +44,21 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
     std::optional<std::pair<uint32, uint32>> const &healthOverride = std::nullopt,
     std::optional<std::pair<uint32, uint32>> const &power1Override = std::nullopt);
 
+/// `UNIT_FLAG_CAN_SWIM` + `UNIT_FIELD_BYTES_1` anim tier from movement (call after GM merge).
+void ApplyMovementHintsToPlayerCreateFields(std::map<uint16, uint32> &fields,
+                                            MovementInfo const &move);
+
 /// `SMSG_UPDATE_OBJECT` with `UPDATETYPE_VALUES` for `UNIT_FIELD_HEALTH` / max only.
 void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
                                    uint32 maxHealth, WorldPacket &outPacket);
 
 void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power1,
                                    uint32 maxPower1, WorldPacket &outPacket);
+
+/// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_FACTIONTEMPLATE` only (players or units).
+void BuildUnitFactionTemplateValuesUpdate(uint16 mapId, uint64 unitGuid,
+                                          uint32 factionTemplate,
+                                          WorldPacket &outPacket);
 
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName);
@@ -64,15 +74,19 @@ void SendPlayerCreateToNotifier(
     std::optional<std::pair<uint32, uint32>> const &healthOverride = std::nullopt,
     std::optional<std::pair<uint32, uint32>> const &power1Override = std::nullopt);
 
-/// Minimal `TYPEID_UNIT` field map for GM-spawned NPCs (no DB creature_template yet).
+/// Minimal `TYPEID_UNIT` field map for NPC creates; `factionTemplate` should match
+/// `creature_template.faction` when that row exists.
 /// \param npcFlags `UNIT_NPC_FLAGS` mask (e.g. gossip bit `0x1`).
+/// \param factionTemplate `FactionTemplate.dbc` id (`UNIT_FIELD_FACTIONTEMPLATE`).
 std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 creatureEntry,
                                                          uint32 displayId,
                                                          uint32 health,
                                                          uint32 maxHealth,
                                                          uint8 level,
-                                                         uint32 npcFlags = 0);
+                                                         uint32 npcFlags = 0,
+                                                         uint32 factionTemplate =
+                                                             Creature::kDefaultFactionTemplate);
 
 /// `SMSG_CREATURE_QUERY_RESPONSE` (Trinity `QueryCreatureResponse::Write`, 4.3.4).
 /// If `nameTitle` is empty, sends entry with high bit set (client shows no template).

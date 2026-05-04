@@ -5,11 +5,18 @@
 namespace Firelands {
 
 Creature::Creature(uint64 guid, uint32 entry, uint32 displayId, uint32 maxHealth,
-                   uint8 level)
+                   uint8 level, uint32 factionTemplate)
     : WorldObject(guid), m_entry(entry), m_displayId(displayId),
-      m_level(level == 0 ? 1 : level) {
+      m_level(level == 0 ? 1 : level),
+      m_factionTemplate(factionTemplate == 0 ? kDefaultFactionTemplate
+                                              : factionTemplate) {
   m_liveMaxHealth = std::max(1u, maxHealth);
   m_liveHealth = m_liveMaxHealth;
+}
+
+void Creature::SetFactionTemplate(uint32 factionTemplate) {
+  m_factionTemplate =
+      factionTemplate == 0 ? kDefaultFactionTemplate : factionTemplate;
 }
 
 void Creature::ApplyHealthDelta(int32 delta) {

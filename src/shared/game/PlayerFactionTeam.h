@@ -4,6 +4,23 @@
 
 namespace Firelands {
 
+/// When `ChrRaces.dbc` is missing, use generic Horde (2) vs Alliance (1) player
+/// `FactionTemplate.dbc` ids — always present on the client (avoids WowError from
+/// wrong hardcoded race-specific templates).
+inline uint32_t SafePlayerFactionTemplateWithoutChrRaces(uint8_t race) {
+  switch (race) {
+  case 2:  // Orc
+  case 5:  // Undead
+  case 6:  // Tauren
+  case 8:  // Troll
+  case 9:  // Goblin
+  case 10: // Blood Elf
+    return 2u;
+  default:
+    return 1u;
+  }
+}
+
 /// Cataclysm (4.3.4) playable races → Alliance / Horde for UI and spell-range hints.
 /// Does not replace `FactionTemplate.dbc` reaction (PvP flags, sanctuary).
 enum class PlayableFactionSide : uint8_t {

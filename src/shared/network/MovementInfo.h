@@ -4,6 +4,7 @@
 
 namespace Firelands {
 
+/// Client movement state (`MovementFlags` / `MovementFlags2` in MovementFlags.h).
 struct MovementInfo {
   uint32 flags = 0;
   uint16 flags2 = 0;

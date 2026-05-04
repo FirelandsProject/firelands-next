@@ -36,6 +36,11 @@ public:
       (void)ReadBit();
   }
 
+  /// After consuming aligned multi-byte values directly from the underlying
+  /// `ByteBuffer` (e.g. `Read<float>()`), reset the bit stream so the next
+  /// `ReadBit()` starts from a fresh byte boundary in the buffer.
+  void ResyncAfterExternalByteReads() { _bitPos = 8; }
+
   /// Little-endian uint32 read from the **current bit stream** (MSB-first within each byte).
   uint32 ReadUInt32LE() {
     uint32 b0 = ReadBits(8);
