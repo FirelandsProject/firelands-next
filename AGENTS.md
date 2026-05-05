@@ -12,6 +12,8 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 - **Generator**: MUST use Ninja (not Make)
 - **ccache**: Auto-detected and enabled if installed
 
+**Note**: All build outputs are placed in the `build/` directory as specified above.
+
 ### Building
 ```bash
 ninja -C build                    # Full build
