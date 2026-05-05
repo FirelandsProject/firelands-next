@@ -20,12 +20,14 @@ constexpr std::string_view kSpellEffectFmt =
     "nifiiiffiiiiiifiifiiiiiiiix";
 
 constexpr uint32_t kSpellEffectFieldEffect = 1;
+constexpr uint32_t kSpellEffectFieldEffectMiscValue = 2;
 constexpr uint32_t kSpellEffectFieldBasePoints = 5;
 constexpr uint32_t kSpellEffectFieldDieSides = 9;
 constexpr uint32_t kSpellEffectFieldSpellID = 24;
 constexpr uint32_t kSpellEffectFieldEffectIndex = 25;
 
 constexpr uint32_t SPELL_EFFECT_SCHOOL_DAMAGE = 2;
+constexpr uint32_t SPELL_EFFECT_APPLY_AURA = 6;
 constexpr uint32_t SPELL_EFFECT_HEALTH_LEECH = 9;
 constexpr uint32_t SPELL_EFFECT_HEAL = 10;
 constexpr uint32_t SPELL_EFFECT_ENVIRONMENTAL_DAMAGE = 13;
@@ -355,6 +357,41 @@ void SpellEntryDbcStore::MergeImmediateHealthFromSpellEffect(
     LOG_DEBUG(
         "SpellEffect.dbc: set immediateHealthEffectDelta on {} spell(s) from {}.",
         applied, path);
+
+  uint32_t auraCount = 0;
+  for (uint32_t rec = 0; rec < n; ++rec) {
+    uint32_t const spellId =
+        reader.ReadUInt32(rec, kSpellEffectFieldSpellID, offsets);
+    if (spellId == 0u || m_byId.find(spellId) == m_byId.end())
+      continue;
+    uint32_t const effect =
+        reader.ReadUInt32(rec, kSpellEffectFieldEffect, offsets);
+    if (effect != SPELL_EFFECT_APPLY_AURA)
+      continue;
+
+    auto it = m_byId.find(spellId);
+    if (it == m_byId.end())
+      continue;
+
+    if (it->second.hasAuraEffect)
+      continue;
+
+    it->second.hasAuraEffect = true;
+    uint32_t const auraType =
+        reader.ReadUInt32(rec, kSpellEffectFieldEffectMiscValue, offsets);
+    int32_t const basePoints =
+        reader.ReadInt32(rec, kSpellEffectFieldBasePoints, offsets);
+    int32_t const dieSides =
+        reader.ReadInt32(rec, kSpellEffectFieldDieSides, offsets);
+    it->second.auraEffectType = auraType;
+    it->second.auraBasePoints = basePoints;
+    it->second.auraDieSides = dieSides;
+    ++auraCount;
+  }
+
+  if (auraCount > 0u)
+    LOG_DEBUG("SpellEffect.dbc: detected auras on {} spell(s) from {}.",
+              auraCount, path);
 }
 
 bool SpellEntryDbcStore::HasSpell(uint32 spellId) const {

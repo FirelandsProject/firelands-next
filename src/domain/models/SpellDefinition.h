@@ -11,7 +11,7 @@ struct SpellDefinition {
   uint32 attributes = 0;
   /// `Spell.dbc` `AttributesEx` (SPELL_ATTR_EX_* / wowdev first extended attribute dword).
   uint32 attributesEx = 0;
-  /// `Spell.dbc` `AttributesEx2` (SPELL_ATTR2_* / wowdev AttributesExB).
+  /// `Spell.dbc` `AttributesEx2` (SPELL_ATTR_EX2_* / wowdev AttributesExB).
   uint32 attributesEx2 = 0;
   uint32 castingTimeIndex = 0;
   uint32 durationIndex = 0;
@@ -33,6 +33,17 @@ struct SpellDefinition {
   bool spellEffectHasHealKind = false;
   /// Any row uses school damage, health leech, or environmental damage (polarity hint when delta is 0).
   bool spellEffectHasHarmKind = false;
+
+  /// True if any SpellEffect.dbc row has effect = SPELL_EFFECT_APPLY_AURA (6).
+  bool hasAuraEffect = false;
+  /// Aura effect subtype when hasAuraEffect (e.g., SPELL_AURA_MOD_STAT, SPELL_AURA_PERIODIC_HEAL).
+  uint32 auraEffectType = 0;
+  /// Base points from SpellEffect.dbc for the aura effect (used for aura magnitude).
+  int32 auraBasePoints = 0;
+  /// DieSides from SpellEffect.dbc for the aura effect (used for aura magnitude range).
+  int32 auraDieSides = 0;
+  /// Duration index from Spell.dbc - used to determine aura duration.
+  uint32 auraDurationIndex = 0;
 };
 
 } // namespace Firelands
