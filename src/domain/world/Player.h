@@ -2,7 +2,11 @@
 
 #include <application/ports/IMapNotifier.h>
 #include <domain/world/WorldObject.h>
+#include <domain/world/Aura.h>
+#include <chrono>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace Firelands {
 
@@ -15,7 +19,7 @@ public:
 
   /// Seeded from `Character` at world login; authoritative until logout (Phase D/E).
   void InitCombatResources(uint32 health, uint32 maxHealth, uint32 power1,
-                           uint32 maxPower1);
+                            uint32 maxPower1);
   /// Race / faction template mirror `Character` for server-side targeting hints (spell range).
   void SetRaceAndFaction(uint8 race, uint32 factionTemplate);
   void SetFactionTemplate(uint32 factionTemplate);
@@ -29,6 +33,13 @@ public:
   uint32 GetLiveMaxPower1() const { return m_liveMaxPower1; }
   void ApplyPower1Delta(int32 delta);
 
+  /// Aura management
+  void AddAura(const Aura& aura);
+  void RemoveAura(uint32 spellId);
+  bool HasAura(uint32 spellId) const;
+  std::vector<Aura> GetActiveAuras() const;
+  void UpdateAuras(); // Remove expired auras
+
 private:
   std::shared_ptr<IMapNotifier> m_notifier;
   uint8 m_race = 0;
@@ -37,6 +48,9 @@ private:
   uint32 m_liveMaxHealth = 1;
   uint32 m_livePower1 = 0;
   uint32 m_liveMaxPower1 = 1;
+  
+  // Aura storage: spellId -> aura (assuming one aura per spell for simplicity)
+  std::unordered_map<uint32_t, Aura> m_auras;
 };
 
 } // namespace Firelands

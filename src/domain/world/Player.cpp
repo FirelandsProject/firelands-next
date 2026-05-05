@@ -50,4 +50,38 @@ void Player::ApplyPower1Delta(int32 delta) {
   m_livePower1 = static_cast<uint32>(clamped);
 }
 
+void Player::AddAura(const Aura& aura) {
+    m_auras[aura.GetSpellId()] = aura;
+}
+
+void Player::RemoveAura(uint32 spellId) {
+    m_auras.erase(spellId);
+}
+
+bool Player::HasAura(uint32 spellId) const {
+    return m_auras.find(spellId) != m_auras.end();
+}
+
+std::vector<Aura> Player::GetActiveAuras() const {
+    std::vector<Aura> activeAuras;
+    activeAuras.reserve(m_auras.size());
+    for (const auto& pair : m_auras) {
+        if (!pair.second.IsExpired()) {
+            activeAuras.push_back(pair.second);
+        }
+    }
+    return activeAuras;
+}
+
+void Player::UpdateAuras() {
+    // Remove expired auras
+    for (auto it = m_auras.begin(); it != m_auras.end(); ) {
+        if (it->second.IsExpired()) {
+            it = m_auras.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 } // namespace Firelands
