@@ -81,7 +81,7 @@ struct GossipQuestItem {
   uint8_t questIcon = 0;
   int32_t questLevel = 0;
   uint32_t questFlags = 0;
-  bool isAutoComplete = false;
+  bool blueQuestionMark = false;
   std::string questTitle;
 };
 

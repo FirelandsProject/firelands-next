@@ -32,6 +32,7 @@ add_executable(FirelandsUnitTests
     unit/application/CreatureSpawnLogicTests.cpp
     unit/application/GossipLogicTests.cpp
     unit/application/QuestGiverLogicTests.cpp
+    unit/application/QuestGossipFilterTests.cpp
     unit/shared/WowGuidTests.cpp
     unit/infrastructure/GossipPacketTests.cpp
     unit/infrastructure/GmTicketGossipUiTests.cpp

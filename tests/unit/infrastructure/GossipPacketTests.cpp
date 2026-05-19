@@ -49,7 +49,7 @@ TEST(GossipPacketTests, BuildGossipMessage_WritesQuestLinesAfterOptions) {
   quest.questIcon = static_cast<uint8_t>(QuestGossipIcon::Available);
   quest.questLevel = 5;
   quest.questFlags = 0;
-  quest.isAutoComplete = false;
+  quest.blueQuestionMark = false;
   quest.questTitle = "A Gossip Test Quest";
 
   WorldPacket pkt = gossip::BuildGossipMessage(npcGuid, 0, 1, {}, {quest});

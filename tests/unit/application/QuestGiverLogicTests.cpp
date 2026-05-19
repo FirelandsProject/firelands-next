@@ -28,15 +28,19 @@ TEST(QuestGiverLogicTests, EffectiveNpcFlags_AddsQuestGiverWhenStartersExist) {
 
 TEST(QuestGiverLogicTests, ResolveDialogStatus_UsesRepository) {
   MockQuestGossipRepository repo;
-  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 100),
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 100, 11, 8),
             QuestGiverDialogStatus::None);
 
   QuestGossipSummary summary;
   summary.questId = 1;
+  summary.allowableClasses = 1024; // Druid only
+  summary.allowableRaces = 128;    // Troll only
   EXPECT_CALL(repo, GetStarterQuestsForCreature(38243))
       .WillOnce(testing::Return(std::vector<QuestGossipSummary>{summary}));
-  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243),
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 11, 8),
             QuestGiverDialogStatus::Available);
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 1, 8),
+            QuestGiverDialogStatus::None);
   EXPECT_EQ(static_cast<uint32_t>(QuestGiverDialogStatus::Available), 0x100u);
 }
 

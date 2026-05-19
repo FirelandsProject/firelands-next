@@ -75,7 +75,7 @@ TEST(GossipQuestItemTest, DefaultValues) {
   EXPECT_EQ(qi.questIcon, 0);
   EXPECT_EQ(qi.questLevel, 0);
   EXPECT_EQ(qi.questFlags, 0u);
-  EXPECT_FALSE(qi.isAutoComplete);
+  EXPECT_FALSE(qi.blueQuestionMark);
   EXPECT_TRUE(qi.questTitle.empty());
 }
 

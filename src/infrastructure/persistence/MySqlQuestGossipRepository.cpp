@@ -16,7 +16,8 @@ MySqlQuestGossipRepository::GetStarterQuestsForCreature(
 
   try {
     std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(
-        "SELECT q.`ID`, q.`LogTitle`, q.`QuestLevel`, q.`Flags` "
+        "SELECT q.`ID`, q.`LogTitle`, q.`QuestLevel`, q.`Flags`, "
+        "q.`AllowableClasses`, q.`AllowableRaces` "
         "FROM `creature_queststarter` cqs "
         "INNER JOIN `quest_template` q ON q.`ID` = cqs.`quest` "
         "WHERE cqs.`id` = ? "
@@ -29,7 +30,9 @@ MySqlQuestGossipRepository::GetStarterQuestsForCreature(
       summary.title = rs->getString("LogTitle");
       summary.questLevel = rs->getInt("QuestLevel");
       summary.flags = rs->getUInt("Flags");
-      summary.isAutoComplete = QuestHasAutoCompleteFlag(summary.flags);
+      summary.allowableClasses = rs->getUInt("AllowableClasses");
+      summary.allowableRaces = rs->getUInt("AllowableRaces");
+      summary.blueQuestionMark = QuestGossipUsesBlueQuestionMark(summary.flags);
       result.push_back(std::move(summary));
     }
   } catch (sql::SQLException const &e) {

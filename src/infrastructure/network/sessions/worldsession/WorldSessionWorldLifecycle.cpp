@@ -93,6 +93,7 @@ void WorldSession::FinalizeWorldExit() {
   _clientSelectionGuid = 0;
   _activeCharacterGuid = 0;
   _playerRace = 0;
+  _playerClass = 0;
   _playerXp = 0;
   _sentOpeningCinematic = false;
   _tutorialInts.fill(0);

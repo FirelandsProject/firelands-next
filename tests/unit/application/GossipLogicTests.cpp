@@ -80,7 +80,7 @@ TEST(GossipLogicTests, BuildGossipQuestItems_MapsSummaryToWireFields) {
   EXPECT_EQ(items[0].questTitle, "Kill rats");
   EXPECT_EQ(items[0].questLevel, 3);
   EXPECT_EQ(items[0].questFlags, kQuestFlagAutoComplete);
-  EXPECT_TRUE(items[0].isAutoComplete);
+  EXPECT_FALSE(items[0].blueQuestionMark);
   EXPECT_EQ(items[0].questIcon,
             static_cast<uint8_t>(QuestGossipIcon::Available));
 }

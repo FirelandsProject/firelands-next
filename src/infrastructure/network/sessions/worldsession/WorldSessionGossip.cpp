@@ -64,8 +64,9 @@ bool WorldSession::TrySendDatabaseGossipMenu(uint64_t npcGuid,
 
   std::vector<GossipQuestItem> quests;
   if (_questGossipRepo) {
-    auto const summaries =
-        _questGossipRepo->GetStarterQuestsForCreature(templateEntry);
+    auto summaries = _questGossipRepo->GetStarterQuestsForCreature(templateEntry);
+    summaries = FilterQuestGossipForPlayer(std::move(summaries), _playerClass,
+                                           _playerRace);
     quests = BuildGossipQuestItems(summaries);
   }
 
@@ -114,8 +115,9 @@ bool WorldSession::TryOpenQuestGiverDialog(uint64_t npcGuid) {
     }
 
     if (_questGossipRepo) {
-      auto const summaries =
-          _questGossipRepo->GetStarterQuestsForCreature(*entry);
+      auto summaries = _questGossipRepo->GetStarterQuestsForCreature(*entry);
+      summaries = FilterQuestGossipForPlayer(std::move(summaries), _playerClass,
+                                             _playerRace);
       auto const quests = BuildGossipQuestItems(summaries);
       if (!quests.empty()) {
         LOG_DEBUG("Quest list open entry={} quests={}", *entry, quests.size());
@@ -133,15 +135,16 @@ uint32_t WorldSession::ResolveEffectiveNpcFlagsForCreature(
     Creature const &creature) const {
   return EffectiveUnitNpcFlagsForCreature(
       creature.GetNpcFlags(),
-      CreatureHasStarterQuests(_questGossipRepo.get(), creature.GetEntry()));
+      CreatureHasStarterQuests(_questGossipRepo.get(), creature.GetEntry(),
+                               _playerClass, _playerRace));
 }
 
 void WorldSession::SendQuestGiverStatusForGuid(uint64_t npcGuid,
                                                uint32_t creatureEntry) {
   if (npcGuid == 0 || creatureEntry == 0)
     return;
-  auto const status = ResolveQuestGiverDialogStatus(_questGossipRepo.get(),
-                                                    creatureEntry);
+  auto const status = ResolveQuestGiverDialogStatus(
+      _questGossipRepo.get(), creatureEntry, _playerClass, _playerRace);
   if (status == QuestGiverDialogStatus::None)
     return;
   auto data = quest::BuildQuestGiverStatus(npcGuid, static_cast<uint32_t>(status));
@@ -159,7 +162,8 @@ void WorldSession::SendQuestGiverStatusMultipleNearby() {
   map->ForEachCreatureNear(_position.x, _position.y, 2,
                            [&](std::shared_ptr<Creature> const &cr) {
                              auto const status = ResolveQuestGiverDialogStatus(
-                                 _questGossipRepo.get(), cr->GetEntry());
+                                 _questGossipRepo.get(), cr->GetEntry(),
+                                 _playerClass, _playerRace);
                              if (status == QuestGiverDialogStatus::None)
                                return;
                              entries.push_back(

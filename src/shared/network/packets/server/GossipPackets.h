@@ -20,13 +20,13 @@ inline void AppendGossipMenuItem(WorldPacket &out, GossipMenuItem const &item) {
   out.WriteString(item.boxMessage);
 }
 
-/// 3.3.5+ quest line in `SMSG_GOSSIP_MESSAGE` (quest_id, icon, level, flags, repeatable, title).
+/// 3.3.5+ quest line in `SMSG_GOSSIP_MESSAGE` (quest_id, icon, level, flags, blue?, title).
 inline void AppendGossipQuestItem(WorldPacket &out, GossipQuestItem const &quest) {
   out.Append<int32_t>(static_cast<int32_t>(quest.questId));
   out.Append<int32_t>(static_cast<int32_t>(quest.questIcon));
   out.Append<int32_t>(quest.questLevel);
   out.Append<int32_t>(static_cast<int32_t>(quest.questFlags));
-  out.Append<uint8_t>(quest.isAutoComplete ? 1u : 0u);
+  out.Append<uint8_t>(quest.blueQuestionMark ? 1u : 0u);
   out.WriteString(quest.questTitle);
 }
 

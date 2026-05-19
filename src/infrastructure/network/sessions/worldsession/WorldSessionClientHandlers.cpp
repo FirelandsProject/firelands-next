@@ -561,8 +561,10 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
         std::vector<GossipQuestItem> quests;
         if (_questGossipRepo) {
           if (auto const entry = TryResolveCreatureTemplateEntry(npcGuid)) {
-            auto const summaries =
+            auto summaries =
                 _questGossipRepo->GetStarterQuestsForCreature(*entry);
+            summaries = FilterQuestGossipForPlayer(std::move(summaries),
+                                                   _playerClass, _playerRace);
             quests = BuildGossipQuestItems(summaries);
           }
         }

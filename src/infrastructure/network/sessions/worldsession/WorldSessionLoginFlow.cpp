@@ -88,6 +88,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   _sentOpeningCinematic = false;
   _tutorialInts = character.GetTutorialMask();
   _playerRace = character.GetRace();
+  _playerClass = character.GetClass();
   _moneyCopper = character.GetMoney();
   _playerXp = character.GetXp();
 

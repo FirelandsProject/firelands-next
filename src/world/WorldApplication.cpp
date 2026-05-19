@@ -57,12 +57,6 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
                       bool console_enabled) {
   Config &config = Config::Instance();
 
-  if (config.GetNested<bool>({"RealmLink", "Enabled"}, false)) {
-    realmLinkThread = std::make_unique<std::thread>([&config, &stopRealmLink] {
-      RunRealmLinkOutbound(config, stopRealmLink);
-    });
-  }
-
   try {
     if (tui_runtime) {
       LOG_INFO("Starting World Server...");
@@ -259,6 +253,12 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
       return 1;
     }
     LOG_INFO("World Server listening on {}:{}", bindIp, port);
+
+    if (config.GetNested<bool>({"RealmLink", "Enabled"}, false) && !realmLinkThread) {
+      realmLinkThread = std::make_unique<std::thread>([&config, &stopRealmLink] {
+        RunRealmLinkOutbound(config, stopRealmLink);
+      });
+    }
 
     auto interactiveConsole =
         std::make_shared<WorldInteractiveConsole>(commandService);

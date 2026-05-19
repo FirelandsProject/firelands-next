@@ -2,6 +2,7 @@
 
 #include <domain/models/GossipMenu.h>
 #include <domain/models/QuestGossip.h>
+#include <shared/game/QuestMask.h>
 #include <shared/game/UnitNpcFlags.h>
 #include <cstdint>
 #include <vector>
@@ -69,14 +70,33 @@ inline QuestGossipIcon ResolveQuestGossipIcon(QuestGossipSummary const &) noexce
   return QuestGossipIcon::Available;
 }
 
+inline bool QuestGossipAllowsPlayer(QuestGossipSummary const &summary,
+                                    uint8_t playerClass,
+                                    uint8_t playerRace) noexcept {
+  return QuestMaskAllowsPlayer(summary.allowableClasses,
+                               PlayerClassMask(playerClass)) &&
+         QuestMaskAllowsPlayer(summary.allowableRaces, PlayerRaceMask(playerRace));
+}
+
+inline std::vector<QuestGossipSummary>
+FilterQuestGossipForPlayer(std::vector<QuestGossipSummary> quests,
+                           uint8_t playerClass, uint8_t playerRace) {
+  std::vector<QuestGossipSummary> filtered;
+  filtered.reserve(quests.size());
+  for (auto &summary : quests) {
+    if (QuestGossipAllowsPlayer(summary, playerClass, playerRace))
+      filtered.push_back(std::move(summary));
+  }
+  return filtered;
+}
+
 inline std::vector<GossipQuestItem>
 BuildGossipQuestItems(std::vector<QuestGossipSummary> const &quests) {
   std::vector<GossipQuestItem> items;
   items.reserve(quests.size());
   for (auto const &summary : quests) {
     QuestGossipSummary normalized = summary;
-    if (!normalized.isAutoComplete)
-      normalized.isAutoComplete = QuestHasAutoCompleteFlag(summary.flags);
+    normalized.blueQuestionMark = QuestGossipUsesBlueQuestionMark(summary.flags);
     items.push_back(
         ToGossipQuestItem(normalized, ResolveQuestGossipIcon(normalized)));
   }

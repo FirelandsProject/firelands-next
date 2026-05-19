@@ -1,5 +1,6 @@
 #pragma once
 
+#include <application/logic/GossipLogic.h>
 #include <domain/models/QuestGiverStatus.h>
 #include <domain/repositories/IQuestGossipRepository.h>
 #include <shared/game/UnitNpcFlags.h>
@@ -9,17 +10,24 @@
 namespace Firelands {
 
 inline bool CreatureHasStarterQuests(IQuestGossipRepository const *repo,
-                                     uint32_t creatureEntry) {
+                                     uint32_t creatureEntry, uint8_t playerClass,
+                                     uint8_t playerRace) {
   if (repo == nullptr || creatureEntry == 0)
     return false;
-  return !repo->GetStarterQuestsForCreature(creatureEntry).empty();
+  auto const quests = repo->GetStarterQuestsForCreature(creatureEntry);
+  for (auto const &summary : quests) {
+    if (QuestGossipAllowsPlayer(summary, playerClass, playerRace))
+      return true;
+  }
+  return false;
 }
 
 /// Until per-character quest status exists, any starter row ⇒ yellow available marker.
 inline QuestGiverDialogStatus
 ResolveQuestGiverDialogStatus(IQuestGossipRepository const *repo,
-                              uint32_t creatureEntry) {
-  return CreatureHasStarterQuests(repo, creatureEntry)
+                              uint32_t creatureEntry, uint8_t playerClass,
+                              uint8_t playerRace) {
+  return CreatureHasStarterQuests(repo, creatureEntry, playerClass, playerRace)
              ? QuestGiverDialogStatus::Available
              : QuestGiverDialogStatus::None;
 }

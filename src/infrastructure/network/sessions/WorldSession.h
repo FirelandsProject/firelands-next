@@ -418,6 +418,7 @@ public:
   /// Latest `CMSG_SET_SELECTION` unit (0 = cleared / unknown).
   uint64_t _clientSelectionGuid = 0;
   uint8 _playerRace = 0;
+  uint8 _playerClass = 0;
   /// Persisted copper; mirrored on logout and after `.money` GM commands.
   uint32_t _moneyCopper = 0;
   /// Persisted experience (`characters.xp`); mirrored on logout and GM level.

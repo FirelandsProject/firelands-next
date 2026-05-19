@@ -51,7 +51,7 @@ inline WorldPacket BuildQuestGiverQuestListMessage(
     out.Append<int32_t>(static_cast<int32_t>(quest.questIcon));
     out.Append<int32_t>(quest.questLevel);
     out.Append<int32_t>(static_cast<int32_t>(quest.questFlags));
-    out.Append<uint8_t>(quest.isAutoComplete ? 1u : 0u);
+    out.Append<uint8_t>(quest.blueQuestionMark ? 1u : 0u);
     out.WriteString(quest.questTitle);
   }
   return out;
