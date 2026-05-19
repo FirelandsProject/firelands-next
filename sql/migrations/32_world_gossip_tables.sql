@@ -1,5 +1,5 @@
--- Gossip schema + idempotent ref data load (firelands_world.sql bundle tail).
--- JDBC-safe: CREATE IF NOT EXISTS; DELETE + REPLACE for re-runs after partial applies.
+-- Gossip schema (DDL only). Data: migration 35 (`python3 tools/sql/import_ref_gossip.py`).
+-- JDBC-safe: CREATE IF NOT EXISTS.
 
 USE `firelands_world`;
 
@@ -39,8 +39,3 @@ CREATE TABLE IF NOT EXISTS `gossip_menu_option_box` (
   `BoxBroadcastTextId` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`MenuId`, `OptionIndex`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-DELETE FROM `gossip_menu_option_box`;
-DELETE FROM `gossip_menu_option_action`;
-DELETE FROM `gossip_menu_option`;
-DELETE FROM `gossip_menu`;
