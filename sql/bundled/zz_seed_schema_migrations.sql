@@ -16,4 +16,9 @@ INSERT IGNORE INTO `firelands_auth`.`schema_migrations` (`migration`) VALUES
   ('firelands_world.sql'),
   ('auth_schema.sql'),
   ('characters_schema.sql'),
-  ('world_schema.sql');
+  ('world_schema.sql'),
+  ('31_world_creature_template_gossip_menu_id.sql'),
+  ('32_world_gossip_tables.sql'),
+  ('33_world_npc_text.sql'),
+  ('34_world_npc_text_data.sql'),
+  ('35_world_gossip_data.sql');
