@@ -105,6 +105,8 @@ private:
                      const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleLevel(std::shared_ptr<ICommandSession> session,
                    const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleDamage(std::shared_ptr<ICommandSession> session,
+                    const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleBan(std::shared_ptr<ICommandSession> session,
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleUnban(std::shared_ptr<ICommandSession> session,

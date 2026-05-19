@@ -3,6 +3,7 @@
 #include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
+#include <domain/world/Player.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/dbc/FactionTemplateDbc.h>
@@ -16,9 +17,10 @@
 #include <shared/network/WorldPacket.h>
 #include <shared/Logger.h>
 #include <algorithm>
-#include <memory>
 #include <atomic>
+#include <limits>
 #include <map>
+#include <memory>
 
 namespace Firelands {
 
@@ -66,6 +68,14 @@ void SendGmCreatureDespawnVisibility(WorldSession &session, uint32 mapId,
   session.SendPacket(pkt);
   if (auto map = WorldService::Instance().GetMap(mapId))
     map->BroadcastPacketToNearby(session.GetGuid(), pkt, false);
+}
+
+void BroadcastUnitHealthOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                              uint64 unitGuid, uint32 health, uint32 maxHealth) {
+  WorldPacket hpUpdate;
+  ws_obj::BuildPlayerHealthValuesUpdate(static_cast<uint16>(mapId), unitGuid, health,
+                                        maxHealth, hpUpdate);
+  map->BroadcastPacketToNearby(unitGuid, hpUpdate, true);
 }
 
 } // namespace
@@ -365,6 +375,44 @@ bool WorldSession::GmRemoveItem(uint32 itemEntry, uint32 count) {
   SendNotification("Removed item " + std::to_string(itemEntry) + " x" +
                    std::to_string(removed) + " from backpack.");
   return true;
+}
+
+bool WorldSession::GmDamageUnit(uint64 targetGuid, uint32 amount) {
+  if (_playerGuid == 0 || targetGuid == 0 || amount == 0)
+    return false;
+
+  uint32 capped = amount;
+  if (capped > static_cast<uint32>(std::numeric_limits<int32_t>::max()))
+    capped = static_cast<uint32>(std::numeric_limits<int32_t>::max());
+  int32 const delta = -static_cast<int32>(capped);
+
+  auto map = WorldService::Instance().GetMap(_mapId);
+  if (!map)
+    return false;
+
+  if (auto player = map->TryGetPlayer(targetGuid)) {
+    player->ApplyHealthDelta(delta);
+    BroadcastUnitHealthOnMap(_mapId, map, targetGuid, player->GetLiveHealth(),
+                             player->GetLiveMaxHealth());
+    SendNotification("Dealt " + std::to_string(capped) + " damage to player guid=" +
+                     std::to_string(targetGuid) + " (hp=" +
+                     std::to_string(player->GetLiveHealth()) + "/" +
+                     std::to_string(player->GetLiveMaxHealth()) + ").");
+    return true;
+  }
+
+  if (auto creature = map->TryGetCreature(targetGuid)) {
+    creature->ApplyHealthDelta(delta);
+    BroadcastUnitHealthOnMap(_mapId, map, targetGuid, creature->GetLiveHealth(),
+                             creature->GetLiveMaxHealth());
+    SendNotification("Dealt " + std::to_string(capped) + " damage to creature guid=" +
+                     std::to_string(targetGuid) + " (hp=" +
+                     std::to_string(creature->GetLiveHealth()) + "/" +
+                     std::to_string(creature->GetLiveMaxHealth()) + ").");
+    return true;
+  }
+
+  return false;
 }
 
 bool WorldSession::GmSetLevel(uint8 level) {

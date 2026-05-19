@@ -98,6 +98,10 @@ public:
 
   bool GmSetLevel(uint8 level) override { return _subject->GmSetLevel(level); }
 
+  bool GmDamageUnit(uint64 targetGuid, uint32 amount) override {
+    return _subject->GmDamageUnit(targetGuid, amount);
+  }
+
   bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
                   uint32 factionTemplateOrZeroDefault) override {
     return _subject->GmSpawnNpc(creatureEntry, displayId,
@@ -372,6 +376,10 @@ CommandService::CommandService(
       "level", {[this](auto s, auto a, auto o) { return HandleLevel(s, a, o); },
                ToMask(Permission::CommandGameplay), CommandAvailability::Both,
                ConsoleArgLayout::TargetOnlineCharacterFirst});
+  RegisterCommand(
+      "damage", {[this](auto s, auto a, auto o) { return HandleDamage(s, a, o); },
+                 ToMask(Permission::CommandGameplay), CommandAvailability::Game,
+                 ConsoleArgLayout::SameAsInGame});
   RegisterCommand(
       "ban", {[this](auto s, auto a, auto o) { return HandleBan(s, a, o); },
               ToMask(Permission::ManageAccounts), CommandAvailability::Console,
@@ -708,6 +716,8 @@ Online players
      "|cff666666Console:|r |cffffffff.money CharName 50000|r\n"
      "|cffCCCCCC.level|r |cff888888—|r Set level 1-85.  "
      "|cff666666Console:|r |cffffffff.level Char 60|r\n"
+     "|cffCCCCCC.damage|r |cff888888—|r Damage selected unit "
+     "|cff666666(in-game only)|r  |cff666666e.g.|r |cffffffff.damage 500|r\n"
      "|cffAAAAAAItems:|r |cffCCCCCC.additem|r |cff888888/|r |cffCCCCCC.delitem|r  "
      "|cffAAAAAAsee next block.|r",
      R"H6(--------------------------------------------------------------------------------
@@ -717,6 +727,7 @@ Gameplay  (GM)
   .learn <spellId>              (console: .learn <CharName> <spellId>)
   .money <copper delta>         (console: .money <CharName> <copper>)
   .level <1-85>                 (console: .level <CharName> <level>)
+  .damage <amount>              (in-game only; target a unit first)
   .additem / .delitem           (see Items below)
 )H6"},
     {HelpChunkAudience::Both, ToMask(Permission::CommandGameplay),
@@ -1463,6 +1474,44 @@ bool CommandService::HandleDelitem(std::shared_ptr<ICommandSession> session,
     return true;
   } catch (const std::exception &) {
     session->SendNotification("Invalid item id or count.");
+    return false;
+  }
+}
+
+bool CommandService::HandleDamage(std::shared_ptr<ICommandSession> session,
+                                  const std::vector<std::string> &args,
+                                  PrivilegeOrigin origin) {
+  (void)origin;
+  if (args.empty()) {
+    session->SendNotification(
+        "Usage: .damage <amount>  (select a player or NPC first)");
+    return false;
+  }
+  uint64_t const targetGuid = session->GetClientSelectionGuid();
+  if (targetGuid == 0) {
+    session->SendNotification("Select a player or NPC, then use .damage <amount>.");
+    return false;
+  }
+
+  try {
+    unsigned long const raw = std::stoul(args[0]);
+    if (raw == 0ul) {
+      session->SendNotification("Damage amount must be greater than zero.");
+      return false;
+    }
+    if (raw > static_cast<unsigned long>(std::numeric_limits<uint32_t>::max())) {
+      session->SendNotification("Damage amount is too large.");
+      return false;
+    }
+    uint32 const amount = static_cast<uint32>(raw);
+    if (!session->GmDamageUnit(targetGuid, amount)) {
+      session->SendNotification(
+          "Damage failed (target not on your map, or you are not in world).");
+      return false;
+    }
+    return true;
+  } catch (const std::exception &) {
+    session->SendNotification("Invalid damage amount (expected positive integer).");
     return false;
   }
 }

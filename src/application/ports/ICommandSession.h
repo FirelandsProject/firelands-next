@@ -64,6 +64,13 @@ public:
     return false;
   }
 
+  /// Applies damage to `targetGuid` on this session's current map (player or creature).
+  virtual bool GmDamageUnit(uint64 targetGuid, uint32 amount) {
+    (void)targetGuid;
+    (void)amount;
+    return false;
+  }
+
   /// Spawns a creature at this session's map position and facing (world server).
   /// \param factionTemplateOrZeroDefault `FactionTemplate.dbc` id. `0` uses
   /// `creature_template.faction` for `creatureEntry` when the world DB has that column/row;

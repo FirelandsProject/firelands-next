@@ -91,6 +91,7 @@ All names are registered **without** the leading dot in `CommandService`’s con
 | `money` | `CommandGameplay` | BOTH | target first (console) | Signed copper delta; persists `characters.money`. |
 | `additem` | `CommandGameplay` | BOTH | target first (console) | First free backpack slot. |
 | `level` | `CommandGameplay` | BOTH | target first (console) | Clamps to supported range (e.g. 1–85). |
+| `damage` | `CommandGameplay` | GAME | same | Target a player or NPC, then `.damage <amount>`. |
 | `account` | `ManageAccounts` | CONSOLE | same | `create`, `setaccess`, `delete` against `IAccountRepository`. |
 | `ban`, `unban` | `ManageAccounts` | CONSOLE | same | Toggles `account.locked` (login lock), not only a runtime kick. |
 | `ticket` | `ManageGmTickets` | GAME | same | GM queue: `queue`, `mine`, `ui`, `take <id>`, `reply <id> text`, `close <id>` (requires `account.id` on session; see [gm-tickets.md](gm-tickets.md)). |
