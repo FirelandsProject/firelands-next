@@ -24,11 +24,14 @@
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PlayerGmAppearance.h>
 #include <domain/models/GossipMenu.h>
+#include <domain/models/NpcText.h>
+#include <domain/models/GmTicket.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <array>
 #include <chrono>
 #include <map>
+#include <optional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -139,6 +142,7 @@ public:
   uint32_t GetAccountId() const override { return _accountId; }
 
   void OpenGmMailboxUi() override;
+  void OpenGmTicketUi() override;
 
   bool GmNpcSearchPrintResults(std::string const &nameQuery) override;
 
@@ -272,6 +276,22 @@ public:
   void SendGossipComplete();
   std::optional<uint32_t> TryResolveCreatureTemplateEntry(uint64_t npcGuid) const;
   bool TrySendDatabaseGossipMenu(uint64_t npcGuid, uint32_t templateEntry);
+
+  struct GmTicketUiSession {
+    uint64_t gossipNpcGuid = 0;
+    uint64_t selectedTicketId = 0;
+    uint32_t listPage = 0;
+    enum class ListMode { Queue, Mine } listMode = ListMode::Queue;
+    std::vector<uint64_t> pageTicketIds;
+  };
+  void SendGmTicketMainMenu();
+  void SendGmTicketListMenu();
+  void SendGmTicketDetailMenu();
+  void NotifyPlayerGmTicketReply(GmTicket const &ticket);
+  bool TryBuildGmTicketNpcText(uint32_t textId, NpcText &out) const;
+  bool TryHandleGmTicketGossipSelect(uint64_t npcGuid, uint32_t menuId,
+                                     uint32_t listId, std::string const &code);
+  std::optional<GmTicketUiSession> _gmTicketUi;
 
   // Helpers
   /// Trinity schedules the next time-sync ~5s after SendTimeSync; never chains on

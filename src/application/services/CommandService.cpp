@@ -72,6 +72,8 @@ public:
 
   void OpenGmMailboxUi() override { _subject->OpenGmMailboxUi(); }
 
+  void OpenGmTicketUi() override { _subject->OpenGmTicketUi(); }
+
   uint32 GetMapId() const override { return _subject->GetMapId(); }
 
   void RequestDisconnect(std::string const &reason) override {
@@ -694,7 +696,9 @@ Online players
      "|cffCCCCCC.ticket reply|r |cff888888—|r |cff666666e.g.|r "
      "|cffffffff.ticket reply 1 Thanks.|r\n"
      "|cffCCCCCC.ticket close|r |cff888888—|r |cff666666e.g.|r "
-     "|cffffffff.ticket close 1|r",
+     "|cffffffff.ticket close 1|r\n"
+     "|cffCCCCCC.ticket ui|r |cff888888—|r Open ticket desk (gossip window).  "
+     "|cff666666e.g.|r |cffffffff.ticket ui|r",
      nullptr},
     {HelpChunkAudience::Both, ToMask(Permission::CommandGameplay),
      "|cffFFD200· Gameplay (GM)|r\n"
@@ -1546,12 +1550,16 @@ bool CommandService::HandleTicket(std::shared_ptr<ICommandSession> session,
   }
   if (args.empty()) {
     session->SendNotification(
-        "Usage: .ticket queue | .ticket mine | .ticket take <id> | .ticket "
-        "reply <id> <message> | .ticket close <id>");
+        "Usage: .ticket queue | .ticket mine | .ticket ui | .ticket take <id> | "
+        ".ticket reply <id> <message> | .ticket close <id>");
     return true;
   }
 
   std::string const sub = args[0];
+  if (sub == "ui") {
+    session->OpenGmTicketUi();
+    return true;
+  }
   if (sub == "queue") {
     auto list = _gmTicketService->ListQueue(20);
     if (list.empty()) {

@@ -541,12 +541,14 @@ void WorldSession::HandleNpcTextQuery(WorldPacket &packet) {
   LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={} guid={:#x}", textId, guid);
 
   NpcText payload = NpcText::MakeFallback(textId);
-  if (_npcTextRepo) {
-    if (auto const loaded = _npcTextRepo->TryGetById(textId))
-      payload = *loaded;
-    else
-      LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={}: no npc_text row, using fallback",
-                textId);
+  if (!TryBuildGmTicketNpcText(textId, payload)) {
+    if (_npcTextRepo) {
+      if (auto const loaded = _npcTextRepo->TryGetById(textId))
+        payload = *loaded;
+      else
+        LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={}: no npc_text row, using fallback",
+                  textId);
+    }
   }
 
   WorldPacket npcTextPkt = gossip::BuildNpcTextUpdate(payload);
@@ -560,6 +562,13 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
   }
   const uint32 menuId = packet.Read<uint32>();
   const uint32 listId = packet.Read<uint32>();
+
+  std::string code;
+  if (packet.GetReadPos() < packet.Size())
+    code = packet.ReadString();
+
+  if (TryHandleGmTicketGossipSelect(npcGuid, menuId, listId, code))
+    return;
 
   if (auto host = WorldService::Instance().GetScriptHost())
     host->FireGossipSelect(npcGuid, menuId, listId);

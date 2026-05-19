@@ -125,6 +125,9 @@ public:
 
   /// Opens the mailbox UI (`SMSG_SHOW_MAILBOX`); default no-op (world client only).
   virtual void OpenGmMailboxUi() {}
+
+  /// Opens the GM ticket gossip desk (`SMSG_GOSSIP_MESSAGE`); world client only.
+  virtual void OpenGmTicketUi() {}
 };
 
 } // namespace Firelands

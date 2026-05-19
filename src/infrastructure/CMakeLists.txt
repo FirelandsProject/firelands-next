@@ -25,6 +25,7 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/worldsession/GmTicketPackets.cpp
     network/sessions/worldsession/WorldSessionGmState.cpp
     network/sessions/worldsession/WorldSessionGmTicketHandlers.cpp
+    network/sessions/worldsession/WorldSessionGmTicketGossip.cpp
     network/sessions/worldsession/WorldSessionGmCommands.cpp
     network/sessions/worldsession/WorldSessionGossip.cpp
     network/sessions/worldsession/WorldSessionCharacterHandlers.cpp

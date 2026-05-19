@@ -94,7 +94,7 @@ Do not copy Trinity 3.3.5 handlers blindly; Cataclysm support changed. Recommend
 
 1. **`GmTicketService`** (application): orchestrates repository + validation + “one active ticket per character”; no sockets.
 2. **`WorldSession`**: parses CMSG, calls service, sends SMSG; checks `_accountId` / `_playerGuid` for players and `GetAccountAccessLevel()` for staff paths.
-3. **Permissions**: add e.g. `ManageGmTickets` in `Permissions.h`, default on `GameMaster`, plus `.ticket list` / `.ticket assign` / `.ticket close` calling the same service (console + in-game).
+3. **Permissions**: add e.g. `ManageGmTickets` in `Permissions.h`, default on `GameMaster`, plus `.ticket queue` / `.ticket take` / `.ticket close` calling the same service (console + in-game).
 4. **Wiring**: in `world/main.cpp`, construct `MySqlGmTicketRepository(charConn)` and pass `shared_ptr<GmTicketService>` into the `WorldSession` factory (constructor growth or a dependencies struct).
 
 ## Related docs
@@ -108,4 +108,5 @@ Do not copy Trinity 3.3.5 handlers blindly; Cataclysm support changed. Recommend
 - [x] `GmTicketService` (rules + `TryAssign` in SQL).
 - [x] Core CMSG / SMSG path (`WorldSessionGmTicketHandlers.cpp`, `GmTicketPackets.cpp`) following TCPP 4.3.x layout.
 - [x] In-game `.ticket` commands (`CommandService`, `ManageGmTickets` permission).
+- [x] `.ticket ui` — gossip desk (`WorldSessionGmTicketGossip.cpp`, synthetic menu/text ids in `GmTicketGossipUi.h`).
 - [ ] Trinity-style hyperlink sanitization (optional hardening).
