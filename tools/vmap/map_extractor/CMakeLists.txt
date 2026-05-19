@@ -7,7 +7,7 @@ add_library(FirelandsMapExtractorLib STATIC
 
 target_include_directories(FirelandsMapExtractorLib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(FirelandsMapExtractorLib PUBLIC FirelandsVmapCommon)
-target_compile_features(FirelandsMapExtractorLib PUBLIC cxx_std_17)
+target_compile_features(FirelandsMapExtractorLib PUBLIC cxx_std_20)
 
 # MapTypes.h is header-only — no .cpp needed.
 

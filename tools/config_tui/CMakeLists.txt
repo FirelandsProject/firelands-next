@@ -11,4 +11,4 @@ target_link_libraries(firelands-config PRIVATE
     ftxui::component
 )
 
-target_compile_features(firelands-config PRIVATE cxx_std_17)
+target_compile_features(firelands-config PRIVATE cxx_std_20)

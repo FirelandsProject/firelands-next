@@ -25,7 +25,7 @@ This folder contains project “skills” used by Cursor to enforce consistent e
 - **TDD** (`TDD/SKILL.md`)
   - Red/Green/Refactor for logic changes; mock ports for unit tests; integration tests for adapters.
 - **Technical Stack & Platform Support** (`TechStack/SKILL.md`)
-  - C++17/CMake/MySQL expectations and cross-platform directives.
+  - C++20/CMake/MySQL expectations and cross-platform directives.
 - **Build Optimization & Performance** (`Optimization/SKILL.md`)
   - ccache/Ninja/PCH and build best practices.
 - **Strategic Delegation and Roles** (`Delegation/SKILL.md`)

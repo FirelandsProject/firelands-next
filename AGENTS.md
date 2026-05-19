@@ -183,7 +183,7 @@ target_precompile_headers(<target_name> PRIVATE ${PROJECT_PCH_HEADERS})
 |---------|---------|---------|
 | Boost | (system) | Threading |
 | GoogleTest | 1.14.0 | Testing |
-| spdlog | 1.14.1 | Logging |
+| spdlog | 1.14.1 | Logging (`SPDLOG_USE_STD_FORMAT` with C++20) |
 | MariaDB Connector/C | 3.3.8 | MySQL client |
 | MariaDB Connector/C++ | 1.1.7 | MySQL C++ |
 | nlohmann/json | 3.11.2 | JSON |

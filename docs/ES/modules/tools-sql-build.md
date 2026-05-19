@@ -2,7 +2,7 @@
 
 ## CMake / compilación (`CMakeLists.txt`)
 
-- Proyecto **Firelands** en **C++17** con FetchContent para googletest, spdlog, MariaDB C/C++, nlohmann_json, yaml-cpp, Lua, StormLib.
+- Proyecto **Firelands** en **C++20** con FetchContent para googletest, spdlog, MariaDB C/C++, nlohmann_json, yaml-cpp, Lua, StormLib.
 - **Librerías:** `FirelandsShared` → `FirelandsDomain` → `FirelandsApplication` → `FirelandsInfrastructure`.
 - **Ejecutables:** `auth`, `world`, `FirelandsDevTools`.
 - Target opcional **`merge-migrations`** ejecuta `tools/merge_migrations.py` y actualiza **`sql/bundled/`** (requiere `python3`; scratch opcional `sql/merged/`).

@@ -1,12 +1,12 @@
 ---
-description: C++17 and cross-platform conventions
+description: C++20 and cross-platform conventions
 globs: src/**/*.cpp,src/**/*.h,src/**/*.hpp,tests/**/*.cpp
 alwaysApply: false
 ---
 
 # C++ & Platform
 
-- **C++17:** `<filesystem>`, `std::optional`, `std::variant`, etc.
+- **C++20:** `<filesystem>`, `std::optional`, `std::variant`, `std::span`, etc.
 - **Threading:** `std::thread` — not pthreads or Win32 APIs directly.
 - **Paths:** `std::filesystem` for cross-platform path handling.
 - **Platform `#ifdef`s:** only inside adapters when unavoidable.

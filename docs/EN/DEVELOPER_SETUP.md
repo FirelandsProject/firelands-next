@@ -8,7 +8,7 @@ This guide helps new developers set up their environment to work on Firelands, a
 
 | Software | Version | Purpose |
 |----------|---------|---------|
-| **C++ Compiler** | C++17 compatible (Clang 15+, GCC 11+, MSVC 2022+) | Building the project |
+| **C++ Compiler** | C++20 compatible (Clang 15+, GCC 12+, MSVC 2022 17.4+) | Building the project |
 | **CMake** | 3.20+ | Build system configuration |
 | **Ninja** | Latest | Fast build generator (recommended) |
 | **Git** | Any recent version | Version control |

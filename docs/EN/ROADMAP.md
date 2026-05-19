@@ -12,5 +12,5 @@ Full tracking lives in [docs/ES/ROADMAP.md](../ES/ROADMAP.md) (single source of 
 - **In progress (uncommitted):** `npc_text` table + `CMSG_NPC_TEXT_QUERY` → `SMSG_NPC_TEXT_UPDATE` for dialog copy; migrations `33`–`34`, `MySqlNpcTextRepository`, unit tests. See [gossip-npc-text.md](modules/gossip-npc-text.md#in-progress--npc_text-dialog-copy).
 - **Still open:** `WorldSession` split + `shared/network/packets/` refactor; regenerate `sql/bundled/firelands_world.sql` after `npc_text` lands.
 - **2026-05-03 (stability):** idle ≥5 min validated; `Network.TimeSyncPeriodMs` in `worldserver.yaml` (see Spanish roadmap).
-- **Toolchain (planned, low priority):** [C++20 migration plan](CPP20_MIGRATION_PLAN.md) — not started; project still builds as C++17.
+- **Toolchain:** [C++20 migration plan](CPP20_MIGRATION_PLAN.md) — Phase 1 done (CMake `C++20`); Phase 2 feature adoption open.
 

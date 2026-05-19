@@ -31,7 +31,7 @@ This folder contains the English documentation for **firelands-next**.
 
 - [Extractors](extractors.md)
 - [DevTools](devtools.md)
-- [C++20 migration plan](CPP20_MIGRATION_PLAN.md) — toolchain upgrade (planned; baseline is C++17)
+- [C++20 migration plan](CPP20_MIGRATION_PLAN.md) — Phase 1 complete; Phase 2 feature adoption
 - [StormLib roadmap](STORM_LIB_ROADMAP.md)
 - [VMap extraction plan](VMAP_EXTRACTION_PLAN.md)
 - [Roadmap](ROADMAP.md) — phased roadmap, parity matrix, client stability; Spanish file is SSOT (see link inside)

@@ -31,7 +31,7 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 ## Roadmap por fases (alto nivel)
 
 ### Phase 1 — Foundations & Auth (COMPLETED)
-- [x] Project skeleton (CMake / C++17)
+- [x] Project skeleton (CMake / C++20)
 - [x] Logging (`spdlog`)
 - [x] DB base (MariaDB/MySQL connectors)
 - [x] SRP6 auth + auth success
@@ -161,7 +161,7 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 
 ### Toolchain (baja prioridad)
 
-- **C++20:** plan en inglés [`docs/EN/CPP20_MIGRATION_PLAN.md`](../EN/CPP20_MIGRATION_PLAN.md) — **no iniciado**; el repo sigue en **C++17** (`CMakeLists.txt`). Prioridad **después** de estabilidad del cliente (Objetivo 0).
+- **C++20:** [`docs/EN/CPP20_MIGRATION_PLAN.md`](../EN/CPP20_MIGRATION_PLAN.md) — Fase 1 hecha (`CMAKE_CXX_STANDARD 20`); Fase 2 (adopción de features) pendiente.
 
 ---
 

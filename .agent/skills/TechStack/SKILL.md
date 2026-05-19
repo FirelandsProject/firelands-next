@@ -1,12 +1,12 @@
 ---
 name: tech-stack
-description: Defines C++17, CMake, and MySQL standards for cross-platform support. Use to ensure compatibility across Windows, Linux, and macOS.
+description: Defines C++20, CMake, and MySQL standards for cross-platform support. Use to ensure compatibility across Windows, Linux, and macOS.
 ---
 # Technical Stack & Platform Support
 
 ## Stack Definition
-- **Language:** C++17 (Use `<filesystem>`, `std::optional`, `std::variant`, etc.).
-- **Build Tool:** CMake 3.10+.
+- **Language:** C++20 (Use `<filesystem>`, `std::optional`, `std::variant`, `std::span`, designated initializers, etc.).
+- **Build Tool:** CMake 3.10+ (developers: 3.20+ recommended).
 - **Database:** MySql 8.0+.
 - **API:** RESTful (JSON).
 
@@ -24,7 +24,7 @@ description: Defines C++17, CMake, and MySQL standards for cross-platform suppor
 
 ## Workflow Integration
 - **Understand:** Review the required tech stack and platform constraints before starting the task.
-- **Plan:** Ensure the proposed solution utilizes C++17 standard features and cross-platform CMake practices.
+- **Plan:** Ensure the proposed solution utilizes C++20 standard features and cross-platform CMake practices.
 - **Implement:** Write code adhering to the language and platform-abstraction guidelines.
 - **Verify (Tests):** Ensure tests are compatible with the cross-platform nature of the codebase.
-- **Verify (Standards):** Build the project on the relevant target platforms (or simulate as appropriate) and ensure strict adherence to C++17 and standard library usage.
+- **Verify (Standards):** Build the project on the relevant target platforms (or simulate as appropriate) and ensure strict adherence to C++20 and standard library usage.

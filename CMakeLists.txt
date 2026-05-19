@@ -11,9 +11,13 @@ endif()
 
 set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# spdlog 1.14.x bundled fmt breaks under C++20 (FMT_STRING / consteval on Apple Clang).
+# Use std::format instead of bundled fmt; requires C++20 (__cpp_lib_format).
+add_compile_definitions(SPDLOG_USE_STD_FORMAT)
 
 # --- Optimization Settings ---
 
@@ -164,7 +168,7 @@ target_precompile_headers(auth PRIVATE ${PROJECT_PCH_HEADERS})
 
 target_link_libraries(auth
     PRIVATE FirelandsInfrastructure
-    PRIVATE ftxui::component
+    PRIVATE FirelandsTui
     PRIVATE OpenSSL::SSL
     PRIVATE OpenSSL::Crypto
     PRIVATE Boost::thread

@@ -83,7 +83,7 @@ refactor(spell): extract damage formula to domain layer
 
 ### Estilo C++
 
-- Estándar **C++17** requerido
+- Estándar **C++20** requerido
 - Usar `snake_case` para variables y funciones
 - Usar `PascalCase` para tipos y clases
 - Usar `UPPER_SNAKE_CASE` para constantes y enums

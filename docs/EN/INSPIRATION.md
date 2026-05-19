@@ -22,7 +22,7 @@ From these projects, we have learned extensively about:
 
 Rather than forking or modifying an existing codebase, Firelands Next was built **from scratch** with a clear architectural vision:
 
-- **Modern C++17** with a focus on type safety and compile-time checks
+- **Modern C++20** with a focus on type safety and compile-time checks
 - **Hexagonal Architecture** to cleanly separate domain logic from infrastructure concerns
 - **Clean abstraction layers** that make the codebase maintainable and testable
 - **Modular design** allowing for independent development and testing of features

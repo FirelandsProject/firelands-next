@@ -37,7 +37,7 @@ This document is the **implementation plan** for game data extractors in **firel
 
 ### Toolchain
 
-- **C++17**, CMake ≥ 3.10 (project baseline). Extractors as **standalone executables** — do **not** link StormLib into `world` / `auth` unless there is a deliberate runtime MPQ requirement.
+- **C++20**, CMake ≥ 3.10 (project baseline). Extractors as **standalone executables** — do **not** link StormLib into `world` / `auth` unless there is a deliberate runtime MPQ requirement.
 
 ---
 

@@ -8,7 +8,7 @@ Esta guía ayuda a los nuevos desarrolladores a configurar su entorno para traba
 
 | Software | Versión | Propósito |
 |----------|---------|-----------|
-| **Compilador C++** | Compatible con C++17 (Clang 15+, GCC 11+, MSVC 2022+) | Compilar el proyecto |
+| **Compilador C++** | Compatible con C++20 (Clang 15+, GCC 12+, MSVC 2022 17.4+) | Compilar el proyecto |
 | **CMake** | 3.20+ | Sistema de construcción |
 | **Ninja** | Última versión | Generador de compilación rápido (recomendado) |
 | **Git** | Cualquier versión reciente | Control de versiones |

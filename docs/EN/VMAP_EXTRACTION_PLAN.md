@@ -358,7 +358,7 @@ uint32 iGroupWMOID
 | **zlib / bzip2** | Already integrated | No change |
 | **G3D (g3dlite)** | **Must remove / replace** | Reference uses `G3D::Vector3`, `G3D::Matrix3`, `G3D::Quat`, `fromEulerAnglesZYX`, `toEulerAnglesXYZ`. Port these ops as minimal inline math in `Vec3.h` (already have `Vec3D`/`Quaternion` in extractor; extend). Do **not** add g3dlite as a dep. |
 | **Boost.Filesystem** | Do **not** add | Replace with `std::filesystem` (already used in extractors). |
-| **C++17 STL** | Available | `std::unordered_map/set`, `std::filesystem`, `std::thread` for assembler parallelism. |
+| **C++20 STL** | Available | `std::unordered_map/set`, `std::filesystem`, `std::thread` for assembler parallelism. |
 
 **Key math operations to port from G3D (no external dep):**
 

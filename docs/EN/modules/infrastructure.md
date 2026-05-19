@@ -16,11 +16,13 @@
 
 ## Network (`infrastructure/network/`)
 
-- **`AsyncNetworkServer`** — accept loop + session factory; `Update()` polled from `main`.
-- **`AuthSession`** — WoW auth protocol handling; uses `AuthService`, `RealmListService`.
-- **`WorldSession`** — world socket protocol for logged-in clients; uses `AuthService`, `CharacterService`, `PlayerCreateInfoService`, `ICommandService`.
-- **`RestAuthServer`** — HTTP API alongside classic auth (ported services injected).
-- **Realm link** — `RealmLiveRegistry` + `RealmLinkSession` on **auth** accept authenticated realm status from **world** (`RealmLinkOutbound` connects out from world using `RealmLinkProtocol` in shared).
+All socket I/O in this tree uses **C++20 coroutines** (`co_await`, `boost::asio::use_awaitable`). Shared helpers live in **`AsioAwaitables.h`**.
+
+- **`AsyncNetworkServer`** — coroutine `AcceptLoop`; `Update()` polls `io_context`.
+- **`AuthSession`** — `ReadLoop` + queued `WriteLoop`.
+- **`WorldSession`** — `ReadLoop`, `WriteLoop`, `TimeSyncLoop`, deferred spell completion via `co_await` on `_pendingSpellCastTimer`.
+- **`RestAuthServer`** — `AcceptLoop`, per-client `ServeClient` (`async_read` / `async_write`).
+- **Realm link** — `RealmLinkSession` (`ReadLoop`, `co_await SendAck`); `RealmLinkOutbound` coroutine session on world (handshake, ping loop).
 
 ## Scripting & world adapters
 
@@ -30,4 +32,3 @@
 ## CMake
 
 `FirelandsInfrastructure` links **FirelandsApplication**, MariaDB C++, Boost thread, nlohmann_json, **Lua**, zlib; includes connector headers. `LuaGameScriptHost.cpp` skips PCH for toolchain compatibility.
-

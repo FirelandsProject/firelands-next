@@ -1,8 +1,20 @@
 # C++20 migration plan — Firelands Next
 
-This document is the **implementation plan** for raising the project from **C++17** to **C++20**. It is **not started** as of 2026-05-18: `CMakeLists.txt` still sets `CMAKE_CXX_STANDARD 17`, and all `cxx_std_17` targets remain unchanged.
+This document is the **implementation plan** for raising the project from **C++17** to **C++20**.
 
-**Status:** Planned (no tracking issue yet).
+**Status:** Phase 1 complete (2026-05-18) — `CMAKE_CXX_STANDARD 20` at root; tool targets use `cxx_std_20`. Phase 2 (incremental feature adoption) open.
+
+**Phase 1 checklist**
+
+- [x] Root `CMakeLists.txt`: `CMAKE_CXX_STANDARD 20`
+- [x] All tool `CMakeLists.txt`: `cxx_std_20`
+- [x] Developer docs, TechStack skill, `firelands-cpp` cursor rule
+- [x] `SPDLOG_USE_STD_FORMAT` (bundled fmt in spdlog 1.14.1 fails on C++20 / Apple Clang)
+- [x] Trial build: `auth` + `world` on macOS (Apple Clang, arm64)
+- [ ] Trial builds on full compiler matrix (§4.1): Linux GCC/Clang, Windows MSVC
+- [x] Phase 2 P1: `std::span` on `ByteBuffer` (`Append`/`Read`/`AsSpan`/`UnreadSpan`)
+- [x] Boost.Asio C++20 coroutines across `infrastructure/network/` (see below)
+- [ ] Phase 2 remaining: designated initializers, `using enum`
 
 ---
 
@@ -96,7 +108,7 @@ Pinned via `FetchContent` / `find_package` in root `CMakeLists.txt`:
 | Dependency | Version (pinned) | C++20 risk | Mitigation |
 |------------|------------------|------------|------------|
 | GoogleTest | 1.14.0 | Low | Supports C++20; may emit deprecation warnings — fix or suppress in tests only. |
-| spdlog | 1.14.1 | Low | C++20-friendly; keep including via `<shared/Logger.h>`. |
+| spdlog | 1.14.1 | Medium | Build with `SPDLOG_USE_STD_FORMAT` (see root `CMakeLists.txt`); bump spdlog later optional. |
 | nlohmann/json | 3.11.2 | Low | Header-only; widely used with C++20. |
 | yaml-cpp | 0.8.0 | Low–medium | Build as C++20 TU; watch for `std::string` ABI — same as today. |
 | MariaDB C/C++ | 3.3.8 / 1.1.7 | Low | C API boundary unchanged. |
@@ -166,9 +178,19 @@ Pinned via `FetchContent` / `find_package` in root `CMakeLists.txt`:
 | P4 | `concept` | Test doubles, small templates in `tests/unit/` | Keep domain headers free of heavy concepts unless clear win. |
 | P4 | `std::jthread` | New background tasks only | Do not rewrite existing thread pools in one PR. |
 
-**Explicitly defer**
+**Coroutines (network I/O — complete for callback-style handlers)**
 
-- **Coroutines** for async I/O — needs design; out of scope for initial migration.
+| Component | Read | Write | Timers / other |
+|-----------|------|-------|----------------|
+| `AsioAwaitables.h` | `AsyncReadSome` | `AsyncWrite` | `SpawnDetached` |
+| `AsyncNetworkServer` | `AcceptLoop` | — | — |
+| `AuthSession` | `ReadLoop` | `WriteLoop` (queue) | — |
+| `WorldSession` | `ReadLoop` | `WriteLoop` (queue) | `TimeSyncLoop`, deferred spell `co_await` |
+| `RestAuthServer` | `async_read` | `async_write` | accept loop |
+| `RealmLinkSession` | `ReadLoop` | `SendAck` | — |
+| `RealmLinkOutbound` | `async_read` | `AsyncWrite` + ping loop | `steady_timer` |
+
+No completion-handler chains remain in `src/infrastructure/network/` except inside `AsioAwaitables` wrappers (`use_awaitable`).
 - **Modules** — CMake/tooling cost too high for this repo today.
 - **`<format>` in logging hot paths** — profile first.
 
@@ -245,3 +267,4 @@ Migration is **complete** when all are true:
 | Date | Change |
 |------|--------|
 | 2026-05-18 | Initial plan (project on C++17; no prior migration doc) |
+| 2026-05-18 | Phase 1: CMake and docs flipped to C++20 |
