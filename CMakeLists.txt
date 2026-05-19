@@ -185,7 +185,7 @@ target_precompile_headers(world PRIVATE ${PROJECT_PCH_HEADERS})
 
 target_link_libraries(world
     PRIVATE FirelandsInfrastructure
-    PRIVATE ftxui::component
+    PRIVATE FirelandsTui
     PRIVATE OpenSSL::SSL
     PRIVATE OpenSSL::Crypto
     PRIVATE Boost::thread

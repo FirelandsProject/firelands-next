@@ -35,3 +35,5 @@ if(WIN32)
   # Propagate to executables that link FirelandsShared (clipboard Win32 APIs).
   target_link_libraries(FirelandsShared PUBLIC user32)
 endif()
+
+add_subdirectory(tui)
