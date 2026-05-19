@@ -3,6 +3,7 @@ add_executable(FirelandsUnitTests
     unit/domain/RealmTests.cpp
     unit/domain/AuraTests.cpp
     unit/domain/GossipMenuTests.cpp
+    unit/domain/NpcTextTests.cpp
     unit/infrastructure/MySqlAccountRepositoryTests.cpp
     unit/infrastructure/MySqlRealmRepositoryTests.cpp
     unit/infrastructure/RealmLiveRegistryTests.cpp

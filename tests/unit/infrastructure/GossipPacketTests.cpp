@@ -58,7 +58,7 @@ TEST(GossipPacketTests, ReadClientTargetGuid_ReadsPackedGuidWhenShorter) {
   EXPECT_EQ(pkt.GetReadPos(), pkt.Size());
 }
 
-TEST(GossipPacketTests, BuildNpcTextUpdate_IncludesTextIdAndGreeting) {
+TEST(GossipPacketTests, BuildNpcTextUpdate_Fallback_IncludesTextIdAndGreeting) {
   WorldPacket pkt = gossip::BuildNpcTextUpdate(3466);
   EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_NPC_TEXT_UPDATE));
 
@@ -72,6 +72,26 @@ TEST(GossipPacketTests, BuildNpcTextUpdate_IncludesTextIdAndGreeting) {
          (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
     line += c;
   EXPECT_EQ(line, "Greetings $N");
+}
+
+TEST(GossipPacketTests, BuildNpcTextUpdate_FromDomainRow_WritesCustomGreeting) {
+  NpcText text;
+  text.id = 99;
+  text.options[0].probability = 1.f;
+  text.options[0].text0 = "Custom line";
+  text.options[0].text1 = "";
+
+  WorldPacket pkt = gossip::BuildNpcTextUpdate(text);
+  WorldPacket copy = pkt;
+  copy.SetReadPos(0);
+  EXPECT_EQ(copy.Read<uint32_t>(), 99u);
+  EXPECT_FLOAT_EQ(copy.Read<float>(), 1.0f);
+  std::string line;
+  char c = 0;
+  while (copy.GetReadPos() < copy.Size() &&
+         (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
+    line += c;
+  EXPECT_EQ(line, "Custom line");
 }
 
 } // namespace Firelands

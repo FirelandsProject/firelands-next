@@ -1,6 +1,7 @@
 #include <application/logic/GossipLogic.h>
 #include <application/services/WorldService.h>
 #include <domain/repositories/IGossipRepository.h>
+#include <domain/repositories/INpcTextRepository.h>
 #include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
@@ -538,8 +539,18 @@ void WorldSession::HandleNpcTextQuery(WorldPacket &packet) {
   uint64_t const guid = packet.Read<uint64_t>();
 
   LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={} guid={:#x}", textId, guid);
-  auto npcText = gossip::BuildNpcTextUpdate(textId);
-  SendPacket(npcText);
+
+  NpcText payload = NpcText::MakeFallback(textId);
+  if (_npcTextRepo) {
+    if (auto const loaded = _npcTextRepo->TryGetById(textId))
+      payload = *loaded;
+    else
+      LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={}: no npc_text row, using fallback",
+                textId);
+  }
+
+  WorldPacket npcTextPkt = gossip::BuildNpcTextUpdate(payload);
+  SendPacket(npcTextPkt);
 }
 
 void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {

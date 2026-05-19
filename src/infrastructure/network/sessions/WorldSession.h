@@ -54,6 +54,7 @@ class GmTicketService;
 class ISpellDefinitionStore;
 class FactionTemplateDbc;
 class IGossipRepository;
+class INpcTextRepository;
 
 class WorldSession : public IAuthSession,
                      public IMapNotifier,
@@ -76,7 +77,8 @@ public:
       std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch =
           nullptr,
        std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc = nullptr,
-       std::shared_ptr<IGossipRepository> gossipRepo = nullptr);
+       std::shared_ptr<IGossipRepository> gossipRepo = nullptr,
+       std::shared_ptr<INpcTextRepository> npcTextRepo = nullptr);
 
   ~WorldSession();
 
@@ -343,6 +345,7 @@ public:
   std::shared_ptr<INpcTemplateSearchRepository const> _npcTemplateSearch;
   std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
   std::shared_ptr<IGossipRepository> _gossipRepo;
+  std::shared_ptr<INpcTextRepository> _npcTextRepo;
 
   /// Filled when the character is registered for console targeting; empty at
   /// character select / disconnected.

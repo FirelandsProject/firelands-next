@@ -1,33 +1,33 @@
 #pragma once
 
+#include <domain/models/NpcText.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
-#include <cstdint>
-#include <string>
 
 namespace Firelands::gossip {
 
-/// Trinity `MAX_GOSSIP_TEXT_OPTIONS` / `MAX_GOSSIP_TEXT_EMOTES` (Cataclysm).
-inline constexpr uint8_t kNpcTextOptionCount = 8;
-inline constexpr uint8_t kNpcTextEmoteCount = 3;
-
-/// Build `SMSG_NPC_TEXT_UPDATE` — matches TCPP `HandleNpcTextQueryOpcode` fallback layout.
-inline WorldPacket BuildNpcTextUpdate(uint32_t textId,
-                                      std::string const &greeting = "Greetings $N") {
+/// Build `SMSG_NPC_TEXT_UPDATE` — matches TCPP `HandleNpcTextQueryOpcode` layout.
+inline WorldPacket BuildNpcTextUpdate(NpcText const &text) {
   WorldPacket out(SMSG_NPC_TEXT_UPDATE, 256);
-  out.Append<uint32_t>(textId);
+  out.Append<uint32_t>(text.id);
 
-  for (uint8_t i = 0; i < kNpcTextOptionCount; ++i) {
-    out.Append<float>(i == 0 ? 1.0f : 0.0f);
-    out.WriteString(greeting);
-    out.WriteString(greeting);
-    out.Append<uint32_t>(0); // language
-    for (uint8_t j = 0; j < kNpcTextEmoteCount; ++j) {
-      out.Append<uint32_t>(0); // emote delay
-      out.Append<uint32_t>(0); // emote id
+  for (NpcTextOption const &option : text.options) {
+    out.Append<float>(option.probability);
+    out.WriteString(option.text0);
+    out.WriteString(option.text1);
+    out.Append<uint32_t>(static_cast<uint32_t>(option.language));
+    for (NpcTextEmote const &emote : option.emotes) {
+      out.Append<uint32_t>(static_cast<uint32_t>(emote.delay));
+      out.Append<uint32_t>(static_cast<uint32_t>(emote.emote));
     }
   }
   return out;
+}
+
+/// Convenience when no DB row exists.
+inline WorldPacket BuildNpcTextUpdate(uint32_t textId,
+                                      std::string const &greeting = "Greetings $N") {
+  return BuildNpcTextUpdate(NpcText::MakeFallback(textId, greeting));
 }
 
 } // namespace Firelands::gossip
