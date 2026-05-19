@@ -11,6 +11,7 @@ Read in this order:
 | 5 | Executables (`src/auth`, `src/world`) | [executables.md](executables.md) |
 | 6 | Tools, tests, SQL, CMake | [tools-sql-build.md](tools-sql-build.md) |
 | — | GM / staff commands & console | [gm-administration.md](gm-administration.md) |
+| — | NPC gossip & `npc_text` | [gossip-npc-text.md](gossip-npc-text.md) |
 
 **Dependency direction (build):** `Infrastructure → Application → Domain → Shared`.
 

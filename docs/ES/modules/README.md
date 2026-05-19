@@ -11,6 +11,7 @@ Lectura recomendada:
 | 5 | Ejecutables (`src/auth`, `src/world`) | [executables.md](executables.md) |
 | 6 | Herramientas, tests, SQL, CMake | [tools-sql-build.md](tools-sql-build.md) |
 | — | Comandos GM / staff y consola | [gm-administration.md](gm-administration.md) |
+| — | Gossip NPC y `npc_text` | [gossip-npc-text.md](gossip-npc-text.md) |
 | — | Plan SpellManager (rendimiento / alta carga) | [spell-manager-plan.md](spell-manager-plan.md) |
 
 **Dirección de dependencias (build):** `Infrastructure → Application → Domain → Shared`.

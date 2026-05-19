@@ -4,10 +4,12 @@ The roadmap currently lives in Spanish under [docs/ES/ROADMAP.md](../ES/ROADMAP.
 
 If you prefer, we can later translate the full roadmap into English and keep both versions in sync.
 
-## Workspace snapshot (doc update 2026-05-03)
+## Workspace snapshot (doc update 2026-05-18)
 
-- **In flight:** `WorldSession` split into `worldsession/*.cpp` (login flow, client opcode handlers, outbound sends).
-- **Shared packet layer:** new headers under `src/shared/network/packets/` (client read structs, 4.3.4 packed player `ObjectGuid`, small server `ServerPacket` helpers).
-- **Next priorities (see Spanish roadmap):** finish this refactor (build + commit), then spell auras / minimal spell data, plus client idle stability (≥5 min) and time-sync behaviour.
-- **2026-05-03 (stability):** `SMSG_TIME_SYNC_REQ` interval is configurable via `Network.TimeSyncPeriodMs` in `worldserver.yaml` (default 300000 ms / 5 min in repo yaml, clamped 2000–3600000 ms); manual idle test steps are documented in the Spanish roadmap.
+Full tracking lives in [docs/ES/ROADMAP.md](../ES/ROADMAP.md) (single source of truth).
+
+- **Last commit (`d5b48b1`):** NPC gossip menus from world DB — `SMSG_GOSSIP_MESSAGE` / `SMSG_GOSSIP_COMPLETE`, Lua-first then `IGossipRepository` fallback, migrations `31`–`32` + gossip data import. See [modules/gossip-npc-text.md](modules/gossip-npc-text.md#shipped-d5b48b1--npc-gossip-menus).
+- **In progress (uncommitted):** `npc_text` table + `CMSG_NPC_TEXT_QUERY` → `SMSG_NPC_TEXT_UPDATE` for dialog copy; migrations `33`–`34`, `MySqlNpcTextRepository`, unit tests. See [gossip-npc-text.md](modules/gossip-npc-text.md#in-progress--npc_text-dialog-copy).
+- **Still open:** `WorldSession` split + `shared/network/packets/` refactor; regenerate `sql/bundled/firelands_world.sql` after `npc_text` lands.
+- **2026-05-03 (stability):** idle ≥5 min validated; `Network.TimeSyncPeriodMs` in `worldserver.yaml` (see Spanish roadmap).
 

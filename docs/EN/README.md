@@ -25,6 +25,7 @@ This folder contains the English documentation for **firelands-next**.
 - [Infrastructure (`FirelandsInfrastructure`)](modules/infrastructure.md)
 - [Executables (`auth`, `world`)](modules/executables.md)
 - [Tools / SQL / tests / build](modules/tools-sql-build.md)
+- [NPC gossip & `npc_text`](modules/gossip-npc-text.md)
 
 ## Other docs
 

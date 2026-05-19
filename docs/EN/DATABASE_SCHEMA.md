@@ -227,6 +227,28 @@ Tracks schema version.
 - Item templates
 - Custom server-side data
 
+### Gossip and `npc_text` (world)
+
+NPC dialog menus and copy (Cataclysm 4.3.4). Feature docs: [modules/gossip-npc-text.md](modules/gossip-npc-text.md).
+
+| Table | Role |
+|-------|------|
+| `creature_template` | `gossip_menu_id` links creature → menu (migration `31`) |
+| `gossip_menu` | `MenuID` + `TextID` (header for a menu) |
+| `gossip_menu_option` | Options shown in `SMSG_GOSSIP_MESSAGE` |
+| `gossip_menu_option_action` | Chained `ActionMenuId` on select |
+| `gossip_menu_option_box` | Coded/money confirmation box text |
+| `npc_text` | Eight text slots + emotes for `SMSG_NPC_TEXT_UPDATE` (WIP migration `33`–`34`) |
+
+**Import from reference clone:**
+
+```bash
+python3 tools/sql/import_ref_gossip.py    # → sql/migrations/35_world_gossip_data.sql
+python3 tools/sql/import_ref_npc_text.py  # → sql/migrations/34_world_npc_text_data.sql
+```
+
+DDL: migrations `32` (gossip), `33` (`npc_text`). Apply via runtime migrator or bundled `firelands_world.sql` after `merge-migrations`.
+
 ---
 
 ## Working with Migrations

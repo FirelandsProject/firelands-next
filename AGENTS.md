@@ -3,7 +3,36 @@
 ## Build Commands
 
 **Agent note:** NEVER compile the project automatically. After any change, ASK the user for confirmation before compiling. Only compile if the user explicitly authorizes it.
-**Agent note:** For complex tasks spanning multiple domains, you MUST use sub agents (Auth, World, DB, Core) as defined in the Delegation skill.
+
+## Sub-agent delegation
+
+Before implementing anything, **analyze complexity** and decide whether work stays on the main agent or should be delegated to a sub-agent. When in doubt, prefer delegation for work that would bloat main context or spans domains.
+
+### When to delegate
+
+| Signal | Prefer |
+|--------|--------|
+| Single file, obvious change, under ~30 min scope | Main agent (inline) |
+| Broad codebase search / “where is X?” | `explore` or `cavecrew-investigator` (readonly) |
+| Surgical 1–2 file edit with clear spec | `cavecrew-builder` |
+| PR/diff review, audit | `cavecrew-reviewer` |
+| Shell/git/CI only | `shell` |
+| Multiple domains (auth + world + DB + core) | Parallel sub-agents per [Delegation](.agent/skills/Delegation/SKILL.md) roles |
+| Large feature, protocol correctness, security, cross-cutting refactor | `generalPurpose` (or domain role) with a **strong** model |
+
+**Must delegate** when a task spans multiple domains (Auth, World, DB, Core) — see [Delegation skill](.agent/skills/Delegation/SKILL.md).
+
+### Model selection (quality first)
+
+Pick the sub-agent **type** and **model** for the hardest part of the task, not the easiest step.
+
+- **Default:** Omit `model` on the Task tool so the sub-agent uses the same model as the parent (no quality drop).
+- **User-requested model:** If the user names a model, use only allowed Task `model` slugs; if unavailable, say so and pick the closest tier.
+- **Prefer stronger / reasoning models** for: new opcodes/packets, crypto/auth, hexagonal refactors, concurrency, ambiguous requirements, multi-file design.
+- **Lighter models are OK** for: readonly exploration, mechanical renames, formatting-only edits, running scripted commands — only when the spec is unambiguous and mistakes are cheap to fix.
+- **Never** trade quality on correctness-critical paths (SRP6, DB migrations, packet layouts, TDD business rules) to save tokens or latency.
+
+Launch **parallel** sub-agents when domains or search areas are independent; synthesize results on the main agent before committing to a design.
 
 ### Configuration
 ```bash
@@ -75,6 +104,8 @@ docker-compose up -d db
 - Runtime migrator: `sql/init/*.sql` plus optional `sql/migrations/*.sql` (see `DatabaseMigrator`).
 - Docker first boot: `docker/mysql-init/docker_grants_firelands_user.sql` then **`sql/bundled/firelands_auth.sql`**, **`firelands_characters.sql`**, **`firelands_world.sql`**, **`zz_seed_schema_migrations.sql`**.
 - Regenerate bundles when split migrations exist: `python3 tools/merge_migrations.py` or `cmake --build build --target merge-migrations`. Optional scratch: `sql/merged/`.
+- Ref world text: `python3 tools/sql/import_ref_npc_text.py` → `sql/migrations/34_world_npc_text_data.sql`.
+- Ref gossip menus: `python3 tools/sql/import_ref_gossip.py` → `sql/migrations/35_world_gossip_data.sql`.
 
 ## Testing
 
@@ -123,7 +154,7 @@ Deep workflow detail remains in `.agent/skills/` (read on demand).
 | TechStack | `.agent/skills/TechStack/SKILL.md` | Platform/cross-platform work |
 | Optimization | `.agent/skills/Optimization/SKILL.md` | Build/target changes |
 | Language | `.agent/skills/Language/SKILL.md` | Code/comments/naming |
-| Delegation | `.agent/skills/Delegation/SKILL.md` | Large multi-domain tasks |
+| Delegation | `.agent/skills/Delegation/SKILL.md` | Multi-domain tasks; sub-agent planning (see **Sub-agent delegation** above) |
 
 ## Language & Communication
 

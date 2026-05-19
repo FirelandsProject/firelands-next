@@ -14,11 +14,17 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 
 ---
 
-## Estado del workspace (documentado 2026-05-03)
+## Estado del workspace (documentado 2026-05-18)
 
-- **En curso (cambios locales típicos):** modularización de `WorldSession` en `src/infrastructure/network/sessions/worldsession/*.cpp` (flujo de login, handlers de opcodes cliente, envío de paquetes salientes) para reducir unidades de compilación y acoplamiento.
-- **Capa de paquetes compartida:** nuevos headers bajo `src/shared/network/packets/` — lecturas cliente (`SessionOpcodesClient`: ping/time sync/zone update), **packed player `ObjectGuid`** 4.3.4 (`PackedPlayerGuidWire`), respuestas mínimas servidor (`Pong`, `SimpleOutboundPackets` para varios SMSG auxiliares del login y probes).
-- **Motivo:** acercar el criterio de la matriz **Opcodes / packets** (estructuras tipadas y serialización reusable) sin cambiar el comportamiento observable hasta donde alcance el refactor.
+- **Último commit (`d5b48b1`):** menús de gossip NPC desde world DB — ver [gossip-npc-text.md](../EN/modules/gossip-npc-text.md#shipped-d5b48b1--npc-gossip-menus).
+- **En curso (sin commitear):** tabla y datos `npc_text` + `CMSG_NPC_TEXT_QUERY` → `SMSG_NPC_TEXT_UPDATE` (copy del diálogo de gossip); migraciones `33`/`34`, repo MySQL, tests. Detalle: [gossip-npc-text.md](../EN/modules/gossip-npc-text.md#in-progress--npc_text-dialog-copy).
+- **Refactor de red (sigue abierto):** split `WorldSession` en `worldsession/*.cpp` + headers en `src/shared/network/packets/` (login, handlers, SMSG auxiliares).
+- **Regenerar bundles SQL** tras cerrar `npc_text` / datos gossip: `python3 tools/merge_migrations.py` o `cmake --build build --target merge-migrations`.
+
+### Snapshot anterior (2026-05-03)
+
+- Modularización `WorldSession` + capa `shared/network/packets/` (packed player GUID, probes post-login).
+- Motivo: matriz **Opcodes / packets** tipados sin cambiar comportamiento observable.
 
 ---
 
@@ -57,7 +63,9 @@ Este documento es el **único lugar** para hacer seguimiento del progreso: roadm
 - [x] Lua scripting host (MVP) + tests
 - [x] WorldService wiring + hooks Lua (login/gossip/movement/chat/spawn)
 - [x] Spells — cast mínimo (GCD + `SMSG_SPELL_START`/`GO` + `SMSG_SPELL_FAILURE` vía lista conocida); auras/DBC pendientes
-- [ ] Quests/loot/menus (SMSG gossip/quest, aún pendiente)
+- [x] Gossip DB — `SMSG_GOSSIP_MESSAGE` / `SMSG_GOSSIP_COMPLETE`, menús desde `gossip_menu*` (commit `d5b48b1`)
+- [ ] Gossip — copy de diálogo vía `npc_text` + `SMSG_NPC_TEXT_UPDATE` (en curso, ver módulo gossip)
+- [ ] Quests/loot en menú gossip (`SMSG_GOSSIP_MESSAGE` quest lines) y flujo quest
 - [ ] Instancias + fases (Lua)
 
 ---
@@ -102,6 +110,8 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | 2026-05-03 | Doc: snapshot refactor capa paquetes (`shared/network/packets/*`) + split `WorldSession`; foco siguiente alineado con estabilidad idle / auras |
 | 2026-05-03 | Estabilidad: `Network.TimeSyncPeriodMs` + cancel defensivo antes de `SchedulePeriodicTimeSync`; trace en `CMSG_TIME_SYNC_RESP`; guía de validación idle en roadmap |
 | 2026-05-05 | Estabilidad: validación idle ≥ 5 min completada (cliente estable) |
+| 2026-05-18 | Gossip: commit `d5b48b1` — menús desde world DB (`gossip_menu*`), paquetes 4.3.4, Lua + fallback, `.npc search` mejorado |
+| 2026-05-18 | Gossip (WIP): `npc_text` + `CMSG_NPC_TEXT_QUERY` / `SMSG_NPC_TEXT_UPDATE`; migraciones 33–34 + import ref |
 
 ---
 
@@ -116,7 +126,7 @@ Goal: mantener UI consistente sin implementar sistemas completos todavía.
 | world-core-gap | Cerrar gaps fase 5–6 (opcodes/mundo vacío/broadcast) | En curso |
 | entities-combat | Creature/GO + combate/hechizos mínimos + hooks Lua | Parcial (dominio + spawn hooks; cast START/GO + GCD) |
 | maps-collision | mmap/vmap + colisión alineada a ref | Stub listo; integración real pendiente |
-| quests-instances | Quests/loot/gossip + instancias con Lua | Parcial (gossip CMSG→Lua; SMSG pendiente) |
+| quests-instances | Quests/loot/gossip + instancias con Lua | Parcial (gossip SMSG menú DB; `npc_text` en curso; quests en menú pendiente) |
 
 ### Matriz de paridad (subsistema × ref × next × criterio)
 
@@ -137,7 +147,7 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 | Scripting / hooks | `ScriptMgr`, AI scripts | `IGameScriptHost`, `LuaGameScriptHost`, Lua `OnScriptEvent` | Partial | Expand C++→Lua surface + sandbox |
 | Creatures / GOs | `Creature`, `GameObject`, spawns | `Creature`, `GameObject` domain types | Started | Spawn pipeline + `SMSG_UPDATE_OBJECT` for units |
 | Combat / spells | `Spell`, `Unit`, `Aura` | `SpellCastWire`, `WorldSession::HandleCastSpell` | Started | Aura aplicada + coste/recovery desde datos |
-| Quests / gossip | `QuestHandler`, `NPCHandler` | `CMSG_GOSSIP_*` → Lua `gossip_*` events | Started | `SMSG_GOSSIP_MESSAGE` + menu state |
+| Quests / gossip | `QuestHandler`, `NPCHandler` | `CMSG_GOSSIP_*` + `IGossipRepository`; Lua primero, fallback DB | Partial | `npc_text` + quest lines en `SMSG_GOSSIP_MESSAGE`; ver [gossip-npc-text.md](../EN/modules/gossip-npc-text.md) |
 | Loot | `LootMgr`, `Loot` | — | Not started | Basic take-item flow |
 | Collision / path | `VMap`, `MMap`, `MapInstanced` | `IMapCollisionQueries` + stub | Started | Wire `Collision.DataRoot` to real queries |
 | Instances / phases | `InstanceMap`, `InstanceScript` | — | Not started | Instance id on `Map` + reset hooks |
@@ -145,7 +155,7 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 | Battlegrounds / arena | `Battleground*` | — | Not started | Out of scope until open world stable |
 | Anticheat | `Anticheat` | — | Not started | Movement validation baseline |
 
-**Priority order (short term):** world opcodes + visibility → creatures on map → combat stub → quests/gossip SMSG → collision data → instances.
+**Priority order (short term):** cerrar `npc_text` (commit + bundles) → quest lines en gossip → combat/auras → collision data → instances.
 
 **Extractores / colisión (4.3.4):** plan maestro en [`docs/EN/VMAP_EXTRACTION_PLAN.md`](../EN/VMAP_EXTRACTION_PLAN.md); resumen ES en [`docs/ES/VMAP_EXTRACTION_PLAN.md`](VMAP_EXTRACTION_PLAN.md) (herramientas 1–4 + runtime + cierre).
 
@@ -158,4 +168,5 @@ Living section: actualizar **Status** y **Next criterion** al cerrar hitos.
 3. ~~Empezar **spells mínimos**~~ (GCD + `SMSG_SPELL_START`/`GO` + fallos básicos); siguiente: **auras / efectos** o datos mínimos de hechizo (DBC/SQL).
 4. **Cerrar el refactor de red** (split `WorldSession` + headers en `shared/network/packets/`): revisar CMake/includes, compilar y commitear; seguir extrayendo lecturas/escrituras repetidas a tipos compartidos donde aporte claridad.
 5. **Estabilidad cliente (Definition of done):** sesión idle **≥ 5 min**, cadencia sana de `SMSG_TIME_SYNC_REQ`, y validación puntual del burst de login vs referencia.
+6. **Gossip / NPC text:** commitear trabajo `npc_text` en curso; regenerar `sql/bundled/firelands_world.sql`; validar in-game: abrir gossip en NPC con `gossip_menu_id` y texto de `TextID` cargado por el cliente.
 
