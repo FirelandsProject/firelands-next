@@ -379,24 +379,6 @@ private:
   uint32 m_durationIndex;
 };
 
-TEST(SpellManagerTests, AuraEffectFieldsAreSetCorrectly) {
-  auto defs = std::make_shared<SpellDefinitionWithAura>(
-      /*auraEffectType=*/3, /*basePoints=*/10, /*dieSides=*/6, /*durationIndex=*/5);
-  auto tables = std::make_shared<MockSpellCastTables>(0u);
-  SpellManager mgr(defs, tables);
-  std::unordered_set<uint32> known = {100};
-  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
-  SpellCastOutcome out;
-  mgr.ProcessCastRequest(req, &out);
-  
-  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
-  // Verify that the aura fields were correctly set in the definition
-  // This test primarily verifies that our SpellDefinitionStore implementation works correctly
-  // In a real scenario, we would check that the aura fields are properly propagated
-}
-
-} // namespace
-
 static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
                                     std::unordered_set<uint32> *knownSpells) {
   SpellCastRequest req;
@@ -412,6 +394,22 @@ static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
   req.gcdReady = {};
   req.knownSpells = knownSpells;
   return req;
+}
+
+TEST(SpellManagerTests, AuraEffectFieldsAreSetCorrectly) {
+  auto defs = std::make_shared<SpellDefinitionWithAura>(
+      /*auraEffectType=*/3, /*basePoints=*/10, /*dieSides=*/6, /*durationIndex=*/5);
+  auto tables = std::make_shared<MockSpellCastTables>(0u);
+  SpellManager mgr(defs, tables);
+  std::unordered_set<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+  // Verify that the aura fields were correctly set in the definition
+  // This test primarily verifies that our SpellDefinitionStore implementation works correctly
+  // In a real scenario, we would check that the aura fields are properly propagated
 }
 
 TEST(SpellManagerTests, UnknownSpell_ReturnsSpellFailure) {
@@ -1002,3 +1000,5 @@ TEST(SpellManagerTests, PlayerFactionTeamHint_UnknownRace_ReturnsFalse) {
   bool same = true;
   EXPECT_FALSE(TrySpellRangeFriendlyTeamHint(1, 99, &same));
 }
+
+} // namespace
