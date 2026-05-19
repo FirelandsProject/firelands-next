@@ -146,3 +146,19 @@ CREATE TABLE IF NOT EXISTS `npc_text` (
   `VerifiedBuild` int DEFAULT NULL,
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Minimal quest templates for gossip quest lines (full quest system is separate).
+CREATE TABLE IF NOT EXISTS `quest_template` (
+  `ID` int unsigned NOT NULL DEFAULT '0',
+  `QuestLevel` smallint NOT NULL DEFAULT '1',
+  `LogTitle` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `Flags` int unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Creature → quest offered in gossip (`SMSG_GOSSIP_MESSAGE` quest block).
+CREATE TABLE IF NOT EXISTS `creature_queststarter` (
+  `id` mediumint unsigned NOT NULL DEFAULT '0' COMMENT 'Creature entry',
+  `quest` int unsigned NOT NULL DEFAULT '0' COMMENT 'Quest Identifier',
+  PRIMARY KEY (`id`, `quest`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

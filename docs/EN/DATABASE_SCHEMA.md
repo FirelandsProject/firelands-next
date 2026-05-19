@@ -238,16 +238,19 @@ NPC dialog menus and copy (Cataclysm 4.3.4). Feature docs: [modules/gossip-npc-t
 | `gossip_menu_option` | Options shown in `SMSG_GOSSIP_MESSAGE` |
 | `gossip_menu_option_action` | Chained `ActionMenuId` on select |
 | `gossip_menu_option_box` | Coded/money confirmation box text |
-| `npc_text` | Eight text slots + emotes for `SMSG_NPC_TEXT_UPDATE` (WIP migration `33`–`34`) |
+| `npc_text` | Eight text slots + emotes for `SMSG_NPC_TEXT_UPDATE` (migrations `33`–`34`) |
+| `quest_template` | Minimal quest header for gossip quest lines (`ID`, `QuestLevel`, `LogTitle`, `Flags`) |
+| `creature_queststarter` | Creature entry → quest id shown in `SMSG_GOSSIP_MESSAGE` |
 
 **Import from reference clone:**
 
 ```bash
-python3 tools/sql/import_ref_gossip.py    # → sql/migrations/35_world_gossip_data.sql
-python3 tools/sql/import_ref_npc_text.py  # → sql/migrations/34_world_npc_text_data.sql
+python3 tools/sql/import_ref_gossip.py         # → sql/migrations/35_world_gossip_data.sql
+python3 tools/sql/import_ref_npc_text.py       # → sql/migrations/34_world_npc_text_data.sql
+python3 tools/sql/import_ref_quest_gossip.py   # → sql/migrations/38_world_quest_gossip_data.sql
 ```
 
-DDL: migrations `32` (gossip), `33` (`npc_text`). Apply via runtime migrator or bundled `firelands_world.sql` after `merge-migrations`.
+DDL: migrations `32` (gossip), `33` (`npc_text`), `36` (quest gossip). Data: `38_world_quest_gossip_data.sql` from `import_ref_quest_gossip.py`. Apply via runtime migrator or bundled `firelands_world.sql` after `merge-migrations`.
 
 ---
 

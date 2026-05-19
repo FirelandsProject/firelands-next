@@ -106,6 +106,7 @@ docker-compose up -d db
 - Regenerate bundles when split migrations exist: `python3 tools/merge_migrations.py` or `cmake --build build --target merge-migrations`. Optional scratch: `sql/merged/`.
 - Ref world text: `python3 tools/sql/import_ref_npc_text.py` → `sql/migrations/34_world_npc_text_data.sql`.
 - Ref gossip menus: `python3 tools/sql/import_ref_gossip.py` → `sql/migrations/35_world_gossip_data.sql`.
+- Ref quest gossip (starters): `python3 tools/sql/import_ref_quest_gossip.py` → `sql/migrations/38_world_quest_gossip_data.sql`.
 
 ## Testing
 
