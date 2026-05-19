@@ -6,12 +6,10 @@ Reads reference mysqldump INSERTs and emits a JDBC-safe world migration:
   USE `firelands_world`;
   DELETE FROM `creature_queststarter`;
   DELETE FROM `quest_template`;
-  batched REPLACE INTO `quest_template` (ID, QuestLevel, LogTitle, Flags) for quests
-    referenced by starters;
+  batched REPLACE INTO `quest_template`
+    (ID, QuestLevel, LogTitle, Flags, AllowableClasses, AllowableRaces) for quests
+    referenced by starters (`Allowable*` from `quest_template_addon`);
   batched REPLACE INTO `creature_queststarter` (id, quest)
-
-Column mapping for `quest_template` is resolved from the reference CREATE TABLE
-(ID, QuestLevel, LogTitle, Flags).
 
 Usage:
   python3 tools/sql/import_ref_quest_gossip.py
@@ -38,7 +36,9 @@ from import_ref_creature_data import (  # noqa: E402
     write_batched,
 )
 
-QUEST_TEMPLATE_COLUMNS = "`ID`, `QuestLevel`, `LogTitle`, `Flags`"
+QUEST_TEMPLATE_COLUMNS = (
+    "`ID`, `QuestLevel`, `LogTitle`, `Flags`, `AllowableClasses`, `AllowableRaces`"
+)
 CREATURE_QUESTSTARTER_COLUMNS = "`id`, `quest`"
 
 
@@ -84,10 +84,38 @@ def map_creature_queststarter_row(fields: list[str]) -> str:
     return f"({fields[0].strip()},{fields[1].strip()})"
 
 
+def load_quest_addon_masks(ref_dir: Path) -> dict[int, tuple[int, int]]:
+    """Quest id -> (AllowableClasses, AllowableRaces) from `quest_template_addon`."""
+    addon_sql = ref_dir / "quest_template_addon.sql"
+    if not addon_sql.is_file():
+        raise SystemExit(f"Missing {addon_sql}")
+
+    cols = extract_create_table_columns(addon_sql, "quest_template_addon")
+    col_index = {name: i for i, name in enumerate(cols)}
+    for required in ("ID", "AllowableClasses", "AllowableRaces"):
+        if required not in col_index:
+            raise SystemExit(
+                f"quest_template_addon missing column {required!r}; found: {cols[:12]}..."
+            )
+
+    masks: dict[int, tuple[int, int]] = {}
+    for row in extract_insert_rows(addon_sql, "quest_template_addon"):
+        quest_id = int(row[col_index["ID"]].strip())
+        classes = row[col_index["AllowableClasses"]].strip()
+        races = row[col_index["AllowableRaces"]].strip()
+        if classes.upper() == "NULL":
+            classes = "0"
+        if races.upper() == "NULL":
+            races = "0"
+        masks[quest_id] = (int(classes), int(races))
+    return masks
+
+
 def map_quest_template_row(
     fields: list[str],
     col_index: dict[str, int],
     wanted_ids: set[int],
+    addon_masks: dict[int, tuple[int, int]],
 ) -> str | None:
     idx_id = col_index["ID"]
     quest_id = int(fields[idx_id].strip())
@@ -109,7 +137,12 @@ def map_quest_template_row(
     if flags_sql.upper() == "NULL":
         flags_sql = "0"
 
-    return f"({quest_id},{level_sql},{title_sql},{flags_sql})"
+    allowable_classes, allowable_races = addon_masks.get(quest_id, (0, 0))
+
+    return (
+        f"({quest_id},{level_sql},{title_sql},{flags_sql},"
+        f"{allowable_classes},{allowable_races})"
+    )
 
 
 def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
@@ -119,6 +152,9 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
     for path in (starter_sql, quest_sql):
         if not path.is_file():
             raise SystemExit(f"Missing {path}")
+
+    print("Parsing quest_template_addon masks...")
+    addon_masks = load_quest_addon_masks(ref_dir)
 
     print("Parsing creature_queststarter...")
     starter_rows_raw = extract_insert_rows(starter_sql, "creature_queststarter")
@@ -141,7 +177,7 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
     quest_rows_raw = extract_insert_rows(quest_sql, "quest_template")
     quest_rows: list[str] = []
     for row in quest_rows_raw:
-        mapped = map_quest_template_row(row, col_index, wanted_ids)
+        mapped = map_quest_template_row(row, col_index, wanted_ids, addon_masks)
         if mapped:
             quest_rows.append(mapped)
 
@@ -175,11 +211,28 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
             500,
         )
 
+    mask_out = out_path.parent / "40_world_quest_gossip_allowable_masks.sql"
+    mask_updates = []
+    for qid in sorted(wanted_ids):
+        ac, ar = addon_masks.get(qid, (0, 0))
+        mask_updates.append(
+            f"UPDATE `quest_template` SET `AllowableClasses`={ac}, "
+            f"`AllowableRaces`={ar} WHERE `ID`={qid};"
+        )
+    mask_header = (
+        "-- Backfill AllowableClasses / AllowableRaces (when 38 predates mask columns).\n"
+        "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py\n"
+        "\nUSE `firelands_world`;\n\n"
+    )
+    mask_out.write_text(mask_header + "\n".join(mask_updates) + "\n", encoding="utf-8")
+
     mib = out_path.stat().st_size / (1024 * 1024)
+    mask_kib = mask_out.stat().st_size / 1024
     print(
         f"Wrote {out_path.name}: quests={len(quest_rows)} starters={len(starter_rows)} "
         f"({mib:.2f} MiB)"
     )
+    print(f"Wrote {mask_out.name}: {len(mask_updates)} UPDATEs ({mask_kib:.1f} KiB)")
 
 
 def main() -> None:

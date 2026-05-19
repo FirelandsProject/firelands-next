@@ -153,6 +153,8 @@ CREATE TABLE IF NOT EXISTS `quest_template` (
   `QuestLevel` smallint NOT NULL DEFAULT '1',
   `LogTitle` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `Flags` int unsigned NOT NULL DEFAULT '0',
+  `AllowableClasses` int unsigned NOT NULL DEFAULT '0',
+  `AllowableRaces` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
