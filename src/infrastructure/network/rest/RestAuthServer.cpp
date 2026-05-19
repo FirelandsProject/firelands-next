@@ -1,4 +1,5 @@
 #include <boost/beast/version.hpp>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/rest/RestAuthServer.h>
 #include <nlohmann/json.hpp>
 #include <shared/Logger.h>
@@ -13,7 +14,7 @@ RestAuthServer::RestAuthServer(
     const std::string &address, uint16_t port)
     : _authService(std::move(authService)),
       _webSessionService(std::move(webSessionService)), _address(address),
-      _port(port), _running(false) {}
+      _port(port) {}
 
 RestAuthServer::~RestAuthServer() { Stop(); }
 
@@ -25,7 +26,9 @@ bool RestAuthServer::Start() {
         std::make_unique<tcp::acceptor>(_ioc, tcp::endpoint{address, _port});
     _running = true;
 
-    DoAccept();
+    Asio::SpawnDetached(_ioc.get_executor(), [this]() -> Asio::awaitable<void> {
+      co_await AcceptLoop();
+    });
 
     _workerThread = std::thread([this]() {
       LOG_DEBUG("REST Auth Server running on {}:{}", _address, _port);
@@ -44,46 +47,56 @@ void RestAuthServer::Stop() {
     return;
 
   _running = false;
+  boost::system::error_code ec;
+  if (_acceptor) {
+    _acceptor->close(ec);
+  }
   _ioc.stop();
   if (_workerThread.joinable()) {
     _workerThread.join();
   }
 }
 
-void RestAuthServer::DoAccept() {
-  _acceptor->async_accept([this](beast::error_code ec, tcp::socket socket) {
-    if (!ec) {
-      // Handle the connection
-      // For simplicity, we'll handle it synchronously in a session for now
-      // or use a separate per-connection session class.
-      // Given the requirement, I'll implement a simple session.
+Asio::awaitable<void> RestAuthServer::AcceptLoop() {
+  while (_running) {
+    try {
+      tcp::socket socket = co_await _acceptor->async_accept(Asio::use_awaitable);
+      if (!_running)
+        break;
 
-      auto session = std::make_shared<std::thread>(
-          [this, socket = std::move(socket)]() mutable {
-            try {
-              beast::flat_buffer buffer;
-              http::request<http::string_body> req;
-              http::read(socket, buffer, req);
-
-              HandleRequest(std::move(req), socket);
-
-              beast::error_code ec;
-              socket.shutdown(tcp::socket::shutdown_send, ec);
-            } catch (const std::exception &e) {
-              LOG_ERROR("REST Request Error: {}", e.what());
-            }
+      Asio::SpawnDetached(
+          socket.get_executor(),
+          [this, socket = std::move(socket)]() mutable -> Asio::awaitable<void> {
+            co_await ServeClient(std::move(socket));
           });
-      session->detach();
+    } catch (const boost::system::system_error &e) {
+      if (e.code() == boost::asio::error::operation_aborted || !_running) {
+        co_return;
+      }
+      LOG_WARN("REST accept error: {}", e.what());
     }
-
-    if (_running) {
-      DoAccept();
-    }
-  });
+  }
 }
 
-void RestAuthServer::HandleRequest(http::request<http::string_body> &&req,
-                                   tcp::socket &socket) {
+Asio::awaitable<void> RestAuthServer::ServeClient(tcp::socket socket) {
+  try {
+    beast::flat_buffer buffer;
+    http::request<http::string_body> req;
+    co_await http::async_read(socket, buffer, req, Asio::use_awaitable);
+
+    http::response<http::string_body> res = BuildResponse(req);
+    res.prepare_payload();
+    co_await http::async_write(socket, res, Asio::use_awaitable);
+
+    beast::error_code ec;
+    socket.shutdown(tcp::socket::shutdown_send, ec);
+  } catch (const std::exception &e) {
+    LOG_ERROR("REST Request Error: {}", e.what());
+  }
+}
+
+http::response<http::string_body>
+RestAuthServer::BuildResponse(http::request<http::string_body> const &req) const {
   http::response<http::string_body> res;
   res.version(req.version());
   res.keep_alive(false);
@@ -119,7 +132,7 @@ void RestAuthServer::HandleRequest(http::request<http::string_body> &&req,
           LOG_WARN("REST failed login attempt for user: {}", username);
         }
       }
-    } catch (const std::exception &e) {
+    } catch (const std::exception & /*e*/) {
       res.result(http::status::bad_request);
       res.body() = json({{"error", "Invalid JSON"}}).dump();
     }
@@ -131,7 +144,7 @@ void RestAuthServer::HandleRequest(http::request<http::string_body> &&req,
       res.body() = json({{"error", "Missing Authorization header"}}).dump();
     } else {
       std::string authVal(it->value());
-      std::string token = "";
+      std::string token;
       if (authVal.substr(0, 7) == "Bearer ") {
         token = authVal.substr(7);
       } else {
@@ -155,8 +168,7 @@ void RestAuthServer::HandleRequest(http::request<http::string_body> &&req,
     res.body() = json({{"error", "Not Found"}}).dump();
   }
 
-  res.prepare_payload();
-  http::write(socket, res);
+  return res;
 }
 
 } // namespace Firelands

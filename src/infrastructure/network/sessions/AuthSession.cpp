@@ -1,5 +1,7 @@
 #include <application/services/SRPService.h>
+#include <boost/asio/redirect_error.hpp>
 #include <cstring>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/sessions/AuthSession.h>
 #include <shared/Config.h>
 #include <shared/game/AccessLevel.h>
@@ -13,9 +15,19 @@ AuthSession::AuthSession(tcp::socket socket,
                          std::shared_ptr<AuthService> authService,
                          std::shared_ptr<RealmListService> realmService)
     : _socket(std::move(socket)), _authService(std::move(authService)),
-      _realmService(std::move(realmService)) {}
+      _realmService(std::move(realmService)),
+      _writeWakeTimer(_socket.get_executor()) {}
 
-void AuthSession::Start() { DoRead(); }
+void AuthSession::Start() {
+  auto self = shared_from_this();
+  auto const executor = _socket.get_executor();
+  Asio::SpawnDetached(executor, [self, this]() -> Asio::awaitable<void> {
+    co_await ReadLoop();
+  });
+  Asio::SpawnDetached(executor, [self, this]() -> Asio::awaitable<void> {
+    co_await WriteLoop();
+  });
+}
 
 void AuthSession::SendPacket(AuthPacket &packet) {
   // Auth packets are simple: opcode + payload
@@ -25,17 +37,25 @@ void AuthSession::SendPacket(AuthPacket &packet) {
 }
 
 void AuthSession::SendPacket(ByteBuffer &buffer) {
-  auto self(shared_from_this());
-  boost::asio::async_write(
-      _socket, boost::asio::buffer(buffer.GetBuffer(), buffer.Size()),
-      [this, self](boost::system::error_code ec, std::size_t /*length*/) {
-        if (ec) {
-          Close();
-        }
-      });
+  auto shared_buffer = std::make_shared<std::vector<uint8>>(
+      buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
+  QueueOutgoing(std::move(shared_buffer));
 }
 
-void AuthSession::Close() { _socket.close(); }
+void AuthSession::QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer) {
+  {
+    std::lock_guard<std::mutex> lock(_writeMutex);
+    _writeQueue.push_back(std::move(buffer));
+  }
+  _writeWakeTimer.cancel();
+}
+
+void AuthSession::Close() {
+  _writeWakeTimer.cancel();
+  if (_socket.is_open()) {
+    _socket.close();
+  }
+}
 
 std::string AuthSession::GetIpAddress() const {
   try {
@@ -45,20 +65,60 @@ std::string AuthSession::GetIpAddress() const {
   }
 }
 
-void AuthSession::DoRead() {
-  auto self(shared_from_this());
-  _socket.async_read_some(
-      boost::asio::buffer(_readBuffer, 1024),
-      [this, self](boost::system::error_code ec, std::size_t length) {
-        if (!ec) {
-          ByteBuffer buffer;
-          buffer.Append(_readBuffer, length);
-          HandlePacket(buffer);
-          DoRead();
-        } else if (ec != boost::asio::error::operation_aborted) {
-          Close();
+Asio::awaitable<void> AuthSession::ReadLoop() {
+  const std::span<uint8_t> readSpan(_readBuffer, sizeof(_readBuffer));
+
+  try {
+    while (_socket.is_open()) {
+      std::size_t const length = co_await Asio::AsyncReadSome(_socket, readSpan);
+      if (length == 0)
+        continue;
+
+      ByteBuffer buffer;
+      buffer.Append(std::span<const uint8>(_readBuffer, length));
+      HandlePacket(buffer);
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted &&
+        e.code() != boost::asio::error::eof) {
+      LOG_DEBUG("AuthSession read ended: {}", e.what());
+    }
+    Close();
+  }
+}
+
+Asio::awaitable<void> AuthSession::WriteLoop() {
+  try {
+    for (;;) {
+      std::shared_ptr<std::vector<uint8>> buffer;
+
+      {
+        std::unique_lock<std::mutex> lock(_writeMutex);
+        while (_writeQueue.empty()) {
+          if (!_socket.is_open())
+            co_return;
+
+          lock.unlock();
+          boost::system::error_code ec;
+          _writeWakeTimer.expires_at(boost::asio::steady_timer::time_point::max());
+          co_await _writeWakeTimer.async_wait(
+              boost::asio::redirect_error(Asio::use_awaitable, ec));
+          lock.lock();
         }
-      });
+
+        buffer = std::move(_writeQueue.front());
+        _writeQueue.pop_front();
+      }
+
+      co_await Asio::AsyncWrite(
+          _socket, std::span<const uint8>(buffer->data(), buffer->size()));
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted) {
+      LOG_DEBUG("AuthSession write ended: {}", e.what());
+    }
+    Close();
+  }
 }
 
 void AuthSession::HandlePacket(ByteBuffer &buffer) {
@@ -272,10 +332,6 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
   AuthPacket res(AUTH_REALM_LIST);
   response.Write(res);
   SendPacket(res);
-}
-
-void AuthSession::DoWrite() {
-  // Not used currently as we use async_write directly
 }
 
 } // namespace Firelands

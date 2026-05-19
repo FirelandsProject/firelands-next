@@ -6,7 +6,10 @@
 #include <application/services/RealmListService.h>
 #include <application/services/SRPService.h>
 #include <boost/asio.hpp>
+#include <boost/asio/awaitable.hpp>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <shared/game/AccessLevel.h>
 #include <shared/network/AuthPacket.h>
 #include <shared/network/AuthPackets.h>
@@ -30,20 +33,25 @@ public:
   std::string GetIpAddress() const override;
 
 private:
-  void DoRead();
+  boost::asio::awaitable<void> ReadLoop();
+  boost::asio::awaitable<void> WriteLoop();
+  void QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer);
   void HandlePacket(ByteBuffer &buffer);
   void ProcessPacket(AuthPacket &packet);
 
   void HandleLogonChallenge(AuthPacket &packet);
   void HandleLogonProof(AuthPacket &packet);
   void HandleRealmList(AuthPacket &packet);
-  void DoWrite();
 
   tcp::socket _socket;
   std::shared_ptr<AuthService> _authService;
   std::shared_ptr<RealmListService> _realmService;
 
   uint8 _readBuffer[1024];
+
+  std::deque<std::shared_ptr<std::vector<uint8>>> _writeQueue;
+  std::mutex _writeMutex;
+  boost::asio::steady_timer _writeWakeTimer;
 
   // SRP Session State
   std::string _username;

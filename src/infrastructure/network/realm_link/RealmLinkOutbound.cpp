@@ -1,12 +1,15 @@
 #include <infrastructure/network/realm_link/RealmLinkOutbound.h>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <shared/Config.h>
 #include <shared/Logger.h>
 #include <shared/network/RealmLinkProtocol.h>
 
 #include <algorithm>
 #include <boost/asio.hpp>
+#include <boost/asio/redirect_error.hpp>
 #include <chrono>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -34,8 +37,6 @@ void appendU16Le(std::vector<uint8> &out, uint16_t v) {
   out.push_back(static_cast<uint8>((v >> 8) & 0xFF));
 }
 
-/// Lets the realm-link thread observe `stop` between blocking I/O calls instead
-/// of wedging `main` on `join()` (e.g. auth never sends the handshake byte).
 void applyTcpIoTimeouts(boost::asio::ip::tcp::socket &socket) {
 #if defined(_WIN32)
   DWORD const ms = 5000;
@@ -47,7 +48,7 @@ void applyTcpIoTimeouts(boost::asio::ip::tcp::socket &socket) {
                        reinterpret_cast<char const *>(&ms), sizeof(ms));
   }
 #else
-  timeval tv {};
+  timeval tv{};
   tv.tv_sec = 5;
   tv.tv_usec = 0;
   int const fd = socket.native_handle();
@@ -58,11 +59,49 @@ void applyTcpIoTimeouts(boost::asio::ip::tcp::socket &socket) {
 #endif
 }
 
+using boost::asio::ip::tcp;
+
+Asio::awaitable<void> OutboundLinkSession(tcp::socket &socket,
+                                          std::atomic<bool> const &stop,
+                                          std::vector<uint8> const &handshake,
+                                          std::string const &host, uint16_t port,
+                                          uint32_t realmId) {
+  co_await Asio::AsyncWrite(
+      socket, std::span<const uint8>(handshake.data(), handshake.size()));
+
+  uint8_t ack = kRealmLinkAckReject;
+  co_await boost::asio::async_read(
+      socket, boost::asio::buffer(&ack, 1), Asio::use_awaitable);
+
+  if (ack != kRealmLinkAckOk) {
+    throw std::runtime_error(
+        "auth rejected handshake (ack=" + std::to_string(static_cast<int>(ack)) +
+        ")");
+  }
+
+  LOG_INFO("RealmLink: connected to auth {}:{} (realm {})", host, port, realmId);
+
+  boost::asio::steady_timer tick(socket.get_executor());
+
+  while (!stop) {
+    for (int i = 0; i < 40 && !stop; ++i) {
+      tick.expires_after(std::chrono::milliseconds(250));
+      boost::system::error_code ec;
+      co_await tick.async_wait(boost::asio::redirect_error(Asio::use_awaitable, ec));
+      if (ec == boost::asio::error::operation_aborted)
+        co_return;
+    }
+    if (stop)
+      co_return;
+
+    uint8_t ping = kRealmLinkPing;
+    co_await Asio::AsyncWrite(socket, std::span<const uint8>(&ping, 1));
+  }
+}
+
 } // namespace
 
 void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
-  using boost::asio::ip::tcp;
-
   std::string const host =
       config.GetNestedScalarString({"RealmLink", "AuthHost"}, "127.0.0.1");
   uint16_t const port = static_cast<uint16_t>(
@@ -94,34 +133,18 @@ void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
           std::min(token.size(), static_cast<size_t>(kRealmLinkMaxTokenLen)));
       appendU16Le(handshake, tokenLen);
       handshake.insert(handshake.end(), token.begin(),
-                         token.begin() + tokenLen);
+                       token.begin() + tokenLen);
       appendU32Le(handshake, realmId);
 
-      boost::asio::write(socket, boost::asio::buffer(handshake));
+      boost::asio::co_spawn(
+          io,
+          [&]() -> Asio::awaitable<void> {
+            co_await OutboundLinkSession(socket, stop, handshake, host, port,
+                                       realmId);
+          },
+          Asio::detached);
 
-      uint8_t ack = kRealmLinkAckReject;
-      boost::asio::read(socket, boost::asio::buffer(&ack, 1));
-      if (ack != kRealmLinkAckOk) {
-        LOG_WARN("RealmLink: auth rejected handshake (ack={}); retrying…",
-                 static_cast<int>(ack));
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        continue;
-      }
-
-      LOG_INFO("RealmLink: connected to auth {}:{} (realm {})", host, port,
-               realmId);
-
-      while (!stop) {
-        // Wake at least every 250ms so shutdown does not wait on a 10s sleep.
-        for (int i = 0; i < 40 && !stop; ++i) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        }
-        if (stop) {
-          break;
-        }
-        uint8_t ping = kRealmLinkPing;
-        boost::asio::write(socket, boost::asio::buffer(&ping, 1));
-      }
+      io.run();
     } catch (const std::exception &e) {
       if (stop)
         break;

@@ -1,4 +1,5 @@
 #include <cstring>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/realm_link/RealmLinkSession.h>
 #include <shared/Logger.h>
 #include <shared/network/RealmLinkProtocol.h>
@@ -24,7 +25,13 @@ RealmLinkSession::RealmLinkSession(tcp::socket socket,
     : _socket(std::move(socket)), _registry(std::move(registry)),
       _expectedToken(std::move(expectedToken)) {}
 
-void RealmLinkSession::Start() { DoRead(); }
+void RealmLinkSession::Start() {
+  auto self = shared_from_this();
+  Asio::SpawnDetached(_socket.get_executor(),
+                      [self, this]() -> Asio::awaitable<void> {
+                        co_await ReadLoop();
+                      });
+}
 
 uint32_t RealmLinkSession::readU32Le(std::vector<uint8> const &b, size_t pos) {
   uint32_t v = 0;
@@ -40,72 +47,54 @@ uint16_t RealmLinkSession::readU16Le(std::vector<uint8> const &b, size_t pos) {
   return v;
 }
 
-bool RealmLinkSession::tryConsumeHandshake() {
+RealmLinkSession::HandshakeConsume RealmLinkSession::tryConsumeHandshake() {
   if (_handshakeDone)
-    return true;
+    return HandshakeConsume::Accepted;
 
   if (_rx.size() < 6)
-    return false;
+    return HandshakeConsume::NeedMore;
 
   uint32_t const magic = readU32Le(_rx, 0);
   uint16_t const tokenLen = readU16Le(_rx, 4);
-  if (tokenLen > kRealmLinkMaxTokenLen) {
-    FailHandshake(kRealmLinkAckReject);
-    return true;
-  }
+  if (tokenLen > kRealmLinkMaxTokenLen)
+    return HandshakeConsume::Rejected;
 
   size_t const need = 6u + static_cast<size_t>(tokenLen) + 4u;
   if (_rx.size() < need)
-    return false;
+    return HandshakeConsume::NeedMore;
 
-  if (magic != kRealmLinkMagic) {
-    FailHandshake(kRealmLinkAckReject);
-    return true;
-  }
+  if (magic != kRealmLinkMagic)
+    return HandshakeConsume::Rejected;
 
   std::string token(reinterpret_cast<char const *>(_rx.data() + 6),
-                      static_cast<size_t>(tokenLen));
+                    static_cast<size_t>(tokenLen));
   uint32_t const realmId = readU32Le(_rx, 6 + tokenLen);
 
   if (!ConstantTimeTokenEquals(token, _expectedToken)) {
     LOG_WARN("Realm-link: bad token for realm id {}", realmId);
-    FailHandshake(kRealmLinkAckReject);
-    return true;
+    return HandshakeConsume::Rejected;
   }
 
-  if (!_registry) {
-    FailHandshake(kRealmLinkAckReject);
-    return true;
-  }
+  if (!_registry)
+    return HandshakeConsume::Rejected;
 
   if (_registry->tryClaim(realmId) != RealmLiveRegistry::ClaimResult::Ok) {
     LOG_WARN("Realm-link: realm {} already has an active world connection",
              realmId);
-    FailHandshake(kRealmLinkAckReject);
-    return true;
+    return HandshakeConsume::Rejected;
   }
 
   _registered = true;
   _realmId = realmId;
-  SendAck(kRealmLinkAckOk);
   _handshakeDone = true;
   _rx.erase(_rx.begin(), _rx.begin() + static_cast<std::ptrdiff_t>(need));
   LOG_DEBUG("Realm-link: world registered for realm {}", realmId);
-  return true;
+  return HandshakeConsume::Accepted;
 }
 
-void RealmLinkSession::SendAck(uint8_t value) {
-  auto self = shared_from_this();
-  auto buf = std::make_shared<std::vector<uint8>>();
-  buf->push_back(value);
-  boost::asio::async_write(
-      _socket, boost::asio::buffer(buf->data(), buf->size()),
-      [self, buf](boost::system::error_code /*ec*/, std::size_t /*n*/) {});
-}
-
-void RealmLinkSession::FailHandshake(uint8_t ack) {
-  SendAck(ack);
-  _socket.close();
+Asio::awaitable<void> RealmLinkSession::SendAck(uint8_t value) {
+  uint8_t byte = value;
+  co_await Asio::AsyncWrite(_socket, std::span<const uint8>(&byte, 1));
 }
 
 void RealmLinkSession::OnDisconnect() {
@@ -116,29 +105,42 @@ void RealmLinkSession::OnDisconnect() {
   }
 }
 
-void RealmLinkSession::DoRead() {
-  auto self = shared_from_this();
-  _socket.async_read_some(
-      boost::asio::buffer(_readBuf, sizeof(_readBuf)),
-      [this, self](boost::system::error_code ec, std::size_t n) {
-        if (ec) {
+Asio::awaitable<void> RealmLinkSession::ReadLoop() {
+  const std::span<uint8_t> readSpan(_readBuf, sizeof(_readBuf));
+
+  try {
+    while (_socket.is_open()) {
+      std::size_t const n = co_await Asio::AsyncReadSome(_socket, readSpan);
+      if (n == 0)
+        continue;
+
+      _rx.insert(_rx.end(), _readBuf, _readBuf + n);
+
+      if (!_handshakeDone) {
+        switch (tryConsumeHandshake()) {
+        case HandshakeConsume::NeedMore:
+          continue;
+        case HandshakeConsume::Rejected:
+          co_await SendAck(kRealmLinkAckReject);
+          _socket.close();
           OnDisconnect();
-          return;
+          co_return;
+        case HandshakeConsume::Accepted:
+          co_await SendAck(kRealmLinkAckOk);
+          break;
         }
-        _rx.insert(_rx.end(), _readBuf, _readBuf + n);
-        if (!_handshakeDone) {
-          if (!tryConsumeHandshake()) {
-            DoRead();
-            return;
-          }
-          if (!_handshakeDone) // failed and closed
-            return;
-        } else {
-          // Discard pings / extra bytes; connection liveness is the signal.
-          _rx.clear();
-        }
-        DoRead();
-      });
+      } else {
+        // Discard pings / extra bytes; connection liveness is the signal.
+        _rx.clear();
+      }
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted &&
+        e.code() != boost::asio::error::eof) {
+      LOG_DEBUG("Realm-link read ended: {}", e.what());
+    }
+    OnDisconnect();
+  }
 }
 
 } // namespace Firelands

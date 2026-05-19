@@ -1,7 +1,9 @@
 #include <application/services/WorldService.h>
 #include <domain/world/Player.h>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
+#include <boost/asio/redirect_error.hpp>
 #include <shared/Config.h>
 #include <shared/Logger.h>
 #include <shared/game/MirrorTimerTypes.h>
@@ -23,7 +25,6 @@ uint32_t ClampedTimeSyncPeriodMs() {
       {"Network", "TimeSyncPeriodMs"}, 300000u);
   if (v < 2000u)
     return 2000u;
-  // Upper bound allows multi-minute intervals (e.g. low-traffic dev / idle tests).
   if (v > 3600000u)
     return 3600000u;
   return v;
@@ -32,24 +33,44 @@ uint32_t ClampedTimeSyncPeriodMs() {
 } // namespace
 
 void WorldSession::CancelPeriodicTimeSync() {
+  _periodicTimeSyncRunning = false;
   _timeSyncPeriodicTimer.cancel();
 }
 
 void WorldSession::SchedulePeriodicTimeSync() {
-  auto self(shared_from_this());
-  _timeSyncPeriodicTimer.expires_after(
-      std::chrono::milliseconds(ClampedTimeSyncPeriodMs()));
-  _timeSyncPeriodicTimer.async_wait(
-      [this, self](boost::system::error_code ec) {
-        if (ec == boost::asio::error::operation_aborted)
-          return;
-        if (_playerGuid == 0)
-          return;
-        WorldPacket next(SMSG_TIME_SYNC_REQ);
-        next.Append<uint32>(_timeSyncNextCounter++);
-        SendPacket(next);
-        SchedulePeriodicTimeSync();
-      });
+  if (_periodicTimeSyncRunning.exchange(true))
+    return;
+
+  auto self = shared_from_this();
+  Asio::SpawnDetached(_socket.get_executor(),
+                      [self, this]() -> Asio::awaitable<void> {
+                        co_await TimeSyncLoop();
+                      });
+}
+
+Asio::awaitable<void> WorldSession::TimeSyncLoop() {
+  try {
+    while (_socket.is_open() && _periodicTimeSyncRunning) {
+      _timeSyncPeriodicTimer.expires_after(
+          std::chrono::milliseconds(ClampedTimeSyncPeriodMs()));
+      boost::system::error_code ec;
+      co_await _timeSyncPeriodicTimer.async_wait(
+          boost::asio::redirect_error(Asio::use_awaitable, ec));
+      if (ec == boost::asio::error::operation_aborted || !_periodicTimeSyncRunning)
+        co_return;
+      if (_playerGuid == 0)
+        co_return;
+
+      WorldPacket next(SMSG_TIME_SYNC_REQ);
+      next.Append<uint32>(_timeSyncNextCounter++);
+      SendPacket(next);
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted) {
+      LOG_DEBUG("TimeSyncLoop ended: {}", e.what());
+    }
+  }
+  _periodicTimeSyncRunning = false;
 }
 
 void WorldSession::SendStartMirrorTimerPacket(int32_t timerType, int32_t value,

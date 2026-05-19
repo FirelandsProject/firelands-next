@@ -3,6 +3,8 @@
 
 #include <application/ports/INetworkServer.h>
 #include <boost/asio.hpp>
+#include <boost/asio/awaitable.hpp>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -23,11 +25,12 @@ public:
   void Update() override;
 
 private:
-  void DoAccept();
+  boost::asio::awaitable<void> AcceptLoop();
 
   boost::asio::io_context _ioContext;
   std::unique_ptr<tcp::acceptor> _acceptor;
   SessionFactory _sessionFactory;
+  std::atomic<bool> _running{false};
 };
 
 } // namespace Firelands

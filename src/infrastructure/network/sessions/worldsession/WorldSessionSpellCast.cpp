@@ -1,5 +1,7 @@
 #include <application/ports/IMapCollisionQueries.h>
 #include <application/services/WorldService.h>
+#include <boost/asio/redirect_error.hpp>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <application/spell/SpellManager.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Player.h>
@@ -45,12 +47,14 @@ void WorldSession::ScheduleDeferredSpellCastCompletion(SpellCastOutcome const &o
   _pendingSpellCastTimer.expires_after(std::chrono::milliseconds(
       static_cast<int64_t>(std::max<uint32_t>(1u, out.deferredCastTimeMs))));
   auto self = shared_from_this();
-  _pendingSpellCastTimer.async_wait(
-      [self, finish](boost::system::error_code err) {
-        if (err)
-          return;
-        self->CompleteDeferredSpellCast(finish);
-      });
+  Asio::SpawnDetached(_socket.get_executor(),
+                      [self, this, finish]() -> Asio::awaitable<void> {
+                        boost::system::error_code ec;
+                        co_await _pendingSpellCastTimer.async_wait(
+                            boost::asio::redirect_error(Asio::use_awaitable, ec));
+                        if (!ec)
+                          CompleteDeferredSpellCast(finish);
+                      });
 }
 
 void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finish) {

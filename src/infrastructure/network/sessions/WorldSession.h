@@ -10,8 +10,11 @@
 #include <application/spell/SpellManager.h>
 #include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <boost/asio.hpp>
+#include <boost/asio/awaitable.hpp>
+#include <atomic>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <shared/network/BitReader.h>
 #include <shared/network/BitWriter.h>
 #include <shared/network/ByteBuffer.h>
@@ -20,6 +23,7 @@
 #include <shared/network/WorldCrypt.h>
 #include <shared/network/AccountDataTypes.h>
 #include <shared/dbc/ItemDbHotfixStore.h>
+#include <shared/dbc/EmotesTextDbc.h>
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PlayerGmAppearance.h>
@@ -81,7 +85,8 @@ public:
           nullptr,
        std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc = nullptr,
        std::shared_ptr<IGossipRepository> gossipRepo = nullptr,
-       std::shared_ptr<INpcTextRepository> npcTextRepo = nullptr);
+       std::shared_ptr<INpcTextRepository> npcTextRepo = nullptr,
+       std::shared_ptr<EmotesTextDbc const> emotesTextDbc = nullptr);
 
   ~WorldSession();
 
@@ -155,8 +160,9 @@ public:
   void PublishGmVisualPatchIfInWorld();
   void PublishGmMovementPacketsIfInWorld();
   // Core Network Logic
-  void DoRead();
-  void DoWrite();
+  boost::asio::awaitable<void> ReadLoop();
+  boost::asio::awaitable<void> WriteLoop();
+  void ProcessInboundBuffer();
   void QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer);
   void HandlePacket(ByteBuffer &buffer);
   void ProcessPacket(WorldPacket &packet);
@@ -189,6 +195,8 @@ public:
   void HandleMoveTimeSkipped(WorldPacket &packet);
   void HandleMessageChat(WorldPacket &packet);
   void HandleAddonMessageChat(WorldPacket &packet);
+  void HandleEmoteOpcode(WorldPacket &packet);
+  void HandleTextEmoteOpcode(WorldPacket &packet);
   void HandleRealmSplit(WorldPacket &packet);
   void HandleReadyForAccountDataTimes(WorldPacket &packet);
   void HandleUpdateAccountData(WorldPacket &packet);
@@ -298,6 +306,7 @@ public:
   /// every CMSG_TIME_SYNC_RESP (that floods the client and breaks map loading).
   void SchedulePeriodicTimeSync();
   void CancelPeriodicTimeSync();
+  boost::asio::awaitable<void> TimeSyncLoop();
   void ResetBreathMirrorState();
   void UpdateBreathFromSwimmingState(bool swimming);
   void SendStartMirrorTimerPacket(int32_t timerType, int32_t value, int32_t maxValue,
@@ -366,6 +375,16 @@ public:
   std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
   std::shared_ptr<IGossipRepository> _gossipRepo;
   std::shared_ptr<INpcTextRepository> _npcTextRepo;
+  std::shared_ptr<EmotesTextDbc const> _emotesTextDbc;
+
+  bool IsActivePlayerAlive() const;
+  void ApplyUnitNpcEmoteState(uint32_t emoteAnim);
+  void BroadcastEmoteAnimation(uint32_t emoteAnim);
+  void BroadcastTextEmote(uint32_t textEmote, uint32_t emoteNum,
+                          uint64_t targetGuid);
+  void TryClearEmotesOnMovement(WorldOpcode opcode, bool positionChanged = false);
+  std::string ResolveTextEmoteTargetName(uint64_t targetGuid) const;
+  uint32_t _unitNpcEmoteState = 0;
 
   /// Filled when the character is registered for console targeting; empty at
   /// character select / disconnected.
@@ -397,9 +416,10 @@ public:
   uint8 _decHeader[6]{};
   bool _headerDecrypted = false;
 
-  // Write queue: serializes async_write calls to prevent interleaving
+  // Write queue: drained by WriteLoop (single serialized co_await AsyncWrite chain)
   std::deque<std::shared_ptr<std::vector<uint8>>> _writeQueue;
-  bool _writing = false;
+  std::mutex _writeMutex;
+  boost::asio::steady_timer _writeWakeTimer;
 
   // Diagnostics: last SMSG sent (helps correlate client disconnect/crash)
   uint32 _lastSentOpcode = 0;
@@ -410,6 +430,7 @@ public:
 
   boost::asio::steady_timer _timeSyncPeriodicTimer;
   boost::asio::steady_timer _pendingSpellCastTimer;
+  std::atomic<bool> _periodicTimeSyncRunning{false};
 
   /// Filled while handling CMSG_AUTH_SESSION; consumed by SendAddonInfo (SMSG_ADDON_INFO).
   std::vector<AuthSecureAddonEntry> _authSecureAddons;

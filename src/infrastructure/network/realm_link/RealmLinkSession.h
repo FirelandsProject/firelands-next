@@ -2,6 +2,7 @@
 
 #include <infrastructure/network/realm_link/RealmLiveRegistry.h>
 #include <boost/asio.hpp>
+#include <boost/asio/awaitable.hpp>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -21,12 +22,13 @@ public:
   void Start();
 
 private:
-  void DoRead();
-  void SendAck(uint8_t value);
-  void FailHandshake(uint8_t ack);
+  enum class HandshakeConsume { NeedMore, Accepted, Rejected };
+
+  boost::asio::awaitable<void> ReadLoop();
+  boost::asio::awaitable<void> SendAck(uint8_t value);
+  HandshakeConsume tryConsumeHandshake();
   void OnDisconnect();
 
-  bool tryConsumeHandshake();
   static uint32_t readU32Le(std::vector<uint8> const &b, size_t pos);
   static uint16_t readU16Le(std::vector<uint8> const &b, size_t pos);
 

@@ -1,5 +1,5 @@
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/asio/AsyncNetworkServer.h>
-#include <infrastructure/network/sessions/AuthSession.h>
 #include <shared/Logger.h>
 
 namespace Firelands {
@@ -16,7 +16,11 @@ bool AsyncNetworkServer::Start(const std::string &address, uint16 port) {
 
     LOG_DEBUG("Network server acceptor bound on {}:{}", address, port);
 
-    DoAccept();
+    _running = true;
+    Asio::SpawnDetached(_ioContext.get_executor(),
+                        [this]() -> Asio::awaitable<void> {
+                          co_await AcceptLoop();
+                        });
     return true;
   } catch (std::exception &e) {
     LOG_ERROR("Failed to start network server: {}", e.what());
@@ -25,27 +29,36 @@ bool AsyncNetworkServer::Start(const std::string &address, uint16 port) {
 }
 
 void AsyncNetworkServer::Stop() {
-  _ioContext.stop();
+  _running = false;
   if (_acceptor) {
-    _acceptor->close();
+    boost::system::error_code ec;
+    _acceptor->close(ec);
   }
+  _ioContext.stop();
 }
 
 void AsyncNetworkServer::Update() { _ioContext.poll(); }
 
-void AsyncNetworkServer::DoAccept() {
-  _acceptor->async_accept(
-      [this](boost::system::error_code ec, tcp::socket socket) {
-        if (!ec) {
-          LOG_DEBUG("New TCP connection from {}",
-                    socket.remote_endpoint().address().to_string());
-          if (_sessionFactory) {
-            _sessionFactory(std::move(socket));
-          }
-        }
+Asio::awaitable<void> AsyncNetworkServer::AcceptLoop() {
+  while (_running) {
+    try {
+      tcp::socket socket = co_await _acceptor->async_accept(Asio::use_awaitable);
+      if (!_running)
+        break;
 
-        DoAccept();
-      });
+      LOG_DEBUG("New TCP connection from {}",
+                socket.remote_endpoint().address().to_string());
+      if (_sessionFactory) {
+        _sessionFactory(std::move(socket));
+      }
+    } catch (const boost::system::system_error &e) {
+      if (e.code() == boost::asio::error::operation_aborted ||
+          !_running) {
+        co_return;
+      }
+      LOG_WARN("Accept error: {}", e.what());
+    }
+  }
 }
 
 } // namespace Firelands

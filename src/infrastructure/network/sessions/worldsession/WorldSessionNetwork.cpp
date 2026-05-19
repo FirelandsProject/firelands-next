@@ -1,4 +1,6 @@
 #include <application/services/OnlineCharacterSessionRegistry.h>
+#include <boost/asio/redirect_error.hpp>
+#include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <shared/Logger.h>
 #include <shared/network/WorldOpcodes.h>
@@ -27,7 +29,15 @@ void WorldSession::Start() {
   buffer.Append((const uint8 *)initializer.c_str(), initializer.length());
 
   SendPacket(buffer);
-  DoRead();
+
+  auto self = shared_from_this();
+  auto const executor = _socket.get_executor();
+  Asio::SpawnDetached(executor, [self, this]() -> Asio::awaitable<void> {
+    co_await ReadLoop();
+  });
+  Asio::SpawnDetached(executor, [self, this]() -> Asio::awaitable<void> {
+    co_await WriteLoop();
+  });
 }
 
 void WorldSession::SendPacket(WorldPacket &packet) {
@@ -70,10 +80,11 @@ void WorldSession::SendPacket(ServerPacket *packet) {
 }
 
 void WorldSession::QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer) {
-  _writeQueue.push_back(std::move(buffer));
-  if (!_writing) {
-    DoWrite();
+  {
+    std::lock_guard<std::mutex> lock(_writeMutex);
+    _writeQueue.push_back(std::move(buffer));
   }
+  _writeWakeTimer.cancel();
 }
 
 void WorldSession::SendPacket(ByteBuffer &buffer) {
@@ -83,29 +94,38 @@ void WorldSession::SendPacket(ByteBuffer &buffer) {
   QueueOutgoing(shared_buffer);
 }
 
-void WorldSession::DoWrite() {
-  if (_writeQueue.empty()) {
-    _writing = false;
-    return;
-  }
+Asio::awaitable<void> WorldSession::WriteLoop() {
+  try {
+    for (;;) {
+      std::shared_ptr<std::vector<uint8>> buffer;
 
-  _writing = true;
-  auto self(shared_from_this());
-  auto buffer = _writeQueue.front();
-  _writeQueue.pop_front();
+      {
+        std::unique_lock<std::mutex> lock(_writeMutex);
+        while (_writeQueue.empty()) {
+          if (!_socket.is_open())
+            co_return;
 
-  boost::asio::async_write(
-      _socket, boost::asio::buffer(buffer->data(), buffer->size()),
-      [this, self, buffer](boost::system::error_code ec,
-                           std::size_t /*length*/) {
-        if (ec) {
-          LOG_ERROR("[SEND] Write error: {}", ec.message());
-          Close();
-          return;
+          lock.unlock();
+          boost::system::error_code ec;
+          _writeWakeTimer.expires_at(boost::asio::steady_timer::time_point::max());
+          co_await _writeWakeTimer.async_wait(
+              boost::asio::redirect_error(Asio::use_awaitable, ec));
+          lock.lock();
         }
-        // Process next queued packet
-        DoWrite();
-      });
+
+        buffer = std::move(_writeQueue.front());
+        _writeQueue.pop_front();
+      }
+
+      co_await Asio::AsyncWrite(
+          _socket, std::span<const uint8>(buffer->data(), buffer->size()));
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted) {
+      LOG_ERROR("[SEND] WriteLoop error: {}", e.what());
+    }
+    Close();
+  }
 }
 
 void WorldSession::SendAuthChallenge() {
@@ -156,6 +176,7 @@ void WorldSession::Close() {
     UnregisterFromOnlineCharacterRegistryIfNeeded();
   }
   CancelPeriodicTimeSync();
+  _writeWakeTimer.cancel();
   if (_socket.is_open()) {
     LOG_DEBUG("Closing socket for Account={} IP={}", _accountId, GetIpAddress());
     _socket.close();
@@ -170,100 +191,101 @@ std::string WorldSession::GetIpAddress() const {
   }
 }
 
-void WorldSession::DoRead() {
-  auto self(shared_from_this());
-  _socket.async_read_some(
-      boost::asio::buffer(_readBuffer, sizeof(_readBuffer)),
-      [this, self](boost::system::error_code ec, std::size_t length) {
-        if (!ec) {
+Asio::awaitable<void> WorldSession::ReadLoop() {
+  const std::span<uint8_t> readSpan(_readBuffer, sizeof(_readBuffer));
 
-          _inBuffer.Append(_readBuffer, length);
+  try {
+    while (_socket.is_open()) {
+      std::size_t const length = co_await Asio::AsyncReadSome(_socket, readSpan);
+      if (length == 0)
+        continue;
 
-          // Process as many packets as possible from the buffer
-          while (true) {
-            if (!_initialized) {
-              // Handshake: unencrypted [Size:2 BE][String]
-              if (_inBuffer.Size() < 2)
-                break;
-              uint16 size = (_inBuffer[0] << 8) | _inBuffer[1];
-              if (_inBuffer.Size() < static_cast<size_t>(size + 2))
-                break;
+      _inBuffer.Append(std::span<const uint8>(_readBuffer, length));
+      ProcessInboundBuffer();
+    }
+  } catch (const boost::system::system_error &e) {
+    if (e.code() != boost::asio::error::operation_aborted &&
+        e.code() != boost::asio::error::eof) {
+      LOG_ERROR("ReadLoop error: {} ({})", e.what(), e.code().value());
+      if (_lastSentOpcode) {
+        LOG_ERROR("Last SMSG before disconnect: opcode=0x{:04X} payload={}",
+                  _lastSentOpcode, _lastSentPayloadSize);
+      }
+    }
+    Close();
+  }
+}
 
-              ByteBuffer packetData;
-              packetData.Append(_inBuffer.GetBuffer(), size + 2);
-              HandlePacket(packetData);
+void WorldSession::ProcessInboundBuffer() {
+  while (true) {
+    if (!_initialized) {
+      // Handshake: unencrypted [Size:2 BE][String]
+      if (_inBuffer.Size() < 2)
+        break;
+      uint16 size = (_inBuffer[0] << 8) | _inBuffer[1];
+      if (_inBuffer.Size() < static_cast<size_t>(size + 2))
+        break;
 
-              std::vector<uint8> remaining(_inBuffer.GetBuffer() + size + 2,
-                                           _inBuffer.GetBuffer() +
-                                               _inBuffer.Size());
-              _inBuffer.Clear();
-              _inBuffer.Append(remaining.data(), remaining.size());
-              continue;
-            }
+      ByteBuffer packetData;
+      packetData.Append(_inBuffer.GetBuffer(), size + 2);
+      HandlePacket(packetData);
 
-            // Post-init: CMSG header = 6 bytes [Size:2 BE][Opcode:4 LE]
-            // These 6 bytes may be ARC4-encrypted.
-            if (_inBuffer.Size() < 6)
-              break;
+      std::vector<uint8> remaining(_inBuffer.GetBuffer() + size + 2,
+                                   _inBuffer.GetBuffer() + _inBuffer.Size());
+      _inBuffer.Clear();
+      _inBuffer.Append(remaining.data(), remaining.size());
+      continue;
+    }
 
-            // Decrypt header exactamente una vez por paquete (ARC4 tiene
-            // estado)
-            if (_crypt.IsInitialized() && !_headerDecrypted) {
-              std::memcpy(_decHeader, _inBuffer.GetBuffer(), 6);
-              // En Cataclysm 4.3.4, los 6 bytes de la cabecera CMSG están
-              // encriptados
-              _crypt.DecryptRecv(_decHeader, 6);
-              _headerDecrypted = true;
-            } else if (!_crypt.IsInitialized() && !_headerDecrypted) {
-              std::memcpy(_decHeader, _inBuffer.GetBuffer(), 6);
-              _headerDecrypted = true;
-            }
+    // Post-init: CMSG header = 6 bytes [Size:2 BE][Opcode:4 LE]
+    // These 6 bytes may be ARC4-encrypted.
+    if (_inBuffer.Size() < 6)
+      break;
 
-            // In Cataclysm, the Size field includes the 4-byte Opcode
-            uint16 pktSize = (_decHeader[0] << 8) | _decHeader[1];
-            // Opcode is 4 bytes, LITTLE ENDIAN
-            uint32 opcode = _decHeader[2] | (_decHeader[3] << 8) |
-                            (_decHeader[4] << 16) | (_decHeader[5] << 24);
+    // Decrypt header exactamente una vez por paquete (ARC4 tiene estado)
+    if (_crypt.IsInitialized() && !_headerDecrypted) {
+      std::memcpy(_decHeader, _inBuffer.GetBuffer(), 6);
+      // En Cataclysm 4.3.4, los 6 bytes de la cabecera CMSG están encriptados
+      _crypt.DecryptRecv(_decHeader, 6);
+      _headerDecrypted = true;
+    } else if (!_crypt.IsInitialized() && !_headerDecrypted) {
+      std::memcpy(_decHeader, _inBuffer.GetBuffer(), 6);
+      _headerDecrypted = true;
+    }
 
-            // Total on wire: 2 (size field) + pktSize
-            if (_inBuffer.Size() < static_cast<size_t>(pktSize + 2)) {
-              if (_inBuffer.Size() >= 6) {
-                LOG_DEBUG("Waiting for more data. Have {}, need {}",
-                          _inBuffer.Size(), pktSize + 2);
-              }
-              break;
-            }
+    // In Cataclysm, the Size field includes the 4-byte Opcode
+    uint16 pktSize = (_decHeader[0] << 8) | _decHeader[1];
+    // Opcode is 4 bytes, LITTLE ENDIAN
+    uint32 opcode = _decHeader[2] | (_decHeader[3] << 8) |
+                    (_decHeader[4] << 16) | (_decHeader[5] << 24);
 
-            _headerDecrypted = false;
+    // Total on wire: 2 (size field) + pktSize
+    if (_inBuffer.Size() < static_cast<size_t>(pktSize + 2)) {
+      if (_inBuffer.Size() >= 6) {
+        LOG_DEBUG("Waiting for more data. Have {}, need {}", _inBuffer.Size(),
+                  pktSize + 2);
+      }
+      break;
+    }
 
-            uint32 payloadSize = (pktSize >= 4) ? (pktSize - 4) : 0;
+    _headerDecrypted = false;
 
-            WorldPacket packet(opcode, payloadSize);
-            if (payloadSize > 0) {
-              packet.Append(_inBuffer.GetBuffer() + 6, payloadSize);
-            }
+    uint32 payloadSize = (pktSize >= 4) ? (pktSize - 4) : 0;
 
-            // Remove consumed bytes
-            size_t consumed = pktSize + 2;
-            std::vector<uint8> remaining(_inBuffer.GetBuffer() + consumed,
-                                         _inBuffer.GetBuffer() +
-                                             _inBuffer.Size());
-            _inBuffer.Clear();
-            _inBuffer.Append(remaining.data(), remaining.size());
+    WorldPacket packet(opcode, payloadSize);
+    if (payloadSize > 0) {
+      packet.Append(_inBuffer.GetBuffer() + 6, payloadSize);
+    }
 
-            ProcessPacket(packet);
-          }
+    // Remove consumed bytes
+    size_t consumed = pktSize + 2;
+    std::vector<uint8> remaining(_inBuffer.GetBuffer() + consumed,
+                                 _inBuffer.GetBuffer() + _inBuffer.Size());
+    _inBuffer.Clear();
+    _inBuffer.Append(remaining.data(), remaining.size());
 
-          DoRead();
-        } else if (ec != boost::asio::error::operation_aborted) {
-          LOG_ERROR("DoRead error: {} ({})", ec.message(), ec.value());
-          if (_lastSentOpcode) {
-            LOG_ERROR("Last SMSG before disconnect: opcode=0x{:04X} payload={}",
-                      _lastSentOpcode, _lastSentPayloadSize);
-          }
-          Close();
-        }
-      });
+    ProcessPacket(packet);
+  }
 }
 
 void WorldSession::HandlePacket(ByteBuffer &buffer) {
