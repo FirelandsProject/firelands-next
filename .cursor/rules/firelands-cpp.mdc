@@ -1,0 +1,18 @@
+---
+description: C++17 and cross-platform conventions
+globs: src/**/*.cpp,src/**/*.h,src/**/*.hpp,tests/**/*.cpp
+alwaysApply: false
+---
+
+# C++ & Platform
+
+- **C++17:** `<filesystem>`, `std::optional`, `std::variant`, etc.
+- **Threading:** `std::thread` — not pthreads or Win32 APIs directly.
+- **Paths:** `std::filesystem` for cross-platform path handling.
+- **Platform `#ifdef`s:** only inside adapters when unavoidable.
+- **Logging:** include spdlog via `<shared/Logger.h>` (required for `SPDLOG_LEVEL_NAMES`).
+- **Inheritance:** use where it genuinely improves reuse of shared logic.
+
+Must build on Windows (MSVC/MinGW), Linux (GCC/Clang), macOS (Apple Clang).
+
+Details: `.agent/skills/TechStack/SKILL.md`

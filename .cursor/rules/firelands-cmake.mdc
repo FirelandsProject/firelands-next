@@ -1,0 +1,29 @@
+---
+description: CMake, Ninja, PCH, and build optimization
+globs: **/CMakeLists.txt,cmake/**
+alwaysApply: false
+---
+
+# Build System
+
+- **Generator:** Ninja (`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug`).
+- **ccache:** auto-detected by CMake; keep installed for faster rebuilds.
+- **Outputs:** all build artifacts go in `build/`.
+
+## New targets
+
+Every new library/executable must include PCH:
+
+```cmake
+target_precompile_headers(<target_name> PRIVATE ${PROJECT_PCH_HEADERS})
+```
+
+Test targets use `${TEST_PCH_HEADERS}`.
+
+## Practices
+
+- Prefer forward declarations in headers to reduce include depth.
+- Unity builds optional: `-DENABLE_UNITY_BUILD=ON/OFF`.
+- Merge SQL migrations: `cmake --build build --target merge-migrations`.
+
+Details: `.agent/skills/Optimization/SKILL.md` and `AGENTS.md`.

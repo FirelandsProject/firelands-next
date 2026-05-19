@@ -1,0 +1,23 @@
+---
+description: Firelands baseline mandates — language, build policy, delegation
+alwaysApply: true
+---
+
+# Firelands Core Mandates
+
+- **Language:** English for communication, code, comments, commits, and branch names.
+- **WoW nomenclature:** Use standard terms (`Aura`, `Unit`, `PowerType`, `SpellEffect`).
+- **Reference:** Verify server logic and SQL against local clones `firelands-cata-ref/` or `firelands-core-ref/`.
+- **Build tool:** Ninja only (`cmake -B build -G Ninja`, `ninja -C build`). Never use Make.
+- **Compile policy:** NEVER compile automatically. Ask the user before building; compile only when authorized.
+- **Delegation:** Multi-domain tasks MUST use sub-agents per `.agent/skills/Delegation/SKILL.md` (Auth, World, DB, Core).
+- **Skills:** Read the matching skill in `.agent/skills/` before implementing non-trivial work.
+
+| Task | Skill |
+|------|-------|
+| Features / repos | `Architecture/SKILL.md` |
+| Business logic | `TDD/SKILL.md` |
+| CMake / build | `Optimization/SKILL.md` |
+| Cross-platform | `TechStack/SKILL.md` |
+
+Operational details (build commands, deps, DB): see `AGENTS.md`.

@@ -1,0 +1,35 @@
+---
+description: Hexagonal architecture — ports, adapters, dependency direction
+alwaysApply: true
+---
+
+# Hexagonal Architecture
+
+```
+domain/ → application/ → infrastructure/
+auth/ world/            → composition roots (wire adapters via DI)
+```
+
+## Hard rules
+
+- `domain/` must NOT import from `application/` or `infrastructure/`.
+- External I/O goes through abstract port interfaces; concrete adapters wired at composition root.
+- Port methods use domain types (IDs, value objects), not DB row structs or infra DTOs.
+- Errors expressed in domain language (enums/variants), not DB/network error codes.
+- No infra headers (`mysql`, `asio`, `json`, etc.) in domain headers.
+- REST/API exposes DTOs, not domain entities directly.
+
+## New feature workflow
+
+1. Model in domain — no DB, sockets, or JSON knowledge.
+2. Define port interfaces in `src/domain/repositories/` (or similar).
+3. Implement use case in `src/application/`.
+4. Implement adapter in `src/infrastructure/`.
+5. Wire via DI at startup — no `new MySql...` inside domain.
+
+## Testing split
+
+- Domain/application: unit tests with mocked ports (`tests/unit/`, GMock).
+- Adapters: integration tests against real MySQL (docker-compose).
+
+Full checklist: `.agent/skills/Architecture/SKILL.md`

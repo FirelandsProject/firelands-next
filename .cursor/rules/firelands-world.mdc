@@ -1,0 +1,14 @@
+---
+description: World server, opcodes, and game simulation scope
+globs: src/world/**,src/shared/network/**
+alwaysApply: false
+---
+
+# World Server
+
+- **Scope:** opcodes, packet handling, object simulation, movement (WoW 4.3.4.15595).
+- **Binary:** `world` → `build/bin/world`
+- **Config:** `worldserver.yaml`
+- **Logs:** `logs/firelands-world.log`
+
+For opcodes, entity systems, or game mechanics: follow Architecture + TDD where testable, and use World Architect role from `.agent/skills/Delegation/SKILL.md`.

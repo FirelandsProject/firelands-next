@@ -1,0 +1,21 @@
+---
+description: SQL migrations and database schema conventions
+globs: sql/**
+alwaysApply: false
+---
+
+# Database & SQL
+
+- **Engine:** MySQL 8.0+ — databases `auth`, `characters`, `world`.
+- **Local dev:** `docker-compose up -d db` (credentials in `AGENTS.md`).
+- **Runtime migrator:** `sql/init/*.sql` + optional `sql/migrations/*.sql`.
+- **Bundled schema:** `sql/bundled/firelands_*.sql` for Docker first boot.
+- **Regenerate bundles:** `python3 tools/merge_migrations.py` or `cmake --build build --target merge-migrations`.
+
+## Architecture
+
+- Repository implementations in `src/infrastructure/persistence/`.
+- Map DB rows to domain types at the adapter layer — not in domain headers.
+- For schema/migration/repo work, follow Architecture skill and DB Engineer role in Delegation skill.
+
+Details: `.agent/skills/Delegation/SKILL.md`

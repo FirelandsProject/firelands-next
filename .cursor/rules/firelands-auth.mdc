@@ -1,0 +1,14 @@
+---
+description: Auth server scope and conventions
+globs: src/auth/**
+alwaysApply: false
+---
+
+# Auth Server
+
+- **Scope:** SRP6, realm management, account security, login/session flow.
+- **Binary:** `auth` → `build/bin/auth`
+- **Config:** `authserver.yaml`
+- **Logs:** `logs/firelands-auth.log`
+
+For authentication protocols, login packets, or account infrastructure: follow Architecture + TDD, and use Auth Architect role from `.agent/skills/Delegation/SKILL.md`.

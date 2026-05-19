@@ -1,0 +1,22 @@
+---
+description: TDD workflow for domain and application logic
+alwaysApply: true
+---
+
+# TDD
+
+Apply Red → Green → Refactor for domain and application logic changes:
+
+1. **Red** — write a failing test that defines the behavior.
+2. **Green** — minimal production code to pass.
+3. **Refactor** — improve structure; tests stay green.
+
+## Rules
+
+- No production logic without a corresponding test (except pure boilerplate).
+- Unit tests in `tests/unit/` using GoogleTest/GMock.
+- Mock ports (interfaces) to isolate domain tests from infrastructure.
+- Integration tests cover adapter behavior separately (real DB via docker-compose).
+- Ask user before building/running tests; use `ctest --test-dir build` when authorized.
+
+Full workflow: `.agent/skills/TDD/SKILL.md`
