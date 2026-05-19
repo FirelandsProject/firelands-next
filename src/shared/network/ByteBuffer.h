@@ -1,9 +1,11 @@
 #ifndef FIRELANDS_SHARED_NETWORK_BYTE_BUFFER_H
 #define FIRELANDS_SHARED_NETWORK_BYTE_BUFFER_H
 
+#include <algorithm>
 #include <cstring>
 #include <ctime>
 #include <shared/Common.h>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,12 @@ public:
     if (cnt == 0)
       return;
     _storage.insert(_storage.end(), src, src + cnt);
+  }
+
+  void Append(std::span<const uint8> src) {
+    if (src.empty())
+      return;
+    _storage.insert(_storage.end(), src.begin(), src.end());
   }
 
   template <typename T> void Append(T value) {
@@ -77,6 +85,17 @@ public:
     _readPos += count;
   }
 
+  /// Reads up to @p dest.size() bytes; returns bytes copied.
+  size_t Read(std::span<uint8> dest) {
+    if (dest.empty() || _readPos >= _storage.size())
+      return 0;
+    const size_t available = _storage.size() - _readPos;
+    const size_t count = std::min(dest.size(), available);
+    std::memcpy(dest.data(), &_storage[_readPos], count);
+    _readPos += count;
+    return count;
+  }
+
   std::string ReadString() {
     std::string res;
     while (_readPos < _storage.size()) {
@@ -96,6 +115,16 @@ public:
   }
 
   const uint8 *GetBuffer() const { return _storage.data(); }
+
+  [[nodiscard]] std::span<const uint8> AsSpan() const {
+    return {_storage.data(), _storage.size()};
+  }
+
+  [[nodiscard]] std::span<const uint8> UnreadSpan() const {
+    if (_readPos >= _storage.size())
+      return {};
+    return {_storage.data() + _readPos, _storage.size() - _readPos};
+  }
 
   void Resize(size_t size) { _storage.resize(size); }
   uint8 &operator[](size_t pos) { return _storage[pos]; }

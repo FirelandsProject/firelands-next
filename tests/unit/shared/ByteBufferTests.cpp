@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
+#include <array>
 #include <shared/network/ByteBuffer.h>
+#include <span>
 
 using namespace Firelands;
 
@@ -25,6 +27,22 @@ TEST(ByteBufferTest, WriteAndReadString) {
 TEST(ByteBufferTest, ReadEmptyBuffer) {
     ByteBuffer buffer;
     EXPECT_EQ(buffer.Read<uint32>(), 0);
+}
+
+TEST(ByteBufferTest, AppendAndReadSpan) {
+  ByteBuffer buffer;
+  const std::array<uint8, 4> bytes = {0x01, 0x02, 0x03, 0x04};
+  buffer.Append(std::span<const uint8>(bytes));
+
+  EXPECT_EQ(buffer.Size(), 4u);
+  EXPECT_EQ(buffer.AsSpan().size(), 4u);
+  EXPECT_EQ(buffer.AsSpan()[0], 0x01);
+
+  std::array<uint8, 2> out{};
+  EXPECT_EQ(buffer.Read(std::span<uint8>(out)), 2u);
+  EXPECT_EQ(out[0], 0x01);
+  EXPECT_EQ(out[1], 0x02);
+  EXPECT_EQ(buffer.UnreadSpan().size(), 2u);
 }
 
 TEST(ByteBufferTest, ResizeAndAccess) {
