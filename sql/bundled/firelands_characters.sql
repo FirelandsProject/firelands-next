@@ -261,9 +261,7 @@ CREATE TABLE IF NOT EXISTS `character_inventory` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- === 16_gameplay_money_spells_account_lock.sql (characters portion) ===
-ALTER TABLE `firelands_characters`.`characters`
-  ADD COLUMN `money` int unsigned NOT NULL DEFAULT '0'
-  AFTER `firstLogin`;
+-- `money` column already present in `characters` CREATE TABLE; migration kept as comment.
 
 CREATE TABLE IF NOT EXISTS `firelands_characters`.`character_spell` (
   `guid` int unsigned NOT NULL,
@@ -579,16 +577,5 @@ CREATE TABLE IF NOT EXISTS `item_refund_instance` (
 
 -- === source: migrations/31_characters_tutorial_mask.sql ===
 -- Persist UI tutorial completion bitmask (`SMSG_TUTORIAL_FLAGS` / Trinity-style ints).
-CREATE DATABASE IF NOT EXISTS `firelands_characters`;
-USE `firelands_characters`;
-
-ALTER TABLE `characters`
-  ADD COLUMN `tutorial0` int unsigned NOT NULL DEFAULT 0 AFTER `live_power1`,
-  ADD COLUMN `tutorial1` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial0`,
-  ADD COLUMN `tutorial2` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial1`,
-  ADD COLUMN `tutorial3` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial2`,
-  ADD COLUMN `tutorial4` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial3`,
-  ADD COLUMN `tutorial5` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial4`,
-  ADD COLUMN `tutorial6` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial5`,
-  ADD COLUMN `tutorial7` int unsigned NOT NULL DEFAULT 0 AFTER `tutorial6`;
+-- tutorial0..tutorial7 columns already present in `characters` CREATE TABLE; migration kept as comment.
 
