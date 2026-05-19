@@ -127,12 +127,13 @@ After migrations land, regenerate bundled world schema (`merge-migrations`) and 
 |-----------|---------|
 | `36_world_quest_gossip_tables.sql` | DDL: `quest_template`, `creature_queststarter` |
 | `38_world_quest_gossip_data.sql` | Full starters: `python3 tools/sql/import_ref_quest_gossip.py` |
+| `40_world_quest_gossip_allowable_masks.sql` | Backfill class/race masks if `38` ran before columns existed (auto-generated with import) |
 
 ### Quest overhead markers (! / ?)
 
 The client requests `CMSG_QUESTGIVER_STATUS_QUERY` / `CMSG_QUESTGIVER_STATUS_MULTIPLE_QUERY`; the server answers with `SMSG_QUESTGIVER_STATUS` / `_MULTIPLE` (uint64 guid + uint32 cata status flags, e.g. `0x100` = available). Starter NPCs keep template gossip + quest-giver `UNIT_NPC_FLAGS` (flight master bit stripped). Interaction: `CMSG_QUESTGIVER_HELLO` and/or `CMSG_GOSSIP_HELLO` → gossip menu or `SMSG_QUESTGIVER_QUEST_LIST`.
 
-Until per-character quest status exists, any starter on the NPC is reported as **available** (yellow !).
+Until per-character quest status exists, any matching starter on the NPC is reported as **available** (yellow !, wire icon `2`). Gossip quest lines are filtered by `AllowableClasses` / `AllowableRaces` (Trinity `SatisfyQuestClass` / `SatisfyQuestRace`) so class-specific hubs like Jinthala show one line per player. Quest lines use Trinity `SendGossipMenu` layout; the byte after flags is blue-question styling for autocomplete repeatables only.
 
 ### Not in this slice
 

@@ -239,7 +239,7 @@ NPC dialog menus and copy (Cataclysm 4.3.4). Feature docs: [modules/gossip-npc-t
 | `gossip_menu_option_action` | Chained `ActionMenuId` on select |
 | `gossip_menu_option_box` | Coded/money confirmation box text |
 | `npc_text` | Eight text slots + emotes for `SMSG_NPC_TEXT_UPDATE` (migrations `33`–`34`) |
-| `quest_template` | Minimal quest header for gossip quest lines (`ID`, `QuestLevel`, `LogTitle`, `Flags`) |
+| `quest_template` | Minimal quest header for gossip quest lines (`ID`, `QuestLevel`, `LogTitle`, `Flags`, `AllowableClasses`, `AllowableRaces` from ref `quest_template_addon`) |
 | `creature_queststarter` | Creature entry → quest id shown in `SMSG_GOSSIP_MESSAGE` |
 
 **Import from reference clone:**
