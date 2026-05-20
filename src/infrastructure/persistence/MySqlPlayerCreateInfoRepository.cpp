@@ -179,7 +179,7 @@ std::vector<StarterSkillGrant> MySqlPlayerCreateInfoRepository::GetStarterSkills
       g.skillId = skillId;
       uint16_t const rank = static_cast<uint16_t>(rs->getUInt("rank"));
       g.rank = rank;
-      g.maxRank = rank > 0 ? rank : 300;
+      g.maxRank = rank;
       out.push_back(g);
     }
   } catch (sql::SQLException &e) {

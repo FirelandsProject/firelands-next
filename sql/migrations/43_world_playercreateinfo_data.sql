@@ -557,8 +557,6 @@ REPLACE INTO `playercreateinfo_spell` (`raceMask`,`classMask`,`spellId`) VALUES
 (0,1024,33745),
 (0,1024,33763),
 (0,1024,33786),
-(0,1024,33943),
-(0,1024,40120),
 (0,1024,50464),
 (0,1024,50769),
 (0,1024,52610),
@@ -569,8 +567,6 @@ REPLACE INTO `playercreateinfo_spell` (`raceMask`,`classMask`,`spellId`) VALUES
 (0,1024,77764),
 (0,1024,80964),
 (0,1024,80965),
-(0,1024,86470),
-(0,1024,86530),
 (0,1024,88747),
 (0,1024,88751);
 

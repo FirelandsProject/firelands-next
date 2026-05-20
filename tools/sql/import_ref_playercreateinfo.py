@@ -95,17 +95,99 @@ def map_playercreateinfo_row(fields: list[str]) -> str:
     return ",".join(fields)
 
 
-def map_spell_row(fields: list[str]) -> str:
+_RIDING_SPELL_IDS = frozenset(
+    {
+        33388,
+        33391,
+        34090,
+        34091,
+        54197,
+        90265,
+        90267,
+        40120,
+        33943,
+        86470,
+        86530,
+    }
+)
+
+
+def map_spell_row(fields: list[str]) -> str | None:
     if len(fields) < 3:
         raise ValueError("playercreateinfo_spell_custom row too short")
     race_mask, class_mask, spell_id = fields[0], fields[1], fields[2]
+    if int(spell_id) in _RIDING_SPELL_IDS:
+        return None
     return f"{race_mask},{class_mask},{spell_id}"
 
 
-def map_skill_row(fields: list[str]) -> str:
+_EXCLUDED_STARTER_SKILL_IDS = frozenset(
+    {
+        183,
+        777,
+        778,
+        810,
+        762,
+        129,
+        171,
+        164,
+        165,
+        182,
+        185,
+        186,
+        197,
+        202,
+        333,
+        356,
+        393,
+        773,
+        6,
+        8,
+        38,
+        39,
+        50,
+        51,
+        56,
+        78,
+        134,
+        163,
+        184,
+        237,
+        253,
+        267,
+        354,
+        355,
+        373,
+        374,
+        375,
+        573,
+        574,
+        593,
+        594,
+        613,
+        770,
+        771,
+        772,
+        795,
+        796,
+        797,
+        798,
+        799,
+        800,
+        801,
+        802,
+        803,
+        804,
+    }
+)
+
+
+def map_skill_row(fields: list[str]) -> str | None:
     if len(fields) < 4:
         raise ValueError("playercreateinfo_skills row too short")
     race_mask, class_mask, skill_id, rank = fields[0], fields[1], fields[2], fields[3]
+    if int(skill_id) in _EXCLUDED_STARTER_SKILL_IDS:
+        return None
     return f"{race_mask},{class_mask},{skill_id},{rank}"
 
 
@@ -133,16 +215,18 @@ def main() -> None:
         map_playercreateinfo_row(r)
         for r in extract_insert_rows(ref / "playercreateinfo.sql", "playercreateinfo")
     ]
-    spell_rows = [
-        map_spell_row(r)
-        for r in extract_insert_rows(
-            ref / "playercreateinfo_spell_custom.sql", "playercreateinfo_spell_custom"
-        )
-    ]
-    skill_rows = [
-        map_skill_row(r)
-        for r in extract_insert_rows(ref / "playercreateinfo_skills.sql", "playercreateinfo_skills")
-    ]
+    spell_rows = []
+    for r in extract_insert_rows(
+        ref / "playercreateinfo_spell_custom.sql", "playercreateinfo_spell_custom"
+    ):
+        mapped = map_spell_row(r)
+        if mapped is not None:
+            spell_rows.append(mapped)
+    skill_rows = []
+    for r in extract_insert_rows(ref / "playercreateinfo_skills.sql", "playercreateinfo_skills"):
+        mapped = map_skill_row(r)
+        if mapped is not None:
+            skill_rows.append(mapped)
 
     args.tables_out.parent.mkdir(parents=True, exist_ok=True)
     args.tables_out.write_text(TABLES_SQL, encoding="utf-8")
