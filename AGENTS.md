@@ -208,6 +208,14 @@ target_precompile_headers(<target_name> PRIVATE ${PROJECT_PCH_HEADERS})
 - Module guides: `docs/EN/modules/README.md`
 - Reference implementation (local clone, not vendored): `firelands-cata-ref/`.
 
+### Reference scope (Cataclysm 4.3.4 only)
+
+This emulator targets **World of Warcraft Cataclysm 4.3.4** (build **15595**). When verifying server logic, SQL, packets, or gameplay behavior:
+
+- **Use** Cataclysm 4.3.4 sources (e.g. local clone `firelands-cata-ref/`, and other refs that match this build).
+- **Do not** use **WotLK** or **3.3.5a** server code, SQL, opcodes, or patterns as reference—they follow different standards and will not align with this project.
+- If a snippet or doc is from another expansion, discard it or find the Cataclysm 4.3.4 equivalent before implementing.
+
 ## Logs
 
 - **World server**: `logs/firelands-world.log`
