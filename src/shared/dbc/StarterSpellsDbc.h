@@ -3,12 +3,14 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 namespace Firelands {
 
-/// Resolves all class spells from SkillRaceClassInfo + SkillLineAbility (DBC).
-/// Returns every spell for a race/class; the caller must apply level filtering.
+/// Resolves starter spells from SkillRaceClassInfo + SkillLineAbility (DBC).
+/// `GetStarterSpells` returns class + racial spells; `GetRacialSpells` returns
+/// only race-restricted SkillLineAbility rows for merging with world DB data.
 class StarterSpellsDbc {
 public:
   bool Load(std::string const &skillLineAbilityPath,
@@ -18,7 +20,16 @@ public:
 
   std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) const;
 
+  /// Race-specific abilities (non-zero `raceMask` in SkillLineAbility.dbc).
+  std::vector<uint32_t> GetRacialSpells(uint8_t race, uint8_t klass) const;
+
+  /// True when `spellId` is granted via a profession / meta skill line in DBC.
+  bool IsSpellFromExcludedSkillLine(uint32_t spellId) const;
+
 private:
+  std::vector<uint32_t>
+  finalizeCandidates(std::unordered_set<uint32_t> candidates) const;
+
   struct SkillLineAbilityRow {
     uint32_t skillLine = 0;
     uint32_t spellId = 0;

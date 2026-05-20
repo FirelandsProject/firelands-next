@@ -3,7 +3,9 @@
 #include <application/spell/SpellManager.h>
 #include <domain/world/Aura.h>
 #include <chrono>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace Firelands {
 
@@ -17,6 +19,12 @@ void ApplySpellCastAuraOnMap(std::shared_ptr<Map> const &map, SpellCastOutcome c
 /// Re-sends active auras for `unitGuid` (login / reconnect).
 void SendActiveAurasOnMap(std::shared_ptr<Map> const &map, uint64 unitGuid,
                           std::chrono::steady_clock::time_point now);
+
+/// Applies passive auras for `candidateSpellIds` (use racial spell list only, not full book).
+void ApplyPassiveAurasForKnownSpellsOnMap(
+    std::shared_ptr<Map> const &map, uint64_t unitGuid, uint8_t casterLevel,
+    std::vector<uint32_t> const &candidateSpellIds,
+    std::chrono::steady_clock::time_point now);
 
 /// Applies direct health/power from `SpellCastOutcome` on `map` and broadcasts wire.
 void ApplySpellCastOutcomeOnMap(uint32 mapId, std::shared_ptr<Map> const &map,

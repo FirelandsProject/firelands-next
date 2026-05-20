@@ -1,6 +1,8 @@
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/PlayerCreateInfoService.h>
 #include <shared/game/ChatLanguages.h>
+#include <shared/game/StarterSpellFilters.h>
+#include <shared/game/StarterSkillFilters.h>
 #include <shared/Logger.h>
 
 #include <algorithm>
@@ -19,6 +21,31 @@ void PushUnique(std::vector<uint32_t> &out, uint32_t sid) {
     out.push_back(sid);
 }
 
+bool IsProfessionGrantSpell(ISpellDefinitionStore const *store, uint32_t spellId) {
+  if (IsLanguagePassiveSpell(spellId))
+    return false;
+  if (!store)
+    return false;
+  std::optional<SpellDefinition> def = store->GetDefinition(spellId);
+  return def && def->grantsSkillLine;
+}
+
+bool IsMountOrVehicleSpell(ISpellDefinitionStore const *store, uint32_t spellId) {
+  if (IsLanguagePassiveSpell(spellId))
+    return false;
+  if (IsRidingOrTransportStarterSpell(spellId) || IsKnownMountSpell(spellId))
+    return true;
+  if (!store)
+    return false;
+  std::optional<SpellDefinition> def = store->GetDefinition(spellId);
+  return def && def->hasMountOrVehicleAura;
+}
+
+bool IsExcludedKnownSpell(ISpellDefinitionStore const *store, uint32_t spellId) {
+  return IsMountOrVehicleSpell(store, spellId) ||
+         IsProfessionGrantSpell(store, spellId);
+}
+
 bool SpellAllowedAtLevel(ISpellDefinitionStore const *store, uint32_t spellId,
                          uint8_t level) {
   if (!store)
@@ -31,13 +58,13 @@ bool SpellAllowedAtLevel(ISpellDefinitionStore const *store, uint32_t spellId,
   return def->requiredLevel <= level;
 }
 
-void StripWrongEraSpellIds(std::vector<uint32_t> &spells) {
-  for (auto it = spells.begin(); it != spells.end();) {
-    if (*it >= 86450u && *it <= 86550u)
-      it = spells.erase(it);
-    else
-      ++it;
-  }
+void StripMountAndRidingSpells(ISpellDefinitionStore const *store,
+                               std::vector<uint32_t> &spells) {
+  spells.erase(std::remove_if(spells.begin(), spells.end(),
+                              [&](uint32_t sid) {
+                                return IsMountOrVehicleSpell(store, sid);
+                              }),
+               spells.end());
 }
 
 void FilterBySpellDbc(ISpellDefinitionStore const *store, uint8_t race,
@@ -71,22 +98,28 @@ std::vector<uint32_t> BuildKnownSpells(
       createInfo.GetStarterSpells(race, klass);
   if (starterSpells.empty()) {
     LOG_WARN(
-        "No starter spells for race={} class={} (ensure "
-        "playercreateinfo_spell has data or DBC files are present).",
+        "No starter spells for race={} class={} (world DB and racial DBC).",
         static_cast<uint32_t>(race), static_cast<uint32_t>(klass));
   } else {
     spells.reserve(spells.size() + starterSpells.size());
     for (uint32_t sid : starterSpells) {
+      if (createInfo.IsSpellFromExcludedSkillLine(sid))
+        continue;
+      if (IsMountOrVehicleSpell(spellDefinitions, sid))
+        continue;
       if (!SpellAllowedAtLevel(spellDefinitions, sid, level))
         continue;
       PushUnique(spells, sid);
     }
   }
 
-  StripWrongEraSpellIds(spells);
   FilterBySpellDbc(spellDefinitions, race, klass, spells);
 
   for (uint32_t sid : extraSpellIdsFromCharacter) {
+    if (createInfo.IsSpellFromExcludedSkillLine(sid))
+      continue;
+    if (IsExcludedKnownSpell(spellDefinitions, sid))
+      continue;
     if (!SpellAllowedAtLevel(spellDefinitions, sid, level))
       continue;
     if (spellDefinitions && !IsLanguagePassiveSpell(sid) &&
@@ -94,6 +127,8 @@ std::vector<uint32_t> BuildKnownSpells(
       continue;
     PushUnique(spells, sid);
   }
+
+  StripMountAndRidingSpells(spellDefinitions, spells);
 
   EnsureRacialLanguageSpells(race, spells);
   PrioritizeDefaultLanguageSpell(race, spells);
@@ -105,13 +140,19 @@ std::vector<StarterSkillGrant> BuildStarterSkills(
     PlayerCreateInfoService const &createInfo) {
   std::vector<StarterSkillGrant> out;
   std::unordered_set<uint32_t> seen;
-  auto pushGrant = [&](StarterSkillGrant g) {
-    if (g.skillId == 0u || !seen.insert(g.skillId).second)
+  auto pushGrant = [&](StarterSkillGrant g, bool nativeLanguage) {
+    if (g.skillId == 0u || IsExcludedStarterSkill(g.skillId) ||
+        !seen.insert(g.skillId).second)
       return;
-    if (g.maxRank == 0u)
-      g.maxRank = g.rank > 0 ? g.rank : 300;
-    if (g.rank == 0u)
-      g.rank = 1;
+    if (nativeLanguage) {
+      g.rank = 300;
+      g.maxRank = 300;
+    } else {
+      if (g.rank == 0u)
+        g.rank = 1;
+      if (g.maxRank == 0u)
+        g.maxRank = g.rank;
+    }
     out.push_back(g);
   };
 
@@ -120,12 +161,10 @@ std::vector<StarterSkillGrant> BuildStarterSkills(
   for (uint32_t skillId : langSkills) {
     StarterSkillGrant g;
     g.skillId = skillId;
-    g.rank = 300;
-    g.maxRank = 300;
-    pushGrant(g);
+    pushGrant(g, true);
   }
   for (StarterSkillGrant const &g : createInfo.GetStarterSkills(race, klass))
-    pushGrant(g);
+    pushGrant(g, false);
   return out;
 }
 

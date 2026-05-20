@@ -2,9 +2,12 @@
 #include <domain/models/Character.h>
 #include <shared/game/PlayerPowerType.h>
 #include <shared/Logger.h>
+#include <shared/game/StarterSpellFilters.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <unordered_set>
 
 namespace Firelands {
 
@@ -15,6 +18,26 @@ uint32_t SumPrimary(uint16_t base, int16_t raceBonus) {
   v = std::max<int64_t>(1, v);
   v = std::min<int64_t>(v, static_cast<int64_t>(0xFFFFFFFFu));
   return static_cast<uint32_t>(v);
+}
+
+void MergeUniqueSpellIds(std::vector<uint32_t> &dest,
+                         std::vector<uint32_t> const &extra) {
+  std::unordered_set<uint32_t> seen(dest.begin(), dest.end());
+  for (uint32_t const sid : extra) {
+    if (sid == 0u || IsRidingOrTransportStarterSpell(sid))
+      continue;
+    if (seen.insert(sid).second)
+      dest.push_back(sid);
+  }
+}
+
+void StripRidingSpells(std::vector<uint32_t> &spells) {
+  spells.erase(
+      std::remove_if(spells.begin(), spells.end(),
+                     [](uint32_t sid) {
+                       return IsRidingOrTransportStarterSpell(sid);
+                     }),
+      spells.end());
 }
 
 } // namespace
@@ -30,21 +53,60 @@ PlayerCreateInfoService::PlayerCreateInfoService(
     LOG_DEBUG("PlayerCreateInfoService: optional gtOCT*.dbc not loaded from {}",
               clientGameTablesDbcDir);
   }
-  if (!clientGameTablesDbcDir.empty())
+  if (!clientGameTablesDbcDir.empty()) {
     m_statGameTables.Load(clientGameTablesDbcDir);
+    m_starterSpellsDbcLoaded = m_starterSpellsDbc.Load(
+        clientGameTablesDbcDir + "/SkillLineAbility.dbc",
+        clientGameTablesDbcDir + "/SkillRaceClassInfo.dbc");
+    if (!m_starterSpellsDbcLoaded) {
+      LOG_DEBUG(
+          "PlayerCreateInfoService: SkillLineAbility/SkillRaceClassInfo not "
+          "loaded from {} (racial starter spells unavailable).",
+          clientGameTablesDbcDir);
+    }
+  }
 }
 
 std::vector<uint32_t> PlayerCreateInfoService::GetStarterSpells(uint8_t race,
                                                               uint8_t klass) const {
-  if (m_repository) {
-    auto fromDb = m_repository->GetStarterSpells(race, klass);
-    if (!fromDb.empty())
-      return fromDb;
+  std::vector<uint32_t> spells;
+  if (m_repository)
+    spells = m_repository->GetStarterSpells(race, klass);
+  StripRidingSpells(spells);
+  spells.erase(
+      std::remove_if(spells.begin(), spells.end(),
+                     [this](uint32_t sid) {
+                       return IsSpellFromExcludedSkillLine(sid);
+                     }),
+      spells.end());
+
+  if (m_starterSpellsDbcLoaded) {
+    std::vector<uint32_t> racial = m_starterSpellsDbc.GetRacialSpells(race, klass);
+    StripRidingSpells(racial);
+    MergeUniqueSpellIds(spells, racial);
   }
-  LOG_WARN("playercreateinfo_spell empty for race={} class={}; apply world "
-           "migrations (45_world_playercreateinfo_restore_data.sql).",
-           static_cast<uint32_t>(race), static_cast<uint32_t>(klass));
-  return {};
+
+  if (spells.empty()) {
+    LOG_WARN(
+        "No starter spells for race={} class={} (apply world migrations "
+        "45_world_playercreateinfo_restore_data.sql and/or provide DBCs under "
+        "Data.DbcPath).",
+        static_cast<uint32_t>(race), static_cast<uint32_t>(klass));
+  }
+  return spells;
+}
+
+std::vector<uint32_t> PlayerCreateInfoService::GetRacialSpells(uint8_t race,
+                                                              uint8_t klass) const {
+  if (!m_starterSpellsDbcLoaded)
+    return {};
+  return m_starterSpellsDbc.GetRacialSpells(race, klass);
+}
+
+bool PlayerCreateInfoService::IsSpellFromExcludedSkillLine(
+    uint32_t spellId) const {
+  return m_starterSpellsDbcLoaded &&
+         m_starterSpellsDbc.IsSpellFromExcludedSkillLine(spellId);
 }
 
 uint32_t PlayerCreateInfoService::GetXpToNextLevelForLevel(uint8_t level) const {

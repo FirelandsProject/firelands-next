@@ -1,6 +1,9 @@
 #include <shared/dbc/StarterSpellsDbc.h>
 #include <shared/dbc/DbcReader.h>
 #include <shared/game/QuestMask.h>
+#include <shared/game/SkillLineCategories.h>
+#include <shared/game/StarterSkillFilters.h>
+#include <shared/game/StarterSpellFilters.h>
 #include <shared/Logger.h>
 
 #include <algorithm>
@@ -12,25 +15,6 @@ namespace {
 
 constexpr char kSkillLineAbilityFmt[] = "niiiiiiiiiiiii";
 constexpr char kSkillRaceClassInfoFmt[] = "diiiiiiii";
-bool IsStarterRidingOrFlyingSpell(uint32_t spellId) {
-  switch (spellId) {
-  case 33388u:
-  case 33391u:
-  case 34090u:
-  case 34091u:
-  case 54197u:
-  case 90265u:
-  case 90267u:
-  case 40120u:
-  case 33943u:
-  case 86470u:
-  case 86530u:
-    return true;
-  default:
-    return false;
-  }
-}
-
 bool MaskAllowsPlayer(uint32_t mask, uint32_t playerMask) {
   if (mask == 0u)
     return true;
@@ -100,41 +84,8 @@ bool StarterSpellsDbc::Load(std::string const &skillLineAbilityPath,
   return true;
 }
 
-std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
-                                                         uint8_t klass) const {
-  if (!m_loaded || klass == 0u)
-    return {};
-
-  uint32_t const raceMask = PlayerRaceMask(race);
-  uint32_t const classMask = PlayerClassMask(klass);
-
-  std::unordered_set<uint32_t> skillLines;
-  for (auto const &[skillId, srcRaceMask, srcClassMask] : m_skillRaceClass) {
-    if (!MaskAllowsPlayer(srcClassMask, classMask))
-      continue;
-    if (!MaskAllowsPlayer(srcRaceMask, raceMask))
-      continue;
-    skillLines.insert(skillId);
-  }
-
-  std::unordered_set<uint32_t> candidates;
-  for (SkillLineAbilityRow const &row : m_abilities) {
-    if (!skillLines.count(row.skillLine))
-      continue;
-    if (row.minSkillLineRank > 1u)
-      continue;
-    if (row.acquireMethod != 0u && row.acquireMethod != 2u)
-      continue;
-    if (!MaskAllowsPlayer(row.classMask, classMask))
-      continue;
-    if (row.raceMask != 0u && row.raceMask != 0xFFFFFFFFu &&
-        !MaskAllowsPlayer(row.raceMask, raceMask))
-      continue;
-    if (IsStarterRidingOrFlyingSpell(row.spellId))
-      continue;
-    candidates.insert(row.spellId);
-  }
-
+std::vector<uint32_t> StarterSpellsDbc::finalizeCandidates(
+    std::unordered_set<uint32_t> candidates) const {
   std::unordered_map<uint32_t, uint32_t> supercededBy;
   for (SkillLineAbilityRow const &row : m_abilities) {
     if (!candidates.count(row.spellId))
@@ -159,6 +110,89 @@ std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
   std::vector<uint32_t> out(candidates.begin(), candidates.end());
   std::sort(out.begin(), out.end());
   return out;
+}
+
+std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
+                                                         uint8_t klass) const {
+  if (!m_loaded || klass == 0u)
+    return {};
+
+  uint32_t const raceMask = PlayerRaceMask(race);
+  uint32_t const classMask = PlayerClassMask(klass);
+
+  std::unordered_set<uint32_t> skillLines;
+  for (auto const &[skillId, srcRaceMask, srcClassMask] : m_skillRaceClass) {
+    if (!MaskAllowsPlayer(srcClassMask, classMask))
+      continue;
+    if (!MaskAllowsPlayer(srcRaceMask, raceMask))
+      continue;
+    // Professions and generic/DND lines must not grant starter spells.
+    // Weapon, armor, language, class, and racial lines are all OK.
+    if (IsExcludedSpellGrantSkillLine(skillId))
+      continue;
+    skillLines.insert(skillId);
+  }
+
+  std::unordered_set<uint32_t> candidates;
+  for (SkillLineAbilityRow const &row : m_abilities) {
+    if (!skillLines.count(row.skillLine))
+      continue;
+    if (IsExcludedSpellGrantSkillLine(row.skillLine))
+      continue;
+    if (row.minSkillLineRank > 1u)
+      continue;
+    if (row.acquireMethod != 0u && row.acquireMethod != 2u)
+      continue;
+    if (!MaskAllowsPlayer(row.classMask, classMask))
+      continue;
+    if (row.raceMask != 0u && row.raceMask != 0xFFFFFFFFu &&
+        !MaskAllowsPlayer(row.raceMask, raceMask))
+      continue;
+    if (IsRidingOrTransportStarterSpell(row.spellId))
+      continue;
+    candidates.insert(row.spellId);
+  }
+
+  return finalizeCandidates(std::move(candidates));
+}
+
+bool StarterSpellsDbc::IsSpellFromExcludedSkillLine(uint32_t spellId) const {
+  if (!m_loaded || spellId == 0u)
+    return false;
+  for (SkillLineAbilityRow const &row : m_abilities) {
+    if (row.spellId != spellId)
+      continue;
+    return IsExcludedSpellGrantSkillLine(row.skillLine);
+  }
+  return false;
+}
+
+std::vector<uint32_t> StarterSpellsDbc::GetRacialSpells(uint8_t race,
+                                                        uint8_t klass) const {
+  if (!m_loaded || klass == 0u || race == 0u)
+    return {};
+
+  uint32_t const raceMask = PlayerRaceMask(race);
+  uint32_t const classMask = PlayerClassMask(klass);
+
+  std::unordered_set<uint32_t> candidates;
+  for (SkillLineAbilityRow const &row : m_abilities) {
+    if (row.raceMask == 0u || row.raceMask == 0xFFFFFFFFu)
+      continue;
+    if (!MaskAllowsPlayer(row.raceMask, raceMask))
+      continue;
+    if (!MaskAllowsPlayer(row.classMask, classMask))
+      continue;
+    if (row.minSkillLineRank > 1u)
+      continue;
+    if (row.acquireMethod != 0u && row.acquireMethod != 2u)
+      continue;
+    if (IsRidingOrTransportStarterSpell(row.spellId))
+      continue;
+    candidates.insert(row.spellId);
+  }
+
+  return finalizeCandidates(std::move(candidates));
 }
 
 } // namespace Firelands

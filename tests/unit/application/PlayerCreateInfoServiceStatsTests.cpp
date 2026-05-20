@@ -4,9 +4,20 @@
 #include <domain/models/Character.h>
 #include <domain/models/PlayerTemplateStats.h>
 #include <domain/repositories/IPlayerCreateInfoRepository.h>
+#include <shared/Logger.h>
+
+#include <algorithm>
+#include <string>
 
 using namespace Firelands;
 using namespace testing;
+
+namespace {
+
+std::string const kTestDbcDir =
+    std::string(FIRELANDS_TEST_DATA_DIR) + "/data/dbc";
+
+} // namespace
 
 class MockPlayerCreateInfoRepo : public IPlayerCreateInfoRepository {
 public:
@@ -54,6 +65,25 @@ TEST(PlayerCreateInfoServiceStats, AppliesClassRaceAndSetsHealth) {
   EXPECT_EQ(ch.GetPrimaryStat(2), 31u);
   EXPECT_GT(ch.GetMaxHealth(), 50u);
   EXPECT_EQ(ch.GetPowerType(), 1u); // warrior rage
+}
+
+TEST(PlayerCreateInfoServiceStats, MergesRacialSpellsFromDbcWithWorldDbClassSpells) {
+  if (!Logger::IsInitialized())
+    Logger::Init(LoggerBuilder().WithConsole(false).Build());
+  auto repo = std::make_shared<MockPlayerCreateInfoRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(2, 1))
+      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u}));
+
+  PlayerCreateInfoService svc(repo, "", kTestDbcDir);
+  std::vector<uint32_t> spells = svc.GetStarterSpells(2, 1);
+  ASSERT_FALSE(spells.empty());
+
+  auto has = [&](uint32_t id) {
+    return std::find(spells.begin(), spells.end(), id) != spells.end();
+  };
+  EXPECT_TRUE(has(78u));
+  EXPECT_TRUE(has(2457u));
+  EXPECT_TRUE(has(20572u)) << "Orc Blood Fury from SkillLineAbility.dbc";
 }
 
 TEST(PlayerCreateInfoServiceStats, ReturnsFalseWithoutClassRow) {

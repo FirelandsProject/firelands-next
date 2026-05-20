@@ -16,7 +16,9 @@
 #include <shared/game/ChatLanguages.h>
 #include <shared/game/PlayerFactionTeam.h>
 #include <shared/game/PlayerGmAppearance.h>
+#include <shared/game/PlayerItemProficiency.h>
 #include <shared/game/StarterOpeningCinematic.h>
+#include <shared/game/StarterSpellFilters.h>
 #include <shared/game/WowGuid.h>
 #include <shared/network/MovementStateQueries.h>
 #include <shared/network/packets/client/PackedPlayerGuidWire.h>
@@ -145,8 +147,6 @@ void WorldSession::LoginSendAccountDataAndPreMapPackets(
   SendClientControlUpdate(guid);
   SendBindPointUpdate();
   SendWorldServerInfo();
-  SendSetProficiency(1, 0xFFFFFFFF);
-  SendSetProficiency(2, 0xFFFFFFFF);
 }
 
 void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &character) {
@@ -165,6 +165,31 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       _knownSkills.clear();
     }
     RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
+
+    for (uint32_t const persisted :
+         _charService->GetCharacterSpellIds(character.GetGuid())) {
+      if (_knownSpellIds.count(persisted) != 0)
+        continue;
+      bool const strip = [&] {
+        if (IsRidingOrTransportStarterSpell(persisted) ||
+            IsKnownMountSpell(persisted))
+          return true;
+        if (!_spellDefinitions)
+          return false;
+        auto def = _spellDefinitions->GetDefinition(persisted);
+        if (!def)
+          return false;
+        return def->hasMountOrVehicleAura || def->grantsSkillLine;
+      }();
+      if (strip)
+        _charService->RemoveCharacterSpell(character.GetGuid(), persisted);
+    }
+
+    SendSetProficiency(kItemClassWeapon,
+                       ComputeWeaponProficiencyMask(_knownSkills));
+    SendSetProficiency(kItemClassArmor,
+                       ComputeArmorProficiencyMask(_knownSkills));
+
     uint32 const defaultLang = DefaultLanguageForRace(character.GetRace());
     uint32 const defaultLangSpell = LanguageSpellIdForLang(defaultLang);
     {
