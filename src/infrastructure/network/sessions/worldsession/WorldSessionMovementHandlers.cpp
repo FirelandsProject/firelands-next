@@ -8,6 +8,7 @@
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/MovementTeleportPackets.h>
 #include <shared/network/MovementWire.h>
+#include <shared/network/movement/ClientMovementMse.h>
 
 namespace Firelands {
 
@@ -193,6 +194,25 @@ void WorldSession::HandleMovement(WorldPacket &packet) {
     else if (op == MSG_MOVE_STOP_SWIM)
       inLiquidForBreath = false;
     UpdateBreathFromSwimmingState(inLiquidForBreath);
+  }
+}
+
+void WorldSession::HandleForceSpeedChangeAck(WorldPacket &packet) {
+  if (_playerGuid == 0)
+    return;
+
+  MovementInfo move{};
+  if (!TryReadClientMovementMse(packet, packet.GetOpcode(), move)) {
+    LOG_DEBUG("[MOVE] Force speed change ack opcode 0x{:04X}: payload not fully decoded "
+              "(size={}), discarding",
+              packet.GetOpcode(), packet.Size());
+    packet.SetReadPos(packet.Size());
+    return;
+  }
+
+  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (move.x != 0.f || move.y != 0.f || move.z != 0.f)
+      map->UpdateObjectPosition(_playerGuid, move);
   }
 }
 

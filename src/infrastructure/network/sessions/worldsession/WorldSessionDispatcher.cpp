@@ -294,6 +294,10 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     // movement packets (decoder not wired — position stays on heartbeat).
     HandleMovement(packet);
     break;
+  case CMSG_MOVE_FORCE_RUN_SPEED_CHANGE_ACK:
+  case CMSG_MOVE_FORCE_FLIGHT_SPEED_CHANGE_ACK:
+    HandleForceSpeedChangeAck(packet);
+    break;
   default:
     LOG_DEBUG("[PACKET] Unknown/unhandled opcode: 0x{:04X} (size: {})", opcode,
               packet.Size());

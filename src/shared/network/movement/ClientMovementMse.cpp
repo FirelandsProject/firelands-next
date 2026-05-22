@@ -61,6 +61,10 @@ MovementStatusElements const *GetClientMovementStatusSequence(uint32 opcode) {
     return MovementSetRunMode;
   case MSG_MOVE_SET_WALK_MODE:
     return MovementSetWalkMode;
+  case CMSG_MOVE_FORCE_RUN_SPEED_CHANGE_ACK:
+    return MovementForceRunSpeedChangeAck;
+  case CMSG_MOVE_FORCE_FLIGHT_SPEED_CHANGE_ACK:
+    return MovementForceFlightSpeedChangeAck;
   default:
     return nullptr;
   }
@@ -410,7 +414,15 @@ bool TryReadClientMovementMse(WorldPacket &packet, uint32 opcode, MovementInfo &
       break;
     }
     case MSEExtraElement:
-    case MSEExtraFloat:
+    case MSEExtraFloat: {
+      br.AlignToByteBoundary();
+      float extra = 0.f;
+      if (!ReadChecked(packet, extra))
+        return false;
+      (void)extra;
+      br.ResyncAfterExternalByteReads();
+      break;
+    }
     case MSEExtraInt8:
     case MSEExtraTwoBits:
       return false;

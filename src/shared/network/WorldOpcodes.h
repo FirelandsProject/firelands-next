@@ -227,6 +227,11 @@ enum WorldOpcode : uint32 {
   /// Client reports a failed `SMSG_UPDATE_OBJECT` (packed GUID); safe to ignore.
   CMSG_OBJECT_UPDATE_FAILED = 0x3808,
   /// Reference: WowPacketParser V4_3_4_15595 Opcodes.cs
+  /// Client ack after `SMSG_MOVE_UPDATE_RUN_SPEED` / `SMSG_MOVE_SET_RUN_SPEED` (reference 15595).
+  CMSG_MOVE_FORCE_RUN_SPEED_CHANGE_ACK = 0x7818,
+  /// Client ack after `SMSG_MOVE_UPDATE_FLIGHT_SPEED` / flight speed set (reference 15595).
+  CMSG_MOVE_FORCE_FLIGHT_SPEED_CHANGE_ACK = 0x7314,
+
   CMSG_CAST_SPELL = 0x4C07,
   /// Right-click remove buff (WowPacketParser V4_3_4_15595: uint32 spell id).
   CMSG_CANCEL_AURA = 0x0E26,
@@ -234,6 +239,8 @@ enum WorldOpcode : uint32 {
   CMSG_CANCEL_CAST = 0x0115,
   SMSG_SPELL_START = 0x6415,
   SMSG_SPELL_GO = 0x6E16,
+  /// Reference: WowPacketParser `V4_3_4_15595` — plays `SpellVisualKit` on a unit (impact VFX).
+  SMSG_PLAY_SPELL_VISUAL_KIT = 0x55A5,
   SMSG_SPELL_FAILURE = 0x4535,
   SMSG_AURA_UPDATE = 0x4707,
   /// Trinity Cataclysm — replaces the unit's visible aura list (used on login / resync).
