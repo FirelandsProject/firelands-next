@@ -28,6 +28,10 @@ add_executable(FirelandsUnitTests
     unit/shared/SpellCastWireTests.cpp
     unit/shared/AuraUpdateWireTests.cpp
     unit/shared/SpellCooldownWireTests.cpp
+    unit/shared/ActionButtonTests.cpp
+    unit/shared/ActionBarTogglesTests.cpp
+    unit/shared/PackedPlayerGuidWireTests.cpp
+    unit/shared/KnownSpellsWireTests.cpp
     unit/shared/SpellPeriodicAuraLogWireTests.cpp
     unit/shared/SpellEffectMagnitudeTests.cpp
     unit/shared/MovementStateQueriesTests.cpp
@@ -35,17 +39,21 @@ add_executable(FirelandsUnitTests
     unit/application/RealmListServiceTests.cpp
     unit/application/AuthServiceTests.cpp
     unit/application/CharacterServiceTests.cpp
+    unit/application/CharacterActionButtonsTests.cpp
     unit/application/SpellHitEffectsTests.cpp
     unit/application/SpellManagerTests.cpp
     unit/application/PlayerCreateInfoServiceStatsTests.cpp
     unit/application/PlayerSpellbookTests.cpp
     unit/application/PassiveSpellAurasTests.cpp
+    unit/application/PlayerAuraStatEffectsTests.cpp
     unit/application/WorldServiceCreatureScriptTests.cpp
     unit/application/CreatureSpawnLogicTests.cpp
     unit/application/GossipLogicTests.cpp
     unit/application/QuestGiverLogicTests.cpp
     unit/application/QuestGossipFilterTests.cpp
     unit/shared/WowGuidTests.cpp
+    unit/infrastructure/ActionButtonPacketTests.cpp
+    unit/infrastructure/ActionBarTogglesObjectUpdateTests.cpp
     unit/infrastructure/GossipPacketTests.cpp
     unit/infrastructure/GmTicketGossipUiTests.cpp
     unit/domain/MapTests.cpp

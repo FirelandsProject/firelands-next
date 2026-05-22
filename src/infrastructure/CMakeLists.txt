@@ -41,6 +41,7 @@ add_library(FirelandsInfrastructure STATIC
     world/MapAuraTicker.cpp
     network/sessions/worldsession/WorldSessionTimeMirror.cpp
     network/sessions/worldsession/WorldSessionWorldLifecycle.cpp
+    network/sessions/worldsession/WorldSessionActionButtons.cpp
     network/asio/AsyncNetworkServer.cpp
     network/realm_link/RealmLiveRegistry.cpp
     network/realm_link/RealmLinkSession.cpp

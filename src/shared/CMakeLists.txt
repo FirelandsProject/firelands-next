@@ -22,6 +22,7 @@ add_library(FirelandsShared STATIC
     game/ItemEquipSlots.cpp
     game/PlayerGmAppearance.cpp
     game/StatFormulas.cpp
+    game/ActionButton.cpp
     network/MovementWire.cpp
     network/movement/ClientMovementMse.cpp
     network/SpellCastWire.cpp
