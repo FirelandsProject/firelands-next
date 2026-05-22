@@ -79,7 +79,10 @@ Asio::awaitable<void> OutboundLinkSession(tcp::socket &socket,
         ")");
   }
 
-  LOG_INFO("RealmLink: connected to auth {}:{} (realm {})", host, port, realmId);
+  LOG_INFO(
+      "Realm-link: world successfully sent realm link signal to auth server at "
+      "{}:{} (realm id {})",
+      host, port, realmId);
 
   boost::asio::steady_timer tick(socket.get_executor());
 
@@ -114,9 +117,12 @@ void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
       config.GetNested<int>({"RealmLink", "RealmId"}, 1));
 
   if (token.empty()) {
-    LOG_ERROR("RealmLink: Token is empty; outbound link disabled.");
+    LOG_ERROR("Realm-link: Token is empty; outbound link disabled.");
     return;
   }
+
+  LOG_INFO("Realm-link: connecting to auth server at {}:{} (realm id {})", host,
+           port, realmId);
 
   while (!stop) {
     try {
@@ -148,7 +154,7 @@ void RunRealmLinkOutbound(const Config &config, std::atomic<bool> &stop) {
     } catch (const std::exception &e) {
       if (stop)
         break;
-      LOG_WARN("RealmLink: {} — reconnecting in 2s", e.what());
+      LOG_WARN("Realm-link: {} — reconnecting in 2s", e.what());
       std::this_thread::sleep_for(std::chrono::seconds(2));
     }
   }
