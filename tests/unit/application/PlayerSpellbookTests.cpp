@@ -169,6 +169,136 @@ TEST_F(PlayerSpellbookTest, FiltersPersistedMountAndProfessionSpells) {
   EXPECT_THAT(known, Not(Contains(2259u)));
 }
 
+TEST_F(PlayerSpellbookTest, HumanWarlockExcludesQuestGatedSummonImp) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(1, 9))
+      .WillOnce(Return(std::vector<uint32_t>{686u, 688u, 697u, 172u}));
+
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(1, 9, 1, svc, &spells, {688u});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(686u));
+  EXPECT_FALSE(has(688u)) << "Summon Imp is quest-gated, not a starter spell";
+  EXPECT_FALSE(has(697u));
+}
+
+TEST_F(PlayerSpellbookTest, HumanWarlockIncludesShadowBoltFromPci) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(1, 9))
+      .WillOnce(Return(std::vector<uint32_t>{686u, 172u, 348u, 5782u}));
+
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(1, 9, 1, svc, &spells, {});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(686u)) << "Shadow Bolt (level 1, not trainer-yellow)";
+  EXPECT_TRUE(has(172u)) << "Corruption";
+  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+}
+
+TEST_F(PlayerSpellbookTest, HumanMageIncludesFireballFromPci) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(1, 8))
+      .WillOnce(Return(std::vector<uint32_t>{116u, 133u, 1459u, 2136u}));
+
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(1, 8, 1, svc, &spells, {});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(133u)) << "Fireball (level 1, not trainer-yellow)";
+  EXPECT_TRUE(has(116u)) << "Frostbolt";
+  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+}
+
+TEST_F(PlayerSpellbookTest, HumanRogueIncludesSinisterStrikeFromPci) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(1, 4))
+      .WillOnce(Return(std::vector<uint32_t>{1784u, 1752u, 2098u, 921u}));
+
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(1, 4, 1, svc, &spells, {});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(1752u)) << "Sinister Strike (level 1, not trainer-yellow)";
+  EXPECT_TRUE(has(1784u)) << "Stealth";
+  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+}
+
+TEST_F(PlayerSpellbookTest, HumanPaladinUsesPciPlusWeaponArmorLanguageFromDbc) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(1, 2))
+      .WillOnce(Return(std::vector<uint32_t>{635u, 20271u, 35395u, 20154u, 465u,
+                                             19740u}));
+
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(1, 2, 1, svc, &spells, {});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(635u));
+  EXPECT_TRUE(has(20271u));
+  EXPECT_TRUE(has(35395u)) << "Crusader Strike (level 1, not trainer-yellow)";
+  EXPECT_TRUE(has(203u)) << "Unarmed from weapon skill line";
+  EXPECT_TRUE(has(8737u)) << "Mail from armor skill line";
+  EXPECT_FALSE(has(83951u)) << "Guild perk";
+}
+
+TEST_F(PlayerSpellbookTest, OrcWarriorIncludesWeaponSkillSpellsFromDbc) {
+  auto repo = std::make_shared<MockPciRepo>();
+  EXPECT_CALL(*repo, GetStarterSpells(2, 1))
+      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u, 6673u}));
+  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
+                                              "/data/dbc");
+
+  MockSpellStore spells;
+  EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
+  EXPECT_CALL(spells, HasSpell(_)).WillRepeatedly(Return(true));
+
+  auto known = PlayerSpellbook::BuildKnownSpells(2, 1, 1, svc, &spells, {});
+  auto has = [&](uint32_t id) {
+    return std::find(known.begin(), known.end(), id) != known.end();
+  };
+  EXPECT_TRUE(has(6603u)) << "Attack must be known, not trainer-only in spellbook";
+  EXPECT_TRUE(has(3018u)) << "Shoot";
+  EXPECT_TRUE(has(2764u)) << "Throw";
+  EXPECT_TRUE(has(20572u)) << "Blood Fury";
+}
+
 TEST_F(PlayerSpellbookTest, StarterSkillsOmitMetaProfessionsAndFixZeroRanks) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSkills(1, 2))

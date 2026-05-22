@@ -7,6 +7,8 @@ namespace Firelands {
 
 /// SkillLine.dbc `categoryId` values (Cataclysm 4.3.4, Trinity `SkillLineCategory`).
 namespace SkillLineCategory {
+/// `SkillLine.dbc` categoryId (Cataclysm 4.3.4); ref Trinity `SkillLineCategory`.
+constexpr uint32_t Guild = 5u;
 constexpr uint32_t Weapon = 6u;
 constexpr uint32_t Class = 7u;
 constexpr uint32_t Armor = 8u;
@@ -25,8 +27,8 @@ bool SkillLineCategoriesLoaded();
 bool IsAllowedStarterSkillLine(uint32_t skillId);
 
 /// Spells from these skill lines must NOT be in the starter spellbook.
-/// Blocks professions (cat 11) and generic/DND (cat 12) only.
-/// Weapon (6), armor (8), language (10), class (7), and racial/secondary (9) all allowed.
+/// Blocks guild perks (cat 5), professions (cat 11), and generic/DND (cat 12).
+/// Weapon (6), armor (8), language (10), class (7), and racial/secondary (9) allowed.
 bool IsExcludedSpellGrantSkillLine(uint32_t skillId);
 
 } // namespace Firelands

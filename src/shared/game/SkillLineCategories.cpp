@@ -1,4 +1,5 @@
 #include <shared/game/SkillLineCategories.h>
+#include <shared/game/StarterSkillFilters.h>
 #include <shared/dbc/DbcReader.h>
 #include <shared/Logger.h>
 
@@ -79,6 +80,13 @@ static bool IsSecondaryProfessionSkillLine(uint32_t skillId) {
 }
 
 bool IsExcludedSpellGrantSkillLine(uint32_t skillId) {
+  // Mounts / companion pets / glyph meta lines (DBC category 7) must never grant
+  // spells at create — ref blocks skill 777 even when SkillLine.dbc is loaded.
+  if (IsMetaOrInternalStarterSkill(skillId))
+    return true;
+  if (IsClassSpellTabStarterSkill(skillId))
+    return true;
+
   // Always block secondary professions regardless of DBC load state.
   if (IsSecondaryProfessionSkillLine(skillId))
     return true;
@@ -98,6 +106,7 @@ bool IsExcludedSpellGrantSkillLine(uint32_t skillId) {
   if (it == g_categoryBySkill.end())
     return false;
   switch (it->second) {
+  case SkillLineCategory::Guild:      // cat 5 — guild perks (learned via guild level)
   case SkillLineCategory::Profession: // cat 11 — primary professions
   case SkillLineCategory::Generic:    // cat 12 — DND / meta
     return true;

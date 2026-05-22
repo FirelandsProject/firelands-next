@@ -1,8 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace Firelands {
+
+/// Guild perk spells (`SkillLine` 821 / category 5). Not granted until guilds exist.
+bool IsGuildPerkSpell(uint32_t spellId);
+
+/// Warlock demon summons taught by starter-zone quests (e.g. Piercing the Veil → 688),
+/// not at character creation.
+bool IsWarlockQuestGatedSummonSpell(uint32_t spellId);
+
+/// Warlock quest-gated summon spell ids (for tests / quest-reward wiring).
+std::vector<uint32_t> WarlockQuestGatedSummonSpellIds();
 
 /// Riding, flying, and transport spells from `playercreateinfo` ref data that must not
 /// be granted at character creation (learned later from trainers).

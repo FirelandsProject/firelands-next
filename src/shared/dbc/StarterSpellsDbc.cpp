@@ -23,6 +23,12 @@ bool MaskAllowsPlayer(uint32_t mask, uint32_t playerMask) {
   return (mask & playerMask) != 0u;
 }
 
+/// Ref `AbilityLearnType`: 0 trainer, 1 on skill value (Shoot/Throw at rank 1),
+/// 2 on skill learn (Attack, etc.). Starter rows use min rank 0–1 only.
+bool AllowsStarterSkillLineAcquire(uint32_t acquireMethod) {
+  return acquireMethod == 0u || acquireMethod == 1u || acquireMethod == 2u;
+}
+
 } // namespace
 
 bool StarterSpellsDbc::Load(std::string const &skillLineAbilityPath,
@@ -112,8 +118,8 @@ std::vector<uint32_t> StarterSpellsDbc::finalizeCandidates(
   return out;
 }
 
-std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
-                                                         uint8_t klass) const {
+std::vector<uint32_t> StarterSpellsDbc::collectSkillLineSpells(
+    uint8_t race, uint8_t klass, bool weaponArmorLanguageOnly) const {
   if (!m_loaded || klass == 0u)
     return {};
 
@@ -126,22 +132,32 @@ std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
       continue;
     if (!MaskAllowsPlayer(srcRaceMask, raceMask))
       continue;
-    // Professions and generic/DND lines must not grant starter spells.
-    // Weapon, armor, language, class, and racial lines are all OK.
     if (IsExcludedSpellGrantSkillLine(skillId))
+      continue;
+    if (weaponArmorLanguageOnly && !IsAllowedStarterSkillLine(skillId))
       continue;
     skillLines.insert(skillId);
   }
 
   std::unordered_set<uint32_t> candidates;
   for (SkillLineAbilityRow const &row : m_abilities) {
+    // Attack (6603) is on GENERIC/DND (183), which is not a starter skill line,
+    // but every new character must know it — ref Player::learnDefaultSpells.
+    if (row.skillLine == 183u && row.spellId == 6603u) {
+      if (row.minSkillLineRank <= 1u &&
+          AllowsStarterSkillLineAcquire(row.acquireMethod) &&
+          MaskAllowsPlayer(row.classMask, classMask)) {
+        candidates.insert(row.spellId);
+      }
+      continue;
+    }
     if (!skillLines.count(row.skillLine))
       continue;
     if (IsExcludedSpellGrantSkillLine(row.skillLine))
       continue;
     if (row.minSkillLineRank > 1u)
       continue;
-    if (row.acquireMethod != 0u && row.acquireMethod != 2u)
+    if (!AllowsStarterSkillLineAcquire(row.acquireMethod))
       continue;
     if (!MaskAllowsPlayer(row.classMask, classMask))
       continue;
@@ -150,10 +166,22 @@ std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
       continue;
     if (IsRidingOrTransportStarterSpell(row.spellId))
       continue;
+    if (IsWarlockQuestGatedSummonSpell(row.spellId))
+      continue;
     candidates.insert(row.spellId);
   }
 
   return finalizeCandidates(std::move(candidates));
+}
+
+std::vector<uint32_t> StarterSpellsDbc::GetStarterSpells(uint8_t race,
+                                                         uint8_t klass) const {
+  return collectSkillLineSpells(race, klass, false);
+}
+
+std::vector<uint32_t> StarterSpellsDbc::GetWeaponArmorLanguageStarterSpells(
+    uint8_t race, uint8_t klass) const {
+  return collectSkillLineSpells(race, klass, true);
 }
 
 bool StarterSpellsDbc::IsSpellFromExcludedSkillLine(uint32_t spellId) const {
@@ -185,7 +213,7 @@ std::vector<uint32_t> StarterSpellsDbc::GetRacialSpells(uint8_t race,
       continue;
     if (row.minSkillLineRank > 1u)
       continue;
-    if (row.acquireMethod != 0u && row.acquireMethod != 2u)
+    if (!AllowsStarterSkillLineAcquire(row.acquireMethod))
       continue;
     if (IsRidingOrTransportStarterSpell(row.spellId))
       continue;

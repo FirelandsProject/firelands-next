@@ -20,6 +20,10 @@ public:
 
   std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) const;
 
+  /// Weapon, armor, and language skill-line abilities for login (not class tabs).
+  std::vector<uint32_t> GetWeaponArmorLanguageStarterSpells(uint8_t race,
+                                                            uint8_t klass) const;
+
   /// Race-specific abilities (non-zero `raceMask` in SkillLineAbility.dbc).
   std::vector<uint32_t> GetRacialSpells(uint8_t race, uint8_t klass) const;
 
@@ -27,6 +31,9 @@ public:
   bool IsSpellFromExcludedSkillLine(uint32_t spellId) const;
 
 private:
+  std::vector<uint32_t> collectSkillLineSpells(uint8_t race, uint8_t klass,
+                                             bool weaponArmorLanguageOnly) const;
+
   std::vector<uint32_t>
   finalizeCandidates(std::unordered_set<uint32_t> candidates) const;
 

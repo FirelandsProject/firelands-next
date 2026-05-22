@@ -3,6 +3,34 @@
 
 namespace Firelands {
 
+bool IsWarlockQuestGatedSummonSpell(uint32_t spellId) {
+  switch (spellId) {
+  case 688u:  // Summon Imp — starter quest chain (ref Piercing the Veil / Tainted *)
+  case 697u:  // Summon Felhunter
+  case 712u:  // Summon Succubus
+  case 691u:  // Summon Felsteed
+  case 693u:  // Summon Doomguard
+  case 698u:  // Ritual of Doom
+    return true;
+  default:
+    return false;
+  }
+}
+
+std::vector<uint32_t> WarlockQuestGatedSummonSpellIds() {
+  return {688u, 697u, 712u, 691u, 693u, 698u};
+}
+
+bool IsGuildPerkSpell(uint32_t spellId) {
+  if (spellId >= 78631u && spellId <= 78635u)
+    return true;
+  if (spellId >= 83940u && spellId <= 83968u)
+    return true;
+  if (spellId == 84038u)
+    return true;
+  return false;
+}
+
 bool IsRidingOrTransportStarterSpell(uint32_t spellId) {
   switch (spellId) {
   case 33388u:

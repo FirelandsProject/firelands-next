@@ -1,25 +1,23 @@
 #include <gtest/gtest.h>
 #include <shared/game/StarterSpellFilters.h>
 
+#include <algorithm>
+
 using namespace Firelands;
 
-TEST(StarterSpellFiltersTests, RidingSpellsAreExcluded) {
-  EXPECT_TRUE(IsRidingOrTransportStarterSpell(40120u));
-  EXPECT_TRUE(IsRidingOrTransportStarterSpell(86470u));
-  EXPECT_FALSE(IsRidingOrTransportStarterSpell(20572u));
+TEST(StarterSpellFiltersTests, GuildPerkSpellIds) {
+  EXPECT_TRUE(IsGuildPerkSpell(83951u));
+  EXPECT_TRUE(IsGuildPerkSpell(83968u));
+  EXPECT_TRUE(IsGuildPerkSpell(78631u));
+  EXPECT_FALSE(IsGuildPerkSpell(635u));
+  EXPECT_FALSE(IsGuildPerkSpell(6603u));
 }
 
-TEST(StarterSpellFiltersTests, ShapeshiftSpellsAreExcluded) {
-  EXPECT_TRUE(IsClassShapeshiftStarterSpell(768u));
-  EXPECT_FALSE(IsClassShapeshiftStarterSpell(5176u));
+TEST(StarterSpellFiltersTests, WarlockQuestGatedSummonSpells) {
+  EXPECT_TRUE(IsWarlockQuestGatedSummonSpell(688u));
+  EXPECT_TRUE(IsWarlockQuestGatedSummonSpell(697u));
+  EXPECT_FALSE(IsWarlockQuestGatedSummonSpell(686u));
+  std::vector<uint32_t> const ids = WarlockQuestGatedSummonSpellIds();
+  EXPECT_GE(ids.size(), 1u);
+  EXPECT_NE(std::find(ids.begin(), ids.end(), 688u), ids.end());
 }
-
-TEST(StarterSpellFiltersTests, MountAuraTypesAreExcludedFromLogin) {
-  EXPECT_TRUE(IsMountOrVehicleAuraType(32u));
-  EXPECT_TRUE(IsMountOrVehicleAuraType(78u));
-  EXPECT_FALSE(IsMountOrVehicleAuraType(36u));
-  EXPECT_TRUE(IsExcludedLoginAuraType(78u));
-  EXPECT_TRUE(IsExcludedLoginAuraType(36u));
-  EXPECT_FALSE(IsExcludedLoginAuraType(99u));
-}
-

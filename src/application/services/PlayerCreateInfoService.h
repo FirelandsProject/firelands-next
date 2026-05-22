@@ -58,11 +58,7 @@ public:
   /// Profession / meta skill-line spells from `SkillLineAbility.dbc` (not for login).
   bool IsSpellFromExcludedSkillLine(uint32_t spellId) const;
 
-  std::vector<StarterSkillGrant> GetStarterSkills(uint8_t race, uint8_t klass) const {
-    if (!m_repository)
-      return {};
-    return m_repository->GetStarterSkills(race, klass);
-  }
+  std::vector<StarterSkillGrant> GetStarterSkills(uint8_t race, uint8_t klass) const;
 
   std::vector<StarterItemGrant>
   GetStarterItemGrants(uint8 race, uint8 klass, uint8 gender,

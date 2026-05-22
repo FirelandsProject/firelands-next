@@ -28,6 +28,10 @@ TEST_F(SkillLineCategoriesTest, AllowsWeaponArmorLanguageOnly) {
 TEST_F(SkillLineCategoriesTest, SpellGrantsAllowRacialBlockProfession) {
   ASSERT_TRUE(SkillLineCategoriesLoaded());
   // Spells: profession and generic blocked; racial/class allowed.
+  EXPECT_TRUE(IsExcludedSpellGrantSkillLine(821u));  // Guild perks → block
+  EXPECT_TRUE(IsExcludedSpellGrantSkillLine(777u)); // Mount collection meta → block
+  EXPECT_TRUE(IsExcludedSpellGrantSkillLine(778u)); // Companion pets meta → block
+  EXPECT_TRUE(IsExcludedSpellGrantSkillLine(594u)); // Paladin class tab → block
   EXPECT_FALSE(IsExcludedSpellGrantSkillLine(754u)); // Human racial → keep spell
   EXPECT_FALSE(IsExcludedSpellGrantSkillLine(43u));  // Swords → keep
   EXPECT_TRUE(IsExcludedSpellGrantSkillLine(171u));  // Alchemy → block

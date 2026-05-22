@@ -95,6 +95,11 @@ def map_playercreateinfo_row(fields: list[str]) -> str:
     return ",".join(fields)
 
 
+# Warlock demon summons — starter quests (e.g. Piercing the Veil → 688), not create.
+_WARLOCK_QUEST_SUMMON_SPELL_IDS = frozenset(
+    {688, 687, 689, 691, 693, 697, 698, 702, 710, 712}
+)
+
 _RIDING_SPELL_IDS = frozenset(
     {
         33388,
@@ -117,6 +122,8 @@ def map_spell_row(fields: list[str]) -> str | None:
         raise ValueError("playercreateinfo_spell_custom row too short")
     race_mask, class_mask, spell_id = fields[0], fields[1], fields[2]
     if int(spell_id) in _RIDING_SPELL_IDS:
+        return None
+    if int(spell_id) in _WARLOCK_QUEST_SUMMON_SPELL_IDS:
         return None
     return f"{race_mask},{class_mask},{spell_id}"
 

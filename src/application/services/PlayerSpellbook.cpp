@@ -1,6 +1,7 @@
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/PlayerCreateInfoService.h>
 #include <shared/game/ChatLanguages.h>
+#include <shared/game/SpellLevelGate.h>
 #include <shared/game/StarterSpellFilters.h>
 #include <shared/game/StarterSkillFilters.h>
 #include <shared/Logger.h>
@@ -42,7 +43,8 @@ bool IsMountOrVehicleSpell(ISpellDefinitionStore const *store, uint32_t spellId)
 }
 
 bool IsExcludedKnownSpell(ISpellDefinitionStore const *store, uint32_t spellId) {
-  return IsMountOrVehicleSpell(store, spellId) ||
+  return IsGuildPerkSpell(spellId) || IsWarlockQuestGatedSummonSpell(spellId) ||
+         IsMountOrVehicleSpell(store, spellId) ||
          IsProfessionGrantSpell(store, spellId);
 }
 
@@ -53,9 +55,7 @@ bool SpellAllowedAtLevel(ISpellDefinitionStore const *store, uint32_t spellId,
   auto def = store->GetDefinition(spellId);
   if (!def)
     return true;
-  if (def->requiredLevel == 0u)
-    return true;
-  return def->requiredLevel <= level;
+  return SpellMeetsCasterLevelRequirement(def->requiredLevel, level);
 }
 
 void StripMountAndRidingSpells(ISpellDefinitionStore const *store,
@@ -103,7 +103,9 @@ std::vector<uint32_t> BuildKnownSpells(
   } else {
     spells.reserve(spells.size() + starterSpells.size());
     for (uint32_t sid : starterSpells) {
-      if (createInfo.IsSpellFromExcludedSkillLine(sid))
+      if (IsWarlockQuestGatedSummonSpell(sid))
+        continue;
+      if (IsProfessionGrantSpell(spellDefinitions, sid))
         continue;
       if (IsMountOrVehicleSpell(spellDefinitions, sid))
         continue;
@@ -132,6 +134,15 @@ std::vector<uint32_t> BuildKnownSpells(
 
   EnsureRacialLanguageSpells(race, spells);
   PrioritizeDefaultLanguageSpell(race, spells);
+
+  if (klass == 9u) {
+    spells.erase(
+        std::remove_if(spells.begin(), spells.end(),
+                       [](uint32_t sid) {
+                         return IsWarlockQuestGatedSummonSpell(sid);
+                       }),
+        spells.end());
+  }
   return spells;
 }
 

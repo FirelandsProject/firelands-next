@@ -3,6 +3,7 @@
 #include <shared/game/PlayerPowerType.h>
 #include <shared/Logger.h>
 #include <shared/game/StarterSpellFilters.h>
+#include <shared/game/StarterSkillFilters.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -73,14 +74,17 @@ std::vector<uint32_t> PlayerCreateInfoService::GetStarterSpells(uint8_t race,
   if (m_repository)
     spells = m_repository->GetStarterSpells(race, klass);
   StripRidingSpells(spells);
-  spells.erase(
-      std::remove_if(spells.begin(), spells.end(),
-                     [this](uint32_t sid) {
-                       return IsSpellFromExcludedSkillLine(sid);
-                     }),
-      spells.end());
+  // playercreateinfo_spell is authoritative for class abilities; do not strip
+  // spells that also appear on class-tab skill lines in SkillLineAbility.dbc.
 
   if (m_starterSpellsDbcLoaded) {
+    // Skill-line abilities (Attack, Shoot, Throw, armor passives, etc.) from
+    // SkillRaceClassInfo + SkillLineAbility — ref Player::learnDefaultSpells.
+    std::vector<uint32_t> skillLineSpells =
+        m_starterSpellsDbc.GetWeaponArmorLanguageStarterSpells(race, klass);
+    StripRidingSpells(skillLineSpells);
+    MergeUniqueSpellIds(spells, skillLineSpells);
+
     std::vector<uint32_t> racial = m_starterSpellsDbc.GetRacialSpells(race, klass);
     StripRidingSpells(racial);
     MergeUniqueSpellIds(spells, racial);
@@ -101,6 +105,21 @@ std::vector<uint32_t> PlayerCreateInfoService::GetRacialSpells(uint8_t race,
   if (!m_starterSpellsDbcLoaded)
     return {};
   return m_starterSpellsDbc.GetRacialSpells(race, klass);
+}
+
+std::vector<StarterSkillGrant> PlayerCreateInfoService::GetStarterSkills(
+    uint8_t race, uint8_t klass) const {
+  if (!m_repository)
+    return {};
+  std::vector<StarterSkillGrant> skills =
+      m_repository->GetStarterSkills(race, klass);
+  skills.erase(
+      std::remove_if(skills.begin(), skills.end(),
+                     [](StarterSkillGrant const &g) {
+                       return IsExcludedStarterSkill(g.skillId);
+                     }),
+      skills.end());
+  return skills;
 }
 
 bool PlayerCreateInfoService::IsSpellFromExcludedSkillLine(

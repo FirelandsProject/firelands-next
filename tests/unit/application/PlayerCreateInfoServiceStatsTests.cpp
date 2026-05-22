@@ -67,7 +67,7 @@ TEST(PlayerCreateInfoServiceStats, AppliesClassRaceAndSetsHealth) {
   EXPECT_EQ(ch.GetPowerType(), 1u); // warrior rage
 }
 
-TEST(PlayerCreateInfoServiceStats, MergesRacialSpellsFromDbcWithWorldDbClassSpells) {
+TEST(PlayerCreateInfoServiceStats, MergesDbcSkillLineAndRacialSpellsWithWorldDb) {
   if (!Logger::IsInitialized())
     Logger::Init(LoggerBuilder().WithConsole(false).Build());
   auto repo = std::make_shared<MockPlayerCreateInfoRepo>();
@@ -84,6 +84,9 @@ TEST(PlayerCreateInfoServiceStats, MergesRacialSpellsFromDbcWithWorldDbClassSpel
   EXPECT_TRUE(has(78u));
   EXPECT_TRUE(has(2457u));
   EXPECT_TRUE(has(20572u)) << "Orc Blood Fury from SkillLineAbility.dbc";
+  EXPECT_TRUE(has(6603u)) << "Attack from starter weapon skill lines";
+  EXPECT_TRUE(has(3018u)) << "Shoot from skill-value ability rows";
+  EXPECT_TRUE(has(2764u)) << "Throw from skill-value ability rows";
 }
 
 TEST(PlayerCreateInfoServiceStats, ReturnsFalseWithoutClassRow) {
