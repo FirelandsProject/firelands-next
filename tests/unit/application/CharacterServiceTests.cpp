@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 #include <application/services/CharacterService.h>
 #include <domain/models/Character.h>
+#include <domain/models/CharacterActionButtons.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/repositories/ICharacterRepository.h>
 #include <optional>
@@ -35,6 +36,16 @@ public:
                 (override));
     MOCK_METHOD(bool, SaveCharacterCooldowns, (uint32_t, CharacterCooldownState const &),
                 (override));
+    MOCK_METHOD(CharacterActionButtonState, LoadCharacterActionButtons, (uint32_t, uint8_t),
+                (override));
+    MOCK_METHOD(bool, SaveCharacterActionButtons,
+                (uint32_t, uint8_t, CharacterActionButtonState const &), (override));
+    MOCK_METHOD(bool, UpsertCharacterActionButton,
+                (uint32_t, uint8_t, uint8_t, uint32_t, uint8_t), (override));
+    MOCK_METHOD(bool, DeleteCharacterActionButton, (uint32_t, uint8_t, uint8_t),
+                (override));
+    MOCK_METHOD(bool, UpdateCharacterActionBarToggles, (uint32_t, uint8_t),
+                (override));
     MOCK_METHOD(bool, AddCharacterSpell, (uint32_t, uint32_t), (override));
     MOCK_METHOD(bool, RemoveCharacterSpell, (uint32_t, uint32_t), (override));
     MOCK_METHOD(bool, HasItemTemplate, (uint32_t), (const, override));
@@ -52,6 +63,19 @@ public:
     MOCK_METHOD(bool, SaveInventory, (uint32_t, Bag0InventoryData const&), (override));
     MOCK_METHOD(std::vector<MailInboxRow>, LoadMailInbox, (uint32_t), (override));
 };
+
+TEST(CharacterServiceTests, SaveCharacterActionButtons_DelegatesToRepository) {
+  auto repo = std::make_shared<MockCharacterRepository>();
+  CharacterService service(repo);
+
+  CharacterActionButtonState state;
+  state.buttons.push_back(PersistedActionButton{0, 133u, 0});
+
+  EXPECT_CALL(*repo, SaveCharacterActionButtons(42u, 0, testing::_))
+      .WillOnce(Return(true));
+
+  EXPECT_TRUE(service.SaveCharacterActionButtons(42u, 0, state));
+}
 
 TEST(CharacterServiceTests, GetCharacters_ReturnsCharactersFromRepository) {
     auto repo = std::make_shared<MockCharacterRepository>();

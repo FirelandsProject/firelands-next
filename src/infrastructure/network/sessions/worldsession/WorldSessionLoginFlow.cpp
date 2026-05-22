@@ -1,5 +1,6 @@
 #include <application/ports/IMapNotifier.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
+#include <application/spell/PassiveSpellAuras.h>
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/WorldService.h>
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
@@ -89,10 +90,13 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
     return;
   }
   Character const &character = *characterOpt;
+  _actionBarToggles = character.GetActionBarToggles();
+  _activeActionBarSpec = 0;
   _sentOpeningCinematic = false;
   _tutorialInts = character.GetTutorialMask();
   _playerRace = character.GetRace();
   _playerClass = character.GetClass();
+  _playerLevel = std::max<uint8>(1, character.GetLevel());
   _moneyCopper = character.GetMoney();
   _playerXp = character.GetXp();
 
@@ -164,6 +168,14 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       AppendRacialLanguageSpells(character.GetRace(), _knownSpells);
       _knownSkills.clear();
     }
+    if (character.GetClass() == 9u) {
+      _knownSpells.erase(
+          std::remove_if(_knownSpells.begin(), _knownSpells.end(),
+                         [](uint32_t sid) {
+                           return IsWarlockQuestGatedSummonSpell(sid);
+                         }),
+          _knownSpells.end());
+    }
     RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
 
     for (uint32_t const persisted :
@@ -171,8 +183,12 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       if (_knownSpellIds.count(persisted) != 0)
         continue;
       bool const strip = [&] {
-        if (IsRidingOrTransportStarterSpell(persisted) ||
+        if (IsGuildPerkSpell(persisted) ||
+            IsWarlockQuestGatedSummonSpell(persisted) ||
+            IsRidingOrTransportStarterSpell(persisted) ||
             IsKnownMountSpell(persisted))
+          return true;
+        if (pci && pci->IsSpellFromExcludedSkillLine(persisted))
           return true;
         if (!_spellDefinitions)
           return false;
@@ -209,6 +225,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
     }
   }
   _gcdReady = {};
+  _gcdTriggerSpellId = 0;
   _spellCooldownUntil.clear();
   _spellCategoryCooldownUntil.clear();
   RestorePersistedSpellCooldowns(static_cast<uint32>(character.GetGuid()));
@@ -216,8 +233,12 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
   // including passive language spells. Existing characters may have
   // `firstLogin = false`, but the client still expects InitialLogin=1 here.
   SendKnownSpells(true, _knownSpells);
+  // Ref Trinity Player::SendUnlearnSpells: superseded-rank cleanup for spells the
+  // player already has — not a list of quest-gated trainable ids. Sending 688 here
+  // made Summon Imp show as learnable (yellow) on the client.
   SendUnlearnSpellsEmpty();
   SendTalentsInfo();
+  LoadActionButtonsForCharacter(static_cast<uint32_t>(character.GetGuid()));
   SendInitialActionButtons();
   SendInitialFactions();
   SendContactListEmpty();
@@ -297,8 +318,16 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
                                character.GetPower1(), character.GetMaxPower1());
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
-  if (auto map = WorldService::Instance().GetMap(_mapId))
-    SendActiveAurasOnMap(map, guid, std::chrono::steady_clock::now());
+  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    auto const now = std::chrono::steady_clock::now();
+    if (_spellDefinitions) {
+      std::vector<uint32_t> const passiveCandidates =
+          CollectLoginPassiveSpellIds(_knownSpellIds, _spellDefinitions.get());
+      ApplyPassiveAurasForKnownSpellsOnMap(_mapId, map, guid, _playerLevel,
+                                           passiveCandidates, now);
+    }
+    SendActiveAurasOnMap(map, guid, now);
+  }
 
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
 
@@ -472,6 +501,17 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
 
   SendClientActiveSpellCooldowns();
   SendClientActiveCategoryCooldowns();
+
+  // Client may reset bars after player UPDATE_OBJECT; resend once spellbook is active.
+  LoadActionButtonsForCharacter(static_cast<uint32_t>(guid));
+  SendActionButtons(1);
+  SendActionBarTogglesUpdate();
+
+  // Login create update zeros aura-derived stat/AP fields; re-sync from active auras.
+  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (_playerLevel > 0)
+      BroadcastPlayerAuraStatBonusOnMap(_mapId, map, guid, _playerLevel);
+  }
 }
 
 } // namespace Firelands

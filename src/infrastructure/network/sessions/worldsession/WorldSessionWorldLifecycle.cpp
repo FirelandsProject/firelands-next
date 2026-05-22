@@ -3,6 +3,7 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionMovementChecks.h>
 #include <shared/Logger.h>
 #include <shared/network/MovementStateQueries.h>
+#include <shared/game/ActionButton.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <optional>
@@ -59,6 +60,7 @@ void WorldSession::FinalizeWorldExit() {
   }
 
   SavePersistedSpellCooldowns(charGuidLow);
+  SaveActionButtonsForCharacter(charGuidLow);
 
   if (!_charService->SaveCharacterOnLogout(
           _accountId, charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,
@@ -103,8 +105,13 @@ void WorldSession::FinalizeWorldExit() {
   _knownSpellIds.clear();
   _knownSkills.clear();
   _gcdReady = {};
+  _gcdTriggerSpellId = 0;
   _spellCooldownUntil.clear();
   _spellCategoryCooldownUntil.clear();
+  for (auto &bar : _actionButtonBySpec)
+    ActionButton::ClearBar(bar);
+  _activeActionBarSpec = 0;
+  _actionBarToggles = 0xFF;
   ResetGmStateForLogout();
   _mapId = 0;
   _zoneId = 0;

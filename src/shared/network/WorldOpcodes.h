@@ -224,6 +224,8 @@ enum WorldOpcode : uint32 {
 
   /// Reference: WowPacketParser V4_3_4_15595 / Trinity `Opcodes.h` (build 15595).
   CMSG_SET_ACTION_BUTTON = 0x6F06,
+  /// Client reports a failed `SMSG_UPDATE_OBJECT` (packed GUID); safe to ignore.
+  CMSG_OBJECT_UPDATE_FAILED = 0x3808,
   /// Reference: WowPacketParser V4_3_4_15595 Opcodes.cs
   CMSG_CAST_SPELL = 0x4C07,
   /// Right-click remove buff (WowPacketParser V4_3_4_15595: uint32 spell id).
@@ -238,8 +240,14 @@ enum WorldOpcode : uint32 {
   SMSG_AURA_UPDATE_ALL = 0x6916,
   /// Trinity Cataclysm `SMSG_PERIODICAURALOG` — HoT/DoT tick combat log.
   SMSG_PERIODICAURALOG = 0x0416,
+  /// WowPacketParser `V4_3_4_15595` — activates client cooldown UI (action bar slots).
+  SMSG_COOLDOWN_EVENT = 0x4F26,
   /// WowPacketParser `V4_3_4_15595` — per-spell recovery on unit guid.
   SMSG_SPELL_COOLDOWN = 0x4B16,
+  /// Clears one spell cooldown (optional; batch via `SMSG_CLEAR_COOLDOWNS`).
+  SMSG_CLEAR_COOLDOWN = 0x0627,
+  /// Clears many spell cooldowns (GM reset / ref `SpellHistory::SendClearCooldowns`).
+  SMSG_CLEAR_COOLDOWNS = 0x59B4,
   /// Shared category recovery (login / `CMSG_REQUEST_CATEGORY_COOLDOWNS`).
   SMSG_CATEGORY_COOLDOWN = 0x71B6,
 

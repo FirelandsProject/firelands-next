@@ -190,6 +190,30 @@ public:
     return m_repository->SaveCharacterCooldowns(characterGuid, state);
   }
 
+  CharacterActionButtonState LoadCharacterActionButtons(uint32_t characterGuid,
+                                                        uint8_t spec = 0) {
+    return m_repository->LoadCharacterActionButtons(characterGuid, spec);
+  }
+
+  bool SaveCharacterActionButtons(uint32_t characterGuid, uint8_t spec,
+                                  CharacterActionButtonState const &state) {
+    return m_repository->SaveCharacterActionButtons(characterGuid, spec, state);
+  }
+
+  bool UpsertCharacterActionButton(uint32_t characterGuid, uint8_t spec,
+                                   uint8_t button, uint32_t action, uint8_t type) {
+    return m_repository->UpsertCharacterActionButton(characterGuid, spec, button, action,
+                                                   type);
+  }
+
+  bool DeleteCharacterActionButton(uint32_t characterGuid, uint8_t spec, uint8_t button) {
+    return m_repository->DeleteCharacterActionButton(characterGuid, spec, button);
+  }
+
+  bool UpdateCharacterActionBarToggles(uint32_t characterGuid, uint8_t toggles) {
+    return m_repository->UpdateCharacterActionBarToggles(characterGuid, toggles);
+  }
+
   bool SaveCharacterOnLogout(
       uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
       float x, float y, float z, float orientation, uint32_t moneyCopper,

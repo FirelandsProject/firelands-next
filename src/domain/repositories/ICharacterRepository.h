@@ -1,6 +1,7 @@
 #pragma once
 
 #include <domain/models/Character.h>
+#include <domain/models/CharacterActionButtons.h>
 #include <domain/models/CharacterCooldown.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <array>
@@ -64,6 +65,17 @@ public:
   virtual CharacterCooldownState LoadCharacterCooldowns(uint32_t characterGuid) = 0;
   virtual bool SaveCharacterCooldowns(uint32_t characterGuid,
                                     CharacterCooldownState const &state) = 0;
+  virtual CharacterActionButtonState LoadCharacterActionButtons(uint32_t characterGuid,
+                                                                uint8_t spec = 0) = 0;
+  virtual bool SaveCharacterActionButtons(uint32_t characterGuid, uint8_t spec,
+                                          CharacterActionButtonState const &state) = 0;
+  virtual bool UpsertCharacterActionButton(uint32_t characterGuid, uint8_t spec,
+                                           uint8_t button, uint32_t action,
+                                           uint8_t type) = 0;
+  virtual bool DeleteCharacterActionButton(uint32_t characterGuid, uint8_t spec,
+                                         uint8_t button) = 0;
+  virtual bool UpdateCharacterActionBarToggles(uint32_t characterGuid,
+                                               uint8_t toggles) = 0;
   virtual bool AddCharacterSpell(uint32_t characterGuid, uint32_t spellId) = 0;
   virtual bool RemoveCharacterSpell(uint32_t characterGuid, uint32_t spellId) = 0;
   /// True if `itemEntry` resolves from `item_template`, item DB2 hotfix, or CharStartOutfit DBC.

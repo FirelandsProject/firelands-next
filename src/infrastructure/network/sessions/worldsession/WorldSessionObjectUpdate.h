@@ -9,6 +9,7 @@
 #include <shared/network/MovementInfo.h>
 #include <shared/network/WorldPacket.h>
 
+#include <application/spell/PlayerAuraStatEffects.h>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -56,6 +57,15 @@ void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 healt
 
 void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power1,
                                    uint32 maxPower1, WorldPacket &outPacket);
+
+void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                             uint8 actionBarToggles,
+                                             WorldPacket &outPacket);
+
+/// `UNIT_FIELD_POSSTAT*` / `NEGSTAT*` / `PLAYER_FIELD_COMBAT_RATING_*` from aura bonuses.
+void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                     PlayerAuraStatBonus const &bonus,
+                                     WorldPacket &outPacket);
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_FACTIONTEMPLATE` only (players or units).
 void BuildUnitFactionTemplateValuesUpdate(uint16 mapId, uint64 unitGuid,

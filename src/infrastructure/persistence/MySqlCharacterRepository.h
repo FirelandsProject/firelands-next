@@ -45,6 +45,17 @@ namespace Firelands {
         CharacterCooldownState LoadCharacterCooldowns(uint32_t characterGuid) override;
         bool SaveCharacterCooldowns(uint32_t characterGuid,
                                     CharacterCooldownState const &state) override;
+        CharacterActionButtonState LoadCharacterActionButtons(uint32_t characterGuid,
+                                                              uint8_t spec = 0) override;
+        bool SaveCharacterActionButtons(uint32_t characterGuid, uint8_t spec,
+                                        CharacterActionButtonState const &state) override;
+        bool UpsertCharacterActionButton(uint32_t characterGuid, uint8_t spec,
+                                         uint8_t button, uint32_t action,
+                                         uint8_t type) override;
+        bool DeleteCharacterActionButton(uint32_t characterGuid, uint8_t spec,
+                                         uint8_t button) override;
+        bool UpdateCharacterActionBarToggles(uint32_t characterGuid,
+                                             uint8_t toggles) override;
         bool AddCharacterSpell(uint32_t characterGuid, uint32_t spellId) override;
         bool RemoveCharacterSpell(uint32_t characterGuid, uint32_t spellId) override;
         bool HasItemTemplate(uint32_t itemEntry) const override;

@@ -9,8 +9,11 @@
 #include <shared/network/packets/SetProficiencyPacket.h>
 #include <shared/network/packets/server/SimpleOutboundPackets.h>
 #include <shared/network/packets/VerifyWorldPacket.h>
+#include <shared/Logger.h>
+#include <shared/network/KnownSpellsWire.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
+#include <shared/game/ActionButton.h>
 #include <array>
 #include <ctime>
 #include <vector>
@@ -166,15 +169,8 @@ void WorldSession::SendHotfixNotifyBlobEmpty() {
 
 void WorldSession::SendKnownSpells(bool initialLogin,
                                    std::vector<uint32> const &spellIds) {
-  // SpellPackets.cpp SendKnownSpells::Write()
   WorldPacket data(SMSG_SEND_KNOWN_SPELLS);
-  data.Append<uint8>(initialLogin ? 1u : 0u);
-  data.Append<uint16>(static_cast<uint16>(spellIds.size()));
-  for (uint32 spellId : spellIds) {
-    data.Append<uint32>(spellId);
-    data.Append<int16>(0); // Slot (unused)
-  }
-  data.Append<uint16>(0); // SpellHistoryEntries.size()
+  KnownSpellsWire::WriteSendKnownSpells(data, initialLogin, spellIds);
   SendPacket(data);
 }
 
@@ -187,9 +183,13 @@ void WorldSession::SendLearnedSpell(uint32 spellId) {
   SendPacket(data);
 }
 
-void WorldSession::SendUnlearnSpellsEmpty() {
+void WorldSession::SendUnlearnSpellsEmpty() { SendUnlearnSpells({}); }
+
+void WorldSession::SendUnlearnSpells(std::vector<uint32> const &spellIds) {
   WorldPacket data(SMSG_SEND_UNLEARN_SPELLS);
-  data.Append<uint32>(0);
+  data.Append<uint32>(static_cast<uint32>(spellIds.size()));
+  for (uint32 spellId : spellIds)
+    data.Append<uint32>(spellId);
   SendPacket(data);
 }
 
@@ -207,12 +207,25 @@ void WorldSession::SendEquipmentSetListEmpty() {
   SendPacket(new WorldPackets::Character::EquipmentSetListEmpty());
 }
 
-void WorldSession::SendInitialActionButtons() {
+void WorldSession::SendActionButtons(uint8_t reason) {
+  // Cataclysm 4.3.4: SMSG_UPDATE_ACTION_BUTTONS — uint32[144] then Reason (15595 reference).
   WorldPacket data(SMSG_ACTION_BUTTONS);
-  for (int i = 0; i < 144; ++i) data.Append<uint32>(0);
-  data.Append<uint8>(0);
+  ActionButton::PackedActionBar const &bar = ActiveActionBar();
+  data.Append(reinterpret_cast<uint8 const *>(bar.data()),
+              ActionButton::kMaxButtons * sizeof(uint32_t));
+  data.Append<uint8>(reason);
+
+  uint32_t nonEmpty = 0;
+  for (uint32_t packed : bar) {
+    if (packed != 0)
+      ++nonEmpty;
+  }
+  LOG_INFO("SMSG_UPDATE_ACTION_BUTTONS reason={} nonEmptySlots={} payload={}",
+           static_cast<unsigned>(reason), nonEmpty, data.Size());
   SendPacket(data);
 }
+
+void WorldSession::SendInitialActionButtons() { SendActionButtons(0); }
 
 void WorldSession::SendInitWorldStates(uint32 mapId, uint32 zoneId, uint32 areaId) {
   WorldPacket data(SMSG_INIT_WORLD_STATES);
@@ -288,14 +301,18 @@ void WorldSession::SendTalentsInfo() {
   WorldPacket data(SMSG_TALENTS_INFO);
   data.Append<uint8>(0);  // isPet = false
   data.Append<uint32>(0); // freeTalentPoints
-  data.Append<uint8>(1);  // specsCount = 1 (unspecialized)
-  data.Append<uint8>(0);  // activeSpec = 0
-  // Spec 0 block
-  data.Append<uint32>(0); // primaryTalentTree = 0 (none chosen)
-  data.Append<uint8>(0);  // talentIdCount = 0
-  data.Append<uint8>(kGlyphSlots);
-  for (uint8 i = 0; i < kGlyphSlots; ++i)
-    data.Append<uint16>(0); // all glyphs empty
+  static constexpr uint8 kSpecsCount =
+      static_cast<uint8>(ActionButton::kMaxActionBarSpecs);
+  data.Append<uint8>(kSpecsCount);
+  data.Append<uint8>(_activeActionBarSpec);
+  for (uint8 spec = 0; spec < kSpecsCount; ++spec) {
+    (void)spec;
+    data.Append<uint32>(0); // primaryTalentTree
+    data.Append<uint8>(0);  // talentIdCount
+    data.Append<uint8>(kGlyphSlots);
+    for (uint8 i = 0; i < kGlyphSlots; ++i)
+      data.Append<uint16>(0);
+  }
   SendPacket(data);
 }
 

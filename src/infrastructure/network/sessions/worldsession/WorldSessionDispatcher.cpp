@@ -54,9 +54,17 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_GM_SURVEY_SUBMIT:
     // Optional post-resolution survey; not implemented.
     break;
-  case CMSG_SET_ACTIVE_MOVER:
   case CMSG_SET_ACTION_BUTTON:
+    HandleSetActionButton(packet);
+    break;
+  case CMSG_OBJECT_UPDATE_FAILED:
+    HandleObjectUpdateFailed(packet);
+    break;
+  case CMSG_SET_ACTIVE_MOVER:
+    break;
   case CMSG_SET_ACTIONBAR_TOGGLES:
+    HandleSetActionBarToggles(packet);
+    break;
   case CMSG_REQUEST_RAID_INFO:
   case CMSG_GROUP_INVITE_RESPONSE:
   case CMSG_UNREGISTER_ALL_ADDON_PREFIXES:
@@ -84,7 +92,7 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     HandleRequestCemeteryList(packet);
     break;
   case CMSG_LOADING_SCREEN_NOTIFY:
-    // Simply acknowledge loading screen progress
+    HandleLoadingScreenNotify(packet);
     break;
   case CMSG_LOG_DISCONNECT:
     Close();

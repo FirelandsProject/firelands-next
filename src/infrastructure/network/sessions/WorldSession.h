@@ -25,6 +25,7 @@
 #include <shared/dbc/ItemDbHotfixStore.h>
 #include <shared/dbc/EmotesTextDbc.h>
 #include <shared/dbc/LanguagesDbc.h>
+#include <shared/game/ActionButton.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PlayerGmAppearance.h>
 #include <domain/models/GossipMenu.h>
@@ -130,6 +131,7 @@ public:
   bool GmAddItem(uint32 itemEntry, uint32 count) override;
   bool GmRemoveItem(uint32 itemEntry, uint32 count) override;
   bool GmSetLevel(uint8 level) override;
+  bool GmResetAllCooldowns() override;
   bool GmDamageUnit(uint64 targetGuid, uint32 amount) override;
 
   bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
@@ -290,12 +292,21 @@ public:
   /// Same payload as Trinity `Player::LearnSpell` → `SMSG_LEARNED_SPELL`.
   void SendLearnedSpell(uint32 spellId);
   void SendUnlearnSpellsEmpty();
+  void SendUnlearnSpells(std::vector<uint32> const &spellIds);
   void SendDungeonDifficulty(bool inGroup = false);
   void SendHotfixNotifyBlobEmpty();
   void SendContactListEmpty();
   void SendAllAchievementDataEmpty();
   void SendEquipmentSetListEmpty();
+  void SendActionButtons(uint8_t reason);
   void SendInitialActionButtons();
+  void HandleSetActionButton(WorldPacket &packet);
+  void HandleSetActionBarToggles(WorldPacket &packet);
+  void HandleLoadingScreenNotify(WorldPacket &packet);
+  void HandleObjectUpdateFailed(WorldPacket &packet);
+  void LoadActionButtonsForCharacter(uint32_t characterGuid);
+  void SaveActionButtonsForCharacter(uint32_t characterGuid);
+  void SendActionBarTogglesUpdate();
   void SendInitWorldStates(uint32 mapId, uint32 zoneId = 0, uint32 areaId = 0);
   void SendSetupCurrency();
   void SendClientControlUpdate(uint64 guid);
@@ -457,6 +468,7 @@ public:
   uint64_t _clientSelectionGuid = 0;
   uint8 _playerRace = 0;
   uint8 _playerClass = 0;
+  uint8 _playerLevel = 1;
   /// Persisted copper; mirrored on logout and after `.money` GM commands.
   uint32_t _moneyCopper = 0;
   /// Persisted experience (`characters.xp`); mirrored on logout and GM level.
@@ -500,11 +512,27 @@ public:
   std::unordered_set<uint32> _knownSpellIds;
   std::vector<StarterSkillGrant> _knownSkills;
   std::chrono::steady_clock::time_point _gcdReady{};
+  /// Spell id from the cast that started the current GCD (client clear packet).
+  uint32 _gcdTriggerSpellId = 0;
   /// Phase E: per-spell recovery (`SpellCooldowns.dbc` RecoveryTime) until instant.
   std::unordered_map<uint32, std::chrono::steady_clock::time_point> _spellCooldownUntil;
   /// Phase E: shared category recovery (`SpellCooldowns` + `SpellCategories.dbc` group).
   std::unordered_map<uint32, std::chrono::steady_clock::time_point>
       _spellCategoryCooldownUntil;
+
+  std::array<ActionButton::PackedActionBar, ActionButton::kMaxActionBarSpecs>
+      _actionButtonBySpec{};
+  uint8_t _activeActionBarSpec = 0;
+  uint8_t _actionBarToggles = 0xFF;
+
+  ActionButton::PackedActionBar &ActiveActionBar() {
+    return _actionButtonBySpec[std::min<size_t>(_activeActionBarSpec,
+                                                ActionButton::kMaxActionBarSpecs - 1)];
+  }
+  ActionButton::PackedActionBar const &ActiveActionBar() const {
+    return _actionButtonBySpec[std::min<size_t>(_activeActionBarSpec,
+                                                ActionButton::kMaxActionBarSpecs - 1)];
+  }
 
   PlayerGmAppearanceForUpdates _gmAppearance{};
   bool _gmFlyEnabled = false;

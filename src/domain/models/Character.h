@@ -29,7 +29,8 @@ public:
             std::array<uint32_t, kPackSlotCount> packItemGuids = {},
             std::array<uint32_t, kPackSlotCount> packItemStacks = {},
             uint32 moneyCopper = 0, uint32_t xp = 0,
-            std::array<uint32_t, kTutorialMaskInts> tutorialMask = {})
+            std::array<uint32_t, kTutorialMaskInts> tutorialMask = {},
+            uint8 actionBarToggles = 0xFF)
       : m_guid(guid), m_account(account), m_name(std::move(name)), m_race(race),
         m_klass(klass), m_gender(gender), m_skin(skin), m_face(face),
         m_hairStyle(hairStyle), m_hairColor(hairColor),
@@ -42,7 +43,7 @@ public:
         m_visibleItemStacks(visibleItemStacks), m_packItemEntries(packItemEntries),
         m_packItemGuids(packItemGuids), m_packItemStacks(packItemStacks),
         m_moneyCopper(moneyCopper), m_xp(xp), m_tutorialMask(tutorialMask),
-        m_health(100), m_maxHealth(100),
+        m_actionBarToggles(actionBarToggles), m_health(100), m_maxHealth(100),
         m_factionTemplate(1),
         m_displayId(GetDefaultDisplayId(race, gender)),
         m_primaryStats(GetDefaultPrimaryStats(klass)) {}
@@ -179,6 +180,24 @@ public:
     return c == 0 ? 1u : c;
   }
 
+  /// True if `entry` appears in bag-0 equipment or main backpack slots.
+  bool HasBag0ItemEntry(uint32_t entry) const {
+    if (entry == 0)
+      return false;
+    for (uint32_t e : m_visibleItems) {
+      if (e == entry)
+        return true;
+    }
+    for (uint32_t e : m_packItemEntries) {
+      if (e == entry)
+        return true;
+    }
+    return false;
+  }
+
+  uint8 GetActionBarToggles() const { return m_actionBarToggles; }
+  void SetActionBarToggles(uint8 toggles) { m_actionBarToggles = toggles; }
+
   Bag0InventoryData GetBag0Inventory() const {
     Bag0InventoryData data;
     for (size_t i = 0; i < kEquipmentSlotCount; ++i) {
@@ -282,6 +301,7 @@ private:
   uint32 m_moneyCopper = 0;
   uint32_t m_xp = 0;
   std::array<uint32_t, kTutorialMaskInts> m_tutorialMask{};
+  uint8 m_actionBarToggles = 0xFF;
 
   uint32 m_health;
   uint32 m_maxHealth;

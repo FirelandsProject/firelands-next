@@ -33,6 +33,16 @@ void SetPackedShort(std::map<uint16, uint32> &fields, uint16 field, uint8 slot,
 
 /// Cataclysm 4.3.4: each skill slot uses its own update-field index (Size 64
 /// TWO_SHORT arrays are 64 entries, not 32 packed pairs).
+void SetPlayerFieldByte(std::map<uint16, uint32> &fields, uint16 field, uint8 offset,
+                        uint8 value) {
+  uint32 &packed = fields[field];
+  uint8 bytes[4]{};
+  std::memcpy(bytes, &packed, sizeof(bytes));
+  if (offset < 4)
+    bytes[offset] = value;
+  std::memcpy(&packed, bytes, sizeof(bytes));
+}
+
 void SetPlayerSkillSlot(std::map<uint16, uint32> &fields, uint16 baseField,
                         uint8 slot, uint16 value) {
   if (slot >= 64)
@@ -329,7 +339,7 @@ std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
   case 1: // Warrior
     return {2457, 71, 78, 100, 6673, 772, 3127, 34428};
   case 2: // Paladin
-    return {465, 635, 20154, 20271, 19740, 498, 633, 82242};
+    return {465, 635, 20154, 20271, 35395, 19740, 498, 633, 82242};
   case 3: // Hunter
     return {75, 13165, 1978, 2643, 56641, 781, 1130, 2973};
   case 4: // Rogue
@@ -342,8 +352,8 @@ std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
     return {331, 8042, 8017, 8050, 324, 51730, 8004, 52127};
   case 8: // Mage
     return {116, 133, 2136, 1459, 130, 1953, 118};
-  case 9: // Warlock
-    return {172, 348, 687, 1454, 5782, 980, 603};
+  case 9: // Warlock (688 Summon Imp is quest-gated)
+    return {686, 172, 348, 1454, 5782, 980};
   case 11: // Druid
     return {8921, 5185, 774, 768, 1126, 339, 467};
   default:
@@ -464,6 +474,9 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
   // means track XP. If this field is omitted from the create update, the client
   // defaults to slot 0 and shows that faction's name/rep bar instead of experience.
   fields[PLAYER_FIELD_WATCHED_FACTION_INDEX] = static_cast<uint32>(-1);
+  SetPlayerFieldByte(fields, PLAYER_FIELD_BYTES,
+                     PLAYER_FIELD_BYTES_OFFSET_ACTION_BAR_TOGGLES,
+                     character.GetActionBarToggles());
   {
     uint8 const lv = character.GetLevel();
     constexpr uint8 kMaxLevelCata = 85;
@@ -564,6 +577,43 @@ void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power
   std::map<uint16, uint32> fields;
   fields[UNIT_FIELD_POWER1] = power1;
   fields[UNIT_FIELD_MAXPOWER1] = maxPower1;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
+}
+
+void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                             uint8 actionBarToggles,
+                                             WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  SetPlayerFieldByte(fields, PLAYER_FIELD_BYTES,
+                     PLAYER_FIELD_BYTES_OFFSET_ACTION_BAR_TOGGLES, actionBarToggles);
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
+}
+
+void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                     PlayerAuraStatBonus const &bonus,
+                                     WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  for (uint8_t i = 0; i < 5; ++i) {
+    fields[static_cast<uint16>(UNIT_FIELD_POSSTAT0 + i)] =
+        static_cast<uint32>(std::max<int32>(0, bonus.posStat[i]));
+    fields[static_cast<uint16>(UNIT_FIELD_NEGSTAT0 + i)] =
+        static_cast<uint32>(std::max<int32>(0, bonus.negStat[i]));
+  }
+  for (size_t r = 0; r < bonus.combatRating.size(); ++r) {
+    if (bonus.combatRating[r] != 0)
+      fields[static_cast<uint16>(PLAYER_FIELD_COMBAT_RATING_1 +
+                                 static_cast<uint16>(r))] =
+          static_cast<uint32>(std::max<int32>(0, bonus.combatRating[r]));
+  }
+  fields[UNIT_FIELD_ATTACK_POWER_MOD_POS] =
+      static_cast<uint32>(std::max<int32>(0, bonus.attackPowerModPos));
+  fields[UNIT_FIELD_ATTACK_POWER_MOD_NEG] =
+      static_cast<uint32>(std::max<int32>(0, bonus.attackPowerModNeg));
+  fields[UNIT_FIELD_ATTACK_POWER_MULTIPLIER] = PackFloat(bonus.attackPowerMultiplier);
   UpdateData update(mapId);
   update.AddValuesUpdate(playerGuid, fields);
   update.Build(outPacket);

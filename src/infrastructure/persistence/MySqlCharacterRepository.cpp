@@ -178,6 +178,27 @@ void EnsureCharactersTutorialMaskColumns(std::shared_ptr<sql::Connection> conn) 
     (void)EnsureCharactersTutorialColumn(conn, names[i], after[i]);
 }
 
+bool EnsureCharactersActionBarTogglesColumn(std::shared_ptr<sql::Connection> conn) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "ALTER TABLE `firelands_characters`.`characters` "
+        "ADD COLUMN `actionBarToggles` tinyint unsigned NOT NULL DEFAULT 255 "
+        "AFTER `tutorial7`");
+    LOG_DEBUG(
+        "Added missing column `firelands_characters.characters.actionBarToggles`.");
+    return true;
+  } catch (sql::SQLException &e) {
+    if (e.getErrorCode() == 1060)
+      return true;
+    std::string const msg{e.what()};
+    if (msg.find("Duplicate column") != std::string::npos)
+      return true;
+    LOG_WARN("EnsureCharactersActionBarTogglesColumn failed: {}", e.what());
+    return false;
+  }
+}
+
 bool EnsureCharacterSpellCooldownTables(std::shared_ptr<sql::Connection> conn) {
   try {
     std::unique_ptr<sql::Statement> st(conn->createStatement());
@@ -224,6 +245,28 @@ bool EnsureCharacterSpellTable(std::shared_ptr<sql::Connection> conn) {
     return true;
   } catch (sql::SQLException &e) {
     LOG_ERROR("EnsureCharacterSpellTable failed: {}", e.what());
+    return false;
+  }
+}
+
+bool EnsureCharacterActionTable(std::shared_ptr<sql::Connection> conn) {
+  try {
+    std::unique_ptr<sql::Statement> st(conn->createStatement());
+    st->execute(
+        "CREATE TABLE IF NOT EXISTS firelands_characters.character_action ("
+        "guid INT UNSIGNED NOT NULL,"
+        "spec TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+        "button TINYINT UNSIGNED NOT NULL,"
+        "action INT UNSIGNED NOT NULL DEFAULT 0,"
+        "type TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+        "PRIMARY KEY (guid, spec, button),"
+        "KEY idx_guid (guid),"
+        "CONSTRAINT fk_character_action_guid FOREIGN KEY (guid) REFERENCES "
+        "characters(guid) ON DELETE CASCADE"
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    return true;
+  } catch (sql::SQLException &e) {
+    LOG_ERROR("EnsureCharacterActionTable failed: {}", e.what());
     return false;
   }
 }
@@ -650,6 +693,7 @@ MySqlCharacterRepository::MySqlCharacterRepository(
   EnsureCharactersLiveHealthColumn(_connection);
   EnsureCharactersLivePower1Column(_connection);
   EnsureCharactersTutorialMaskColumns(_connection);
+  EnsureCharactersActionBarTogglesColumn(_connection);
   EnsureCharacterSpellTable(_connection);
   EnsureCharacterSpellCooldownTables(_connection);
   _charStartOutfitLoaded =
@@ -989,7 +1033,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
         "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
         "customizationFlags, firstLogin, money, xp, live_health, live_power1, "
         "tutorial0, tutorial1, tutorial2, tutorial3, tutorial4, tutorial5, "
-        "tutorial6, tutorial7 "
+        "tutorial6, tutorial7, actionBarToggles "
         "FROM characters WHERE guid = ?"));
     stmnt->setUInt64(1, guid);
 
@@ -1033,6 +1077,10 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
       tutorialMask[5] = res->getUInt("tutorial5");
       tutorialMask[6] = res->getUInt("tutorial6");
       tutorialMask[7] = res->getUInt("tutorial7");
+      uint8_t const actionBarToggles =
+          res->isNull("actionBarToggles")
+              ? static_cast<uint8_t>(0xFF)
+              : static_cast<uint8_t>(res->getUInt("actionBarToggles"));
       // Read the full row before nested queries; do not `res.reset()` here — closing
       // the result set early has been observed to upset the same connection/session
       // for the inventory query on some MariaDB connector builds.
@@ -1043,7 +1091,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                    pz, po, guildId, characterFlags, customizationFlags, firstLogin,
                    outfitId, equipmentCache, bag0.equipEntries, bag0.equipGuids,
                    bag0.equipStacks, bag0.packEntries, bag0.packGuids,
-                   bag0.packStacks, money, xp, tutorialMask);
+                   bag0.packStacks, money, xp, tutorialMask, actionBarToggles);
       ApplyInitialFactionTemplate(ch, race);
       std::optional<uint32> liveH;
       std::optional<uint32> liveP1;
@@ -1258,6 +1306,128 @@ bool MySqlCharacterRepository::SaveCharacterCooldowns(
     return true;
   } catch (sql::SQLException const &e) {
     LOG_ERROR("SaveCharacterCooldowns failed: {}", e.what());
+    return false;
+  }
+}
+
+CharacterActionButtonState MySqlCharacterRepository::LoadCharacterActionButtons(
+    uint32_t characterGuid, uint8_t spec) {
+  CharacterActionButtonState state;
+  if (!EnsureCharacterActionTable(_connection))
+    return state;
+  try {
+    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
+        "SELECT button, action, type FROM character_action WHERE guid = ? AND "
+        "spec = ? ORDER BY button"));
+    ps->setUInt(1, characterGuid);
+    ps->setUInt(2, spec);
+    std::shared_ptr<sql::ResultSet> rs(ps->executeQuery());
+    while (rs->next()) {
+      PersistedActionButton row;
+      row.button = static_cast<uint8_t>(rs->getUInt("button"));
+      row.action = rs->getUInt("action");
+      row.type = static_cast<uint8_t>(rs->getUInt("type"));
+      state.buttons.push_back(row);
+    }
+  } catch (sql::SQLException const &e) {
+    LOG_WARN("LoadCharacterActionButtons failed: {}", e.what());
+    state.buttons.clear();
+  }
+  return state;
+}
+
+bool MySqlCharacterRepository::SaveCharacterActionButtons(
+    uint32_t characterGuid, uint8_t spec, CharacterActionButtonState const &state) {
+  if (!EnsureCharacterActionTable(_connection))
+    return false;
+  try {
+    {
+      std::shared_ptr<sql::PreparedStatement> del(_connection->prepareStatement(
+          "DELETE FROM character_action WHERE guid = ? AND spec = ?"));
+      del->setUInt(1, characterGuid);
+      del->setUInt(2, spec);
+      del->executeUpdate();
+    }
+    if (!state.buttons.empty()) {
+      std::shared_ptr<sql::PreparedStatement> ins(_connection->prepareStatement(
+          "INSERT INTO character_action (guid, spec, button, action, type) "
+          "VALUES (?, ?, ?, ?, ?)"));
+      for (PersistedActionButton const &row : state.buttons) {
+        if (row.action == 0u)
+          continue;
+        ins->setUInt(1, characterGuid);
+        ins->setUInt(2, spec);
+        ins->setUInt(3, row.button);
+        ins->setUInt(4, row.action);
+        ins->setUInt(5, row.type);
+        ins->executeUpdate();
+      }
+    }
+    return true;
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("SaveCharacterActionButtons failed: {}", e.what());
+    return false;
+  }
+}
+
+bool MySqlCharacterRepository::UpsertCharacterActionButton(uint32_t characterGuid,
+                                                         uint8_t spec, uint8_t button,
+                                                         uint32_t action, uint8_t type) {
+  if (!EnsureCharacterActionTable(_connection))
+    return false;
+  try {
+    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
+        "INSERT INTO character_action (guid, spec, button, action, type) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE action = VALUES(action), type = VALUES(type)"));
+    ps->setUInt(1, characterGuid);
+    ps->setUInt(2, spec);
+    ps->setUInt(3, button);
+    ps->setUInt(4, action);
+    ps->setUInt(5, type);
+    ps->executeUpdate();
+    return true;
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("UpsertCharacterActionButton failed: {}", e.what());
+    return false;
+  }
+}
+
+bool MySqlCharacterRepository::DeleteCharacterActionButton(uint32_t characterGuid,
+                                                           uint8_t spec,
+                                                           uint8_t button) {
+  if (!EnsureCharacterActionTable(_connection))
+    return false;
+  try {
+    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
+        "DELETE FROM character_action WHERE guid = ? AND spec = ? AND button = ?"));
+    ps->setUInt(1, characterGuid);
+    ps->setUInt(2, spec);
+    ps->setUInt(3, button);
+    ps->executeUpdate();
+    return true;
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("DeleteCharacterActionButton failed: {}", e.what());
+    return false;
+  }
+}
+
+bool MySqlCharacterRepository::UpdateCharacterActionBarToggles(uint32_t characterGuid,
+                                                               uint8_t toggles) {
+  try {
+    std::shared_ptr<sql::PreparedStatement> ps(_connection->prepareStatement(
+        "UPDATE characters SET actionBarToggles = ? WHERE guid = ?"));
+    ps->setUInt(1, toggles);
+    ps->setUInt(2, characterGuid);
+    ps->executeUpdate();
+    return true;
+  } catch (sql::SQLException &e) {
+    if (e.getErrorCode() == 1054) {
+      LOG_WARN("UpdateCharacterActionBarToggles failed: column missing (apply "
+               "migration 53_characters_action_bar_toggles.sql).");
+    } else {
+      LOG_ERROR("UpdateCharacterActionBarToggles failed: {}", e.what());
+    }
     return false;
   }
 }
