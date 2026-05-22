@@ -64,3 +64,37 @@ TEST(SpellCastTablesDbcSpellPowerTests, GetSpellPowerManaCostFromMinimalDbc) {
   std::error_code ec;
   std::filesystem::remove(tmp, ec);
 }
+
+TEST(SpellCastTablesDbcSpellPowerTests, GetSpellPowerManaCostUsesFloatWhenIntegerCostZero) {
+  std::filesystem::path const tmp =
+      std::filesystem::temp_directory_path() / "firelands_ut_spellpower_float.dbc";
+
+  std::vector<uint8_t> raw;
+  raw.insert(raw.end(), {'W', 'D', 'B', 'C'});
+  AppendLeU32(raw, 1u);
+  AppendLeU32(raw, 8u);
+  AppendLeU32(raw, 32u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 33u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 0u);
+  AppendLeU32(raw, 0u);
+  AppendLeF32(raw, 9.0f);
+
+  {
+    std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(out);
+    out.write(reinterpret_cast<char const *>(raw.data()),
+              static_cast<std::streamsize>(raw.size()));
+  }
+
+  SpellCastTablesDbc tables;
+  ASSERT_TRUE(tables.Load("", "", "", tmp.string(), ""));
+  EXPECT_EQ(tables.GetSpellPowerManaCost(33u), 9u);
+
+  std::error_code ec;
+  std::filesystem::remove(tmp, ec);
+}

@@ -1,5 +1,6 @@
 #include <infrastructure/dbc/SpellCastTablesDbc.h>
 
+#include <cmath>
 #include <shared/dbc/DbcReader.h>
 #include <shared/Logger.h>
 
@@ -118,14 +119,24 @@ static bool LoadSpellPower(std::string const &path,
     return false;
   }
 
+  uint32_t const floatFieldIndex =
+      static_cast<uint32_t>(kFmt.size() - 1u);
+
   uint32_t const n = reader.GetRecordCount();
   outManaById.reserve(static_cast<size_t>(n));
   for (uint32_t rec = 0; rec < n; ++rec) {
     uint32_t const id = reader.ReadUInt32(rec, 0, offsets);
     if (id == 0u)
       continue;
-    uint32_t const mana = reader.ReadUInt32(rec, 1, offsets);
-    outManaById.emplace(id, mana);
+    uint32_t cost = reader.ReadUInt32(rec, 1, offsets);
+    if (cost == 0u) {
+      float const floatCost = reader.ReadFloat(rec, floatFieldIndex, offsets);
+      if (floatCost > 0.f)
+        cost = static_cast<uint32_t>(std::floor(static_cast<double>(floatCost) + 0.5));
+    }
+    if (cost == 0u)
+      continue;
+    outManaById.emplace(id, cost);
   }
   LOG_DEBUG("SpellPower.dbc: {} rows from {}.", outManaById.size(), path);
   return true;
