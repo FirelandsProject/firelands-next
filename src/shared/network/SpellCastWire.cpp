@@ -1,7 +1,11 @@
 #include <shared/network/SpellCastWire.h>
 
+#include <shared/network/movement/ClientMovementMse.h>
+
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 
 namespace Firelands {
 namespace SpellCastWire {
@@ -35,10 +39,11 @@ static void AppendSpellTargetData(WorldPacket &data, uint32 targetFlags,
 
 static void AppendSpellHitInfo(WorldPacket &data, uint64 const *hitTargets,
                                size_t hitCount) {
+  // Cataclysm 4.3.4 `SpellHitInfo`: each hit is `ObjectGuid` as raw uint64 (not packed).
   size_t const n = std::min(hitCount, size_t(255));
   data.Append<uint8>(static_cast<uint8>(n));
   for (size_t i = 0; i < n; ++i)
-    data.AppendPackGUID(hitTargets[i]);
+    data.Append<uint64>(hitTargets[i]);
 
   data.Append<uint8>(0); // miss count
 }
@@ -49,7 +54,8 @@ static void AppendSpellCastDataCore(WorldPacket &data, uint64 casterGuid,
                                     uint32 castFlagsEx, uint32 castTimeMs,
                                     bool withHitInfo, uint64 const *hitTargets,
                                     size_t hitCount, uint32 targetFlags,
-                                    uint64 targetUnitGuid) {
+                                    uint64 targetUnitGuid,
+                                    SpellMissileTrajectoryWire const *missile) {
   data.AppendPackGUID(casterGuid);
   data.AppendPackGUID(casterUnitGuid);
   data.Append<uint8>(castId);
@@ -62,9 +68,58 @@ static void AppendSpellCastDataCore(WorldPacket &data, uint64 casterGuid,
     AppendSpellHitInfo(data, hitTargets, hitCount);
 
   AppendSpellTargetData(data, targetFlags, targetUnitGuid);
+
+  if ((castFlags & CAST_FLAG_ADJUST_MISSILE) != 0u && missile != nullptr) {
+    data.Append<float>(missile->pitch);
+    data.Append<int32>(static_cast<int32>(missile->travelTimeMs));
+  }
+}
+
+static float HorizontalDistance(float x0, float y0, float x1, float y1) {
+  float const dx = x1 - x0;
+  float const dy = y1 - y0;
+  return std::sqrt(dx * dx + dy * dy);
+}
+
+static uint32 ComputeTravelMsFromSpeed(float speed, float horizontalDistance,
+                                       uint32 fallbackMs) {
+  if (speed > 0.01f && horizontalDistance > 0.01f) {
+    double const ms = static_cast<double>(horizontalDistance) / static_cast<double>(speed) *
+                      1000.0;
+    if (ms > 0.0 && ms <= static_cast<double>(UINT32_MAX))
+      return static_cast<uint32>(ms);
+  }
+  return fallbackMs;
 }
 
 } // namespace
+
+uint32 BuildSpellGoCastFlags(bool useMissile) {
+  uint32 flags = CAST_FLAG_UNKNOWN_9;
+  if (useMissile)
+    flags |= CAST_FLAG_ADJUST_MISSILE;
+  return flags;
+}
+
+SpellGoMissileResolution ResolveSpellGoMissile(
+    ClientCastSpellData const &client, bool hasCasterWorldPosition, float casterX,
+    float casterY, float casterZ, bool hasTargetWorldPosition, float targetX,
+    float targetY, float targetZ, uint32 fallbackTravelTimeMs) {
+  SpellGoMissileResolution result{};
+  // Reference `SpellCastTargets::HasTraj()` is `m_speed != 0` (from client trajectory).
+  if (!client.hasMissileTrajectory || client.missileSpeed <= 0.01f)
+    return result;
+
+  float horizontal = 0.f;
+  if (hasCasterWorldPosition && hasTargetWorldPosition)
+    horizontal = HorizontalDistance(casterX, casterY, targetX, targetY);
+
+  result.sendOnWire = true;
+  result.trajectory.pitch = client.missilePitch;
+  result.trajectory.travelTimeMs =
+      ComputeTravelMsFromSpeed(client.missileSpeed, horizontal, fallbackTravelTimeMs);
+  return result;
+}
 
 uint32 ResolveSpellGoTimestampMs(uint32 clientMovementTimeMs) {
   if (clientMovementTimeMs != 0u)
@@ -142,11 +197,20 @@ bool TryReadClientCastSpell(WorldPacket &packet, ClientCastSpellData &out) {
   if (out.sendCastFlags & CLIENT_CAST_FLAG_HAS_TRAJECTORY) {
     if (packet.Size() - packet.GetReadPos() < 4 + 4 + 1)
       return false;
-    (void)packet.Read<float>();
-    (void)packet.Read<float>();
-    uint8 hasMovement = packet.Read<uint8>();
-    if (hasMovement != 0)
-      return false;
+    out.missilePitch = packet.Read<float>();
+    out.missileSpeed = packet.Read<float>();
+    out.hasMissileTrajectory = true;
+    uint8 const movementData = packet.Read<uint8>();
+    if (movementData != 0) {
+      if (packet.Size() - packet.GetReadPos() < 4 + 1)
+        return false;
+      uint32 const moveOpcode = packet.Read<uint32>();
+      if (packet.Size() - packet.GetReadPos() < 1)
+        return false;
+      (void)packet.ReadPackedGuid();
+      MovementInfo move{};
+      (void)TryReadClientMovementMse(packet, moveOpcode, move);
+    }
   }
 
   if (out.sendCastFlags & CLIENT_CAST_FLAG_HAS_WEIGHT) {
@@ -175,25 +239,27 @@ void BuildSpellStart(WorldPacket &out, uint64 casterGuid, uint8 castId,
   out = WorldPacket(SMSG_SPELL_START, 200);
   AppendSpellCastDataCore(out, casterGuid, casterGuid, castId, spellId, castFlags,
                            castFlagsEx, castTimeMs, false, nullptr, 0, targetFlags,
-                           targetUnitGuid);
+                           targetUnitGuid, nullptr);
 }
 
 void BuildSpellGo(WorldPacket &out, uint64 casterGuid, uint8 castId,
                   uint32 spellId, uint32 castFlags, uint32 castFlagsEx,
                   uint32 castTimeMs, uint64 const *hitTargets, size_t hitCount,
-                  uint32 targetFlags, uint64 targetUnitGuid) {
+                  uint32 targetFlags, uint64 targetUnitGuid,
+                  SpellMissileTrajectoryWire const *missile) {
   out = WorldPacket(SMSG_SPELL_GO, 200);
   AppendSpellCastDataCore(out, casterGuid, casterGuid, castId, spellId, castFlags,
                            castFlagsEx, castTimeMs, true, hitTargets, hitCount,
-                           targetFlags, targetUnitGuid);
+                           targetFlags, targetUnitGuid, missile);
 }
 
 void BuildSpellGo(WorldPacket &out, uint64 casterGuid, uint8 castId,
                   uint32 spellId, uint32 castFlags, uint32 castFlagsEx,
                   uint32 castTimeMs, std::vector<uint64> const &hitTargets,
-                  uint32 targetFlags, uint64 targetUnitGuid) {
+                  uint32 targetFlags, uint64 targetUnitGuid,
+                  SpellMissileTrajectoryWire const *missile) {
   BuildSpellGo(out, casterGuid, castId, spellId, castFlags, castFlagsEx, castTimeMs,
-               hitTargets.data(), hitTargets.size(), targetFlags, targetUnitGuid);
+               hitTargets.data(), hitTargets.size(), targetFlags, targetUnitGuid, missile);
 }
 
 void BuildSpellFailure(WorldPacket &out, uint64 casterUnitGuid, uint8 castId,

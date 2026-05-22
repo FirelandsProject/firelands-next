@@ -32,7 +32,15 @@ enum ServerSpellCastFlags : uint32 {
   CAST_FLAG_PENDING = 0x00000001,
   CAST_FLAG_HAS_TRAJECTORY = 0x00000002,
   CAST_FLAG_UNKNOWN_9 = 0x00000100,
+  /// `SMSG_SPELL_GO` missile arc (elevation + travel delay); 3.3.5+ `CAST_FLAG_ADJUST_MISSILE`.
+  CAST_FLAG_ADJUST_MISSILE = 0x00020000,
   CAST_FLAG_NO_GCD = 0x00040000,
+};
+
+/// Optional tail on `SMSG_SPELL_GO` when `CAST_FLAG_ADJUST_MISSILE` is set (after target block).
+struct SpellMissileTrajectoryWire {
+  float pitch = 0.f;
+  uint32 travelTimeMs = 0;
 };
 
 enum SpellFailedReason : uint8 {
@@ -64,6 +72,10 @@ struct ClientCastSpellData {
   uint32 targetFlags = 0;
   /// Set when `targetFlags` implies a packed unit/object GUID in the packet.
   uint64 unitTargetGuid = 0;
+  /// Present when `sendCastFlags` includes `CLIENT_CAST_FLAG_HAS_TRAJECTORY`.
+  bool hasMissileTrajectory = false;
+  float missilePitch = 0.f;
+  float missileSpeed = 0.f;
 };
 
 /// Parses CMSG_CAST_SPELL payload after opcode (operator>> SpellCastRequest + target).
@@ -74,6 +86,20 @@ bool TryReadClientCastSpell(WorldPacket &packet, ClientCastSpellData &out);
 /// first use when `clientMovementTimeMs` is 0.
 uint32 ResolveSpellGoTimestampMs(uint32 clientMovementTimeMs);
 
+/// Base `SMSG_SPELL_GO` flags plus `CAST_FLAG_ADJUST_MISSILE` when `useMissile` is true.
+uint32 BuildSpellGoCastFlags(bool useMissile);
+
+struct SpellGoMissileResolution {
+  bool sendOnWire = false;
+  SpellMissileTrajectoryWire trajectory{};
+};
+
+/// Resolves missile pitch/travel for `SMSG_SPELL_GO` from client trajectory and/or world positions.
+SpellGoMissileResolution ResolveSpellGoMissile(
+    ClientCastSpellData const &client, bool hasCasterWorldPosition, float casterX,
+    float casterY, float casterZ, bool hasTargetWorldPosition, float targetX,
+    float targetY, float targetZ, uint32 fallbackTravelTimeMs);
+
 /// Builds SMSG_SPELL_START (no HitInfo; matches Spell::SendSpellStart for common case).
 void BuildSpellStart(WorldPacket &out, uint64 casterGuid, uint8 castId, uint32 spellId,
                      uint32 castFlags, uint32 castFlagsEx, uint32 castTimeMs,
@@ -81,15 +107,16 @@ void BuildSpellStart(WorldPacket &out, uint64 casterGuid, uint8 castId, uint32 s
 
 /// Builds SMSG_SPELL_GO with HitInfo (self-hit) and target block.
 /// `hitTargets` / `hitCount`: no heap required when `hitCount` is small (stack array).
+/// When `missile` is non-null, appends elevation + travel time after targets.
 void BuildSpellGo(WorldPacket &out, uint64 casterGuid, uint8 castId, uint32 spellId,
                   uint32 castFlags, uint32 castFlagsEx, uint32 castTimeMs,
                   uint64 const *hitTargets, size_t hitCount, uint32 targetFlags,
-                  uint64 targetUnitGuid);
+                  uint64 targetUnitGuid, SpellMissileTrajectoryWire const *missile = nullptr);
 
 void BuildSpellGo(WorldPacket &out, uint64 casterGuid, uint8 castId, uint32 spellId,
                   uint32 castFlags, uint32 castFlagsEx, uint32 castTimeMs,
                   std::vector<uint64> const &hitTargets, uint32 targetFlags,
-                  uint64 targetUnitGuid);
+                  uint64 targetUnitGuid, SpellMissileTrajectoryWire const *missile = nullptr);
 
 void BuildSpellFailure(WorldPacket &out, uint64 casterUnitGuid, uint8 castId,
                        int32 spellId, uint8 reason);
