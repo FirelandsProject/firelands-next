@@ -1,4 +1,4 @@
--- Starter spawn / spells / skills from firelands-cata-ref (Trinity 4.3.4).
+-- Starter spawn / spells / skills from firelands-cata-ref (4.3.4).
 USE `firelands_world`;
 
 -- Ensure mask columns exist (older DBs may have `race`/`class` from an earlier schema).

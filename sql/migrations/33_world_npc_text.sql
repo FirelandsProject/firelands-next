@@ -1,4 +1,4 @@
--- Trinity-compatible `npc_text` for gossip dialog copy (CMSG_NPC_TEXT_QUERY).
+-- reference-compatible `npc_text` for gossip dialog copy (CMSG_NPC_TEXT_QUERY).
 -- Data load: migration 34 (`python3 tools/sql/import_ref_npc_text.py`).
 
 USE `firelands_world`;

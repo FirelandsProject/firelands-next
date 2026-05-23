@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS `gossip_menu_option_box` (
   PRIMARY KEY (`MenuId`, `OptionIndex`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- NPC gossip page text (Trinity `npc_text`; used by CMSG_NPC_TEXT_QUERY).
+-- NPC gossip page text (`npc_text`; used by CMSG_NPC_TEXT_QUERY).
 CREATE TABLE IF NOT EXISTS `npc_text` (
   `ID` int unsigned NOT NULL DEFAULT '0',
   `text0_0` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,

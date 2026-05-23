@@ -1,4 +1,4 @@
--- Links creature_template to gossip_menu (Trinity `gossip_menu_id` → MenuID).
+-- Links creature_template to gossip_menu (`gossip_menu_id` → MenuID).
 -- Data backfill from firelands-cata-ref creature_template.sql.
 -- JDBC-safe conditional DDL + batched UPDATE … CASE.
 -- Regenerate: python3 tools/sql/import_ref_creature_data.py --write-gossip-menu-id-migration
@@ -15,7 +15,7 @@ SET @exist_gossip_menu_id :=
 SET @fl_sql := IF(@exist_gossip_menu_id = 0,
   'ALTER TABLE `creature_template`
      ADD COLUMN `gossip_menu_id` int unsigned NOT NULL DEFAULT ''0''
-     COMMENT ''Links to gossip_menu.MenuID (Trinity cata)''
+  COMMENT ''Links to gossip_menu.MenuID (cata)''
      AFTER `IconName`',
   'SELECT 1');
 

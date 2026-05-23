@@ -1,4 +1,4 @@
--- Trinity-style combat spells on creature_template (spell1..spell8).
+-- reference combat spells on creature_template (spell1..spell8).
 -- Populate via tools/sql/import_ref_creature_data.py after re-importing templates.
 
 USE `firelands_world`;

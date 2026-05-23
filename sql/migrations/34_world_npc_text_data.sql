@@ -1,5 +1,5 @@
 -- NPC gossip page copy (`npc_text`) from firelands-cata-ref.
--- Reference: Trinity `npc_text` (read-only); Firelands serves text*_* on
+-- Reference: `npc_text` from firelands-cata-ref (read-only); Firelands serves text*_* on
 -- CMSG_NPC_TEXT_QUERY. BroadcastTextID* retained for future broadcast_text.
 -- JDBC-safe: DELETE + batched REPLACE (re-runnable).
 -- Regenerate: python3 tools/sql/import_ref_npc_text.py

@@ -1,4 +1,4 @@
--- Gossip menus and options from firelands-cata-ref (Trinity 4.3.4 layout).
+-- Gossip menus and options from firelands-cata-ref (4.3.4 layout).
 -- Used by IGossipRepository / SMSG_GOSSIP_MESSAGE + menu chaining.
 -- JDBC-safe: DELETE + batched REPLACE (re-runnable).
 -- Regenerate: python3 tools/sql/import_ref_gossip.py
