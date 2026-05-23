@@ -28,6 +28,20 @@ void Creature::SetFactionTemplate(uint32 factionTemplate) {
       factionTemplate == 0 ? kDefaultFactionTemplate : factionTemplate;
 }
 
+void Creature::SetCombatStats(UnitCombatStats stats) { m_combatStats = stats; }
+
+void Creature::RestoreHealthToFull() { m_liveHealth = m_liveMaxHealth; }
+
+void Creature::TickEvadeHealthRegen(std::chrono::milliseconds interval) {
+  if (!m_isEvading || m_liveHealth >= m_liveMaxHealth)
+    return;
+  uint32 const gain = std::max(
+      1u, static_cast<uint32>(static_cast<uint64>(m_liveMaxHealth) *
+                               static_cast<uint64>(interval.count()) / 5000u));
+  uint32 const next = std::min(m_liveMaxHealth, m_liveHealth + gain);
+  m_liveHealth = next;
+}
+
 void Creature::ApplyHealthDelta(int32 delta) {
   int64 const sum =
       static_cast<int64>(m_liveHealth) + static_cast<int64>(delta);

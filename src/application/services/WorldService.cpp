@@ -1,5 +1,8 @@
 #include <application/services/WorldService.h>
 
+#include <application/world/PhaseAreaCatalog.h>
+#include <application/world/PhaseGroupCatalog.h>
+#include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/dbc/SpellVisualDbc.h>
 
 namespace Firelands {
@@ -72,6 +75,39 @@ void WorldService::SetSpellVisualDbc(std::shared_ptr<SpellVisualDbc const> spell
 std::shared_ptr<SpellVisualDbc const> WorldService::GetSpellVisualDbc() {
   std::lock_guard<std::mutex> lock(m_auxMutex);
   return m_spellVisualDbc;
+}
+
+void WorldService::SetFactionTemplateDbc(
+    std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc) {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  m_factionTemplateDbc = std::move(factionTemplateDbc);
+}
+
+std::shared_ptr<FactionTemplateDbc const> WorldService::GetFactionTemplateDbc() {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  return m_factionTemplateDbc;
+}
+
+void WorldService::SetPhaseGroupCatalog(
+    std::shared_ptr<PhaseGroupCatalog const> catalog) {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  m_phaseGroupCatalog = std::move(catalog);
+}
+
+std::shared_ptr<PhaseGroupCatalog const> WorldService::GetPhaseGroupCatalog() {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  return m_phaseGroupCatalog;
+}
+
+void WorldService::SetPhaseAreaCatalog(
+    std::shared_ptr<PhaseAreaCatalog const> catalog) {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  m_phaseAreaCatalog = std::move(catalog);
+}
+
+std::shared_ptr<PhaseAreaCatalog const> WorldService::GetPhaseAreaCatalog() {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  return m_phaseAreaCatalog;
 }
 
 void WorldService::SetExperienceRates(ExperienceRates rates) {

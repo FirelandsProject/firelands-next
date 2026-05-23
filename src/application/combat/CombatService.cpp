@@ -1,5 +1,7 @@
 #include "CombatService.h"
 
+#include <application/combat/MeleeCombatDamage.h>
+
 namespace application {
 
 void CombatService::StartCombat(::combat::ICombatEntity &attacker,
@@ -17,7 +19,8 @@ MeleeSwingResult CombatService::BeginMeleeSwing(::combat::ICombatEntity &attacke
     return MeleeSwingResult::CantAttack;
 
   StartCombat(attacker, victim);
-  _engine->Update(attacker, victim);
+  Firelands::uint32 const damage = ComputeMeleeDamageBetween(attacker, victim);
+  _engine->ApplyMeleeDamage(victim, static_cast<float>(damage));
   return MeleeSwingResult::Success;
 }
 
@@ -30,7 +33,8 @@ MeleeSwingResult CombatService::ApplyMeleeHit(::combat::ICombatEntity &attacker,
   if (!attacker.IsAlive())
     return MeleeSwingResult::CantAttack;
 
-  _engine->Update(attacker, victim);
+  Firelands::uint32 const damage = ComputeMeleeDamageBetween(attacker, victim);
+  _engine->ApplyMeleeDamage(victim, static_cast<float>(damage));
   return MeleeSwingResult::Success;
 }
 

@@ -17,6 +17,9 @@
 namespace Firelands {
 
 class SpellVisualDbc;
+class FactionTemplateDbc;
+class PhaseGroupCatalog;
+class PhaseAreaCatalog;
 
 /// Singleton world state (maps, shared script host, collision port).
 /// Populated from `world` executable after config load.
@@ -72,6 +75,14 @@ public:
   void SetSpellVisualDbc(std::shared_ptr<SpellVisualDbc const> spellVisualDbc);
   std::shared_ptr<SpellVisualDbc const> GetSpellVisualDbc();
 
+  void SetFactionTemplateDbc(std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc);
+  std::shared_ptr<FactionTemplateDbc const> GetFactionTemplateDbc();
+
+  void SetPhaseGroupCatalog(std::shared_ptr<PhaseGroupCatalog const> catalog);
+  std::shared_ptr<PhaseGroupCatalog const> GetPhaseGroupCatalog();
+  void SetPhaseAreaCatalog(std::shared_ptr<PhaseAreaCatalog const> catalog);
+  std::shared_ptr<PhaseAreaCatalog const> GetPhaseAreaCatalog();
+
   void SetExperienceRates(ExperienceRates rates);
   ExperienceRates GetExperienceRates();
   /// Explicit teardown hook for process shutdown. Releases map-held objects
@@ -94,6 +105,9 @@ private:
   std::shared_ptr<ISpellCastTables const> m_spellCastTables;
   std::shared_ptr<ISpellDefinitionStore const> m_spellDefinitions;
   std::shared_ptr<SpellVisualDbc const> m_spellVisualDbc;
+  std::shared_ptr<FactionTemplateDbc const> m_factionTemplateDbc;
+  std::shared_ptr<PhaseGroupCatalog const> m_phaseGroupCatalog;
+  std::shared_ptr<PhaseAreaCatalog const> m_phaseAreaCatalog;
   ExperienceRates m_experienceRates{};
 };
 

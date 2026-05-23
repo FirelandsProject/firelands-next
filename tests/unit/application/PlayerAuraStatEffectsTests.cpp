@@ -5,7 +5,10 @@
 #include <domain/world/Aura.h>
 #include <shared/game/SpellAuraTypes.h>
 #include <shared/game/SpellAttributes.h>
+#include <shared/game/UnitCombatStats.h>
+#include <array>
 #include <unordered_map>
+#include <unordered_set>
 
 using namespace Firelands;
 
@@ -117,6 +120,99 @@ TEST(PlayerAuraStatEffectsTests, BloodFuryStacksFlatAndPctRows) {
 
   EXPECT_EQ(bonus.attackPowerModPos, 7);
   EXPECT_FLOAT_EQ(bonus.attackPowerMultiplier, 0.07f);
+}
+
+TEST(PlayerAuraStatEffectsTests, ModResistanceAddsSchoolBuffPos) {
+  SpellDefinition def{};
+  def.id = 20579u;
+  def.attributes = SpellAttr0::kPassive;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraModResistance;
+  row.basePoints = 4;
+  row.miscValue = 1 << 5; // Shadow
+  def.auraEffects.push_back(row);
+
+  StatAuraStore store;
+  store.Add(def);
+
+  std::vector<Aura> auras{MakePassiveAura(20579u)};
+  PlayerAuraStatBonus const bonus =
+      ComputePlayerAuraStatBonus(auras, &store, 85);
+
+  EXPECT_EQ(bonus.resistanceBuffPos[5], 5);
+  EXPECT_EQ(bonus.resistanceBuffPos[4], 0);
+}
+
+TEST(PlayerAuraStatEffectsTests, ModDamagePercentStacksMultiplicatively) {
+  SpellDefinition def{};
+  def.id = 28877u;
+  def.attributes = SpellAttr0::kPassive;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraModDamagePercentDone;
+  row.basePoints = 1;
+  row.miscValue = 1 << 6; // Arcane
+  def.auraEffects.push_back(row);
+
+  StatAuraStore store;
+  store.Add(def);
+
+  std::vector<Aura> auras{MakePassiveAura(28877u)};
+  PlayerAuraStatBonus const bonus =
+      ComputePlayerAuraStatBonus(auras, &store, 85);
+
+  EXPECT_FLOAT_EQ(bonus.damageDonePctMultiplier[6], 1.02f);
+}
+
+TEST(PlayerAuraStatEffectsTests, ApplyBonusMergesResistanceIntoCombatStats) {
+  UnitCombatStats stats{};
+  stats.resistance[5] = 10u;
+  PlayerAuraStatBonus bonus{};
+  bonus.resistanceBuffPos[5] = 5;
+
+  ApplyPlayerAuraStatBonusToCombatStats(stats, bonus);
+
+  EXPECT_EQ(EffectiveSchoolResistance(stats, 5), 15u);
+}
+
+TEST(PlayerAuraStatEffectsTests, ModPercentStatUsesPrimaryStatBase) {
+  SpellDefinition def{};
+  def.id = 20598u;
+  def.attributes = SpellAttr0::kPassive;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraModPercentStat;
+  row.basePoints = 3;
+  row.miscValue = 4;
+  def.auraEffects.push_back(row);
+
+  StatAuraStore store;
+  store.Add(def);
+
+  std::array<uint32, 5> prim{20, 20, 20, 20, 100};
+  std::vector<Aura> auras{MakePassiveAura(20598u)};
+  PlayerAuraStatBonus const bonus =
+      ComputePlayerAuraStatBonus(auras, &store, 85, &prim);
+
+  EXPECT_EQ(bonus.posStat[4], 3);
+}
+
+TEST(PlayerAuraStatEffectsTests, MergePermanentPassiveWithoutActiveAura) {
+  SpellDefinition def{};
+  def.id = 20579u;
+  def.attributes = SpellAttr0::kPassive;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraModResistance;
+  row.basePoints = 4;
+  row.miscValue = 1 << 5;
+  def.auraEffects.push_back(row);
+
+  StatAuraStore store;
+  store.Add(def);
+
+  PlayerAuraStatBonus bonus{};
+  std::vector<uint32_t> passives{20579u};
+  std::unordered_set<uint32_t> active{};
+  MergePermanentPassiveSpellBonuses(passives, active, &store, 85, nullptr, bonus);
+  EXPECT_EQ(bonus.resistanceBuffPos[5], 5);
 }
 
 TEST(PlayerAuraStatEffectsTests, ModRatingAddsCombatRating) {

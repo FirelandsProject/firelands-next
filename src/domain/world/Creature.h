@@ -3,6 +3,8 @@
 #include <domain/world/Aura.h>
 #include <domain/world/UnitAuraState.h>
 #include <domain/world/WorldObject.h>
+#include <shared/game/PhaseShift.h>
+#include <shared/game/UnitCombatStats.h>
 #include <chrono>
 #include <optional>
 #include <vector>
@@ -40,6 +42,21 @@ public:
   uint32 GetLiveHealth() const { return m_liveHealth; }
   uint32 GetLiveMaxHealth() const { return m_liveMaxHealth; }
   void ApplyHealthDelta(int32 delta);
+  void SetCombatStats(UnitCombatStats stats);
+  void SetPhaseShift(PhaseShift phaseShift) { m_phaseShift = std::move(phaseShift); }
+  PhaseShift const &GetPhaseShift() const { return m_phaseShift; }
+  UnitCombatStats const &GetCombatStats() const { return m_combatStats; }
+
+  /// Player this creature is chasing in map combat (0 = none). Set on aggro, cleared on evade.
+  uint64 GetChaseTargetPlayerGuid() const { return m_chaseTargetPlayerGuid; }
+  void SetChaseTargetPlayerGuid(uint64 playerGuid) { m_chaseTargetPlayerGuid = playerGuid; }
+
+  /// Walking back to spawn after evade; immune to player damage until reset at home.
+  bool IsEvading() const { return m_isEvading; }
+  void SetEvading(bool evading) { m_isEvading = evading; }
+  void RestoreHealthToFull();
+  /// Heals toward max while evading (called from return-home movement tick).
+  void TickEvadeHealthRegen(std::chrono::milliseconds interval);
 
   void AddAura(Aura const &aura);
   std::optional<AuraRemoval> TryRemoveAura(uint32 spellId, uint64 casterGuid = 0);
@@ -61,6 +78,10 @@ private:
   bool m_killExperienceAwarded = false;
   uint32 m_liveHealth = 1;
   uint32 m_liveMaxHealth = 1;
+  UnitCombatStats m_combatStats{};
+  bool m_isEvading = false;
+  uint64 m_chaseTargetPlayerGuid = 0;
+  PhaseShift m_phaseShift;
   UnitAuraState m_auraState;
 };
 

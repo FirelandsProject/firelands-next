@@ -1,10 +1,15 @@
 #include <domain/world/Player.h>
 
+#include <shared/game/UnitCombatStats.h>
+
+#include <algorithm>
+
 namespace Firelands {
 
 void Player::InitCombatResources(uint32 health, uint32 maxHealth, uint32 power1,
                                  uint32 maxPower1) {
-  m_liveMaxHealth = std::max<uint32>(1u, maxHealth);
+  m_baselineMaxHealth = std::max<uint32>(1u, maxHealth);
+  m_liveMaxHealth = m_baselineMaxHealth;
   m_liveHealth = health;
   if (m_liveHealth > m_liveMaxHealth)
     m_liveHealth = m_liveMaxHealth;
@@ -23,6 +28,36 @@ void Player::SetRaceAndFaction(uint8 race, uint32 factionTemplate) {
 
 void Player::SetFactionTemplate(uint32 factionTemplate) {
   m_factionTemplate = factionTemplate;
+}
+
+void Player::SetBaselineCombatStats(UnitCombatStats stats) {
+  m_baselineCombatStats = stats;
+  m_combatStats = stats;
+}
+
+void Player::SetCombatStats(UnitCombatStats stats) { m_combatStats = stats; }
+
+void Player::ApplyAuraCombatStatBonus(int32 attackPowerModPos, int32 attackPowerModNeg,
+                                      float attackPowerMultiplier) {
+  ApplyAuraStatBonusToCombatStats(m_combatStats, attackPowerModPos, attackPowerModNeg,
+                                  attackPowerMultiplier);
+}
+
+void Player::InitRegenContext(uint8 powerType, uint32 spirit, uint8 level) {
+  m_powerType = powerType;
+  m_spirit = spirit;
+  m_level = std::max<uint8>(1, level);
+}
+
+void Player::MarkInCombat(std::chrono::steady_clock::time_point now) {
+  m_lastCombatAt = now;
+}
+
+bool Player::IsOutOfCombatForRegen(
+    std::chrono::steady_clock::time_point now) const {
+  if (m_lastCombatAt.time_since_epoch().count() == 0)
+    return true;
+  return now - m_lastCombatAt >= std::chrono::seconds(5);
 }
 
 void Player::ApplyHealthDelta(int32 delta) {
@@ -78,6 +113,17 @@ std::vector<AuraPeriodicTick> Player::TickPeriodicAuras(
 
 UnitAuraTickResult Player::TickAuras(std::chrono::steady_clock::time_point now) {
   return m_auraState.Tick(now);
+}
+
+void Player::ApplyPassiveHealthPctBonus(float healthPctBonus) {
+  if (healthPctBonus <= 0.f)
+    return;
+  float const scaled =
+      static_cast<float>(m_baselineMaxHealth) * (1.f + healthPctBonus);
+  uint32 const newMax = static_cast<uint32>(std::max(1.f, scaled));
+  m_liveMaxHealth = newMax;
+  if (m_liveHealth > m_liveMaxHealth)
+    m_liveHealth = m_liveMaxHealth;
 }
 
 } // namespace Firelands

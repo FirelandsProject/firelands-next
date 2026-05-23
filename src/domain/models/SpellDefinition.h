@@ -105,15 +105,15 @@ struct SpellDefinition {
 
   bool isPassiveSpell() const { return (attributes & SpellAttr0::kPassive) != 0u; }
 
-  /// Racials like Orc Blood Fury (20572): `PASSIVE` in DBC but `durationIndex` set — player
-  /// activates from the action bar; must not be login-applied or blocked as passive cast.
+  /// On-use racials (Blood Fury, Berserking, Stoneform, …): `PASSIVE` in spellbook with a
+  /// `SpellCooldowns` row. Always-on racials still use `DurationIndex` for infinite auras.
   bool isActivatablePassiveSpell() const {
-    return isPassiveSpell() && durationIndex != 0u;
+    return isPassiveSpell() && cooldownsId != 0u;
   }
 
-  /// True passives (Hardiness, weapon spec, …) — infinite/login aura only.
+  /// Always-on passives applied at login (Hardiness, resist racials, Human Spirit, …).
   bool isPermanentLoginPassiveSpell() const {
-    return isPassiveSpell() && durationIndex == 0u;
+    return isPassiveSpell() && cooldownsId == 0u;
   }
 
   bool HasLoginPassiveAura() const {

@@ -13,6 +13,7 @@ namespace combat {
 
         void Engage(ICombatEntity& attacker, ICombatEntity& victim);
         void Update(ICombatEntity& attacker, ICombatEntity& victim);
+        void ApplyMeleeDamage(ICombatEntity& victim, float amount);
         void HandleSpell(ICombatEntity& attacker, uint64_t spellId, ICombatEntity& target);
 
     private:

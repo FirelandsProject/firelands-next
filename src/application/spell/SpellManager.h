@@ -81,6 +81,7 @@ struct SpellCastOutcome {
   bool hasDirectHealthEffect = false;
   uint64 directHealthTargetGuid = 0;
   int32 directHealthDelta = 0;
+  uint32 directHealthSchoolMask = 0;
   /// Negative deducts primary resource (POWER1) on the caster when the cast succeeds.
   int32 power1Delta = 0;
   /// If non-zero, caller should set `spellCooldownUntil[spellId] = now + duration`.

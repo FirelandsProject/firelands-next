@@ -28,6 +28,9 @@ struct CreatureSpawnRow {
   uint32 npcFlags = 0;
   /// `creature_template.ExperienceModifier` (1.0 = normal).
   float experienceModifier = 1.0f;
+  uint8 phaseUseFlags = 0;
+  uint16 phaseId = 0;
+  uint32 phaseGroup = 0;
 };
 
 /// Loads static NPC placements from `creature` joined with `creature_template`.

@@ -1,11 +1,16 @@
 add_library(FirelandsApplication STATIC
     combat/CombatService.cpp
     combat/CombatHostility.cpp
+    combat/CreatureProximityAggro.cpp
     combat/CreatureChaseMovement.cpp
+    combat/MapCombatDamage.cpp
+    combat/MeleeCombatDamage.cpp
+    combat/PlayerCombatStats.cpp
     spell/SpellHitEffects.cpp
     spell/SpellImpactEffects.cpp
     spell/PassiveSpellAuras.cpp
     spell/PlayerAuraStatEffects.cpp
+    spell/PlayerAuraRegenEffects.cpp
     spell/SpellManager.cpp
     services/PlayerCreateInfoService.cpp
     services/PlayerSpellbook.cpp
@@ -15,6 +20,9 @@ add_library(FirelandsApplication STATIC
     services/GmTicketService.cpp
     services/OnlineCharacterSessionRegistry.cpp
     services/WorldService.cpp
+    world/PlayerPhaseShift.cpp
+    world/PhaseGroupCatalog.cpp
+    world/PhaseAreaCatalog.cpp
 )
 
 target_include_directories(FirelandsApplication PUBLIC

@@ -97,7 +97,7 @@ TEST(PassiveSpellAurasTests, CollectLoginPassiveSpellIds_FiltersActiveAndLanguag
   SpellDefinition activatablePassive{};
   activatablePassive.id = 20572u;
   activatablePassive.attributes = SpellAttr0::kPassive;
-  activatablePassive.durationIndex = 8u;
+  activatablePassive.cooldownsId = 1u;
   activatablePassive.hasAuraEffect = true;
   activatablePassive.auraEffectType = 99u;
 

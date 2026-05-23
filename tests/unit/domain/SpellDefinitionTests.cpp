@@ -21,15 +21,16 @@ TEST(SpellDefinitionTests, PassiveAndCantCancelFromAttributes) {
   EXPECT_FALSE(both.playerCanCancelAuraByClient());
 }
 
-TEST(SpellDefinitionTests, ActivatablePassiveUsesDurationIndex) {
+TEST(SpellDefinitionTests, ActivatablePassiveUsesSpellCooldownRow) {
   SpellDefinition bloodFury{};
   bloodFury.attributes = SpellAttr0::kPassive;
-  bloodFury.durationIndex = 8u;
+  bloodFury.cooldownsId = 1u;
   EXPECT_TRUE(bloodFury.isActivatablePassiveSpell());
   EXPECT_FALSE(bloodFury.isPermanentLoginPassiveSpell());
 
   SpellDefinition hardiness{};
   hardiness.attributes = SpellAttr0::kPassive;
+  hardiness.durationIndex = 21u;
   EXPECT_FALSE(hardiness.isActivatablePassiveSpell());
   EXPECT_TRUE(hardiness.isPermanentLoginPassiveSpell());
 }

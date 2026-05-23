@@ -408,10 +408,10 @@ static uint32 ReadSpellStartCastTimeMs(WorldPacket &p) {
   (void)p.ReadPackedGuid();
   (void)p.ReadPackedGuid();
   (void)p.Read<uint8>();
-  (void)p.Read<uint32>();
-  (void)p.Read<uint32>();
-  (void)p.Read<uint32>();
-  return p.Read<uint32>();
+  (void)p.Read<int32>();  // spellId
+  (void)p.Read<uint32>(); // castFlags
+  (void)p.Read<uint32>(); // castFlagsEx
+  return p.Read<uint32>(); // castTimeMs
 }
 
 static uint8 ReadSpellFailureReason(WorldPacket &p) {
@@ -1276,7 +1276,7 @@ public:
     SpellDefinition d{};
     d.id = spellId;
     d.attributes = SpellAttr0::kPassive;
-    d.durationIndex = 8u;
+    d.cooldownsId = 1u;
     d.hasAuraEffect = true;
     d.auraEffectType = 99u;
     return d;

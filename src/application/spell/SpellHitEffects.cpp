@@ -112,6 +112,7 @@ void ApplyImmediateHealthFromDefinition(SpellDefinition const *def, uint64 hitGu
   out->hasDirectHealthEffect = true;
   out->directHealthTargetGuid = hitGuid;
   out->directHealthDelta = delta;
+  out->directHealthSchoolMask = def->schoolMask;
 }
 
 void ApplyAuraFromRow(SpellDefinition const &def, SpellAuraEffectRow const &row,
