@@ -84,7 +84,7 @@ Constants live in `shared/network/WorldOpcodes.h` (source: WowPacketParser `V4_3
 
 ### Packet layout
 
-Do not copy Trinity 3.3.5 handlers blindly; Cataclysm support changed. Recommended workflow:
+Do not copy 3.3.5-era handlers blindly; Cataclysm support changed. Recommended workflow:
 
 1. Use WowPacketParser structs for **15595** or capture sniff from a 4.3.4 reference realm.
 2. Implement read/write in `WorldSession` or a small `GmTicketPackets.{h,cpp}` helper with unit tests on **fixed hex blobs** under `tests/data/`.
@@ -106,7 +106,7 @@ Do not copy Trinity 3.3.5 handlers blindly; Cataclysm support changed. Recommend
 
 - [x] `MySqlGmTicketRepository` (`sql/18_gm_ticket.sql`, `need_more_help` via `Ensure` when upgrading an older table).
 - [x] `GmTicketService` (rules + `TryAssign` in SQL).
-- [x] Core CMSG / SMSG path (`WorldSessionGmTicketHandlers.cpp`, `GmTicketPackets.cpp`) following TCPP 4.3.x layout.
+- [x] Core CMSG / SMSG path (`WorldSessionGmTicketHandlers.cpp`, `GmTicketPackets.cpp`) following WowPacketParser 4.3.x layout.
 - [x] In-game `.ticket` commands (`CommandService`, `ManageGmTickets` permission).
 - [x] `.ticket ui` — gossip desk (`WorldSessionGmTicketGossip.cpp`, synthetic menu/text ids in `GmTicketGossipUi.h`).
-- [ ] Trinity-style hyperlink sanitization (optional hardening).
+- [ ] reference hyperlink sanitization (optional hardening).

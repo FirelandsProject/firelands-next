@@ -1,6 +1,6 @@
 # NPC gossip and `npc_text`
 
-Cataclysm **4.3.4** gossip: database-driven menus, dialog copy, Lua hooks, and wire packets aligned to Trinity/TCPP reference.
+Cataclysm **4.3.4** gossip: database-driven menus, dialog copy, Lua hooks, and wire packets aligned to WowPacketParser / firelands-cata-ref.
 
 **Tracking:** [docs/ES/ROADMAP.md](../../ES/ROADMAP.md) (workspace snapshot, parity matrix, bitácora).
 
@@ -109,7 +109,7 @@ After `SMSG_GOSSIP_MESSAGE`, the server **pushes** npc text immediately when `te
 
 | Migration | Purpose |
 |-----------|---------|
-| `33_world_npc_text.sql` | DDL: Trinity-compatible `npc_text` |
+| `33_world_npc_text.sql` | DDL: reference-compatible `npc_text` |
 | `34_world_npc_text_data.sql` | Data: `python3 tools/sql/import_ref_npc_text.py` |
 
 After migrations land, regenerate bundled world schema (`merge-migrations`) and refresh Docker bundle per `AGENTS.md`.
@@ -133,7 +133,7 @@ After migrations land, regenerate bundled world schema (`merge-migrations`) and 
 
 The client requests `CMSG_QUESTGIVER_STATUS_QUERY` / `CMSG_QUESTGIVER_STATUS_MULTIPLE_QUERY`; the server answers with `SMSG_QUESTGIVER_STATUS` / `_MULTIPLE` (uint64 guid + uint32 cata status flags, e.g. `0x100` = available). Starter NPCs keep template gossip + quest-giver `UNIT_NPC_FLAGS` (flight master bit stripped). Interaction: `CMSG_QUESTGIVER_HELLO` and/or `CMSG_GOSSIP_HELLO` → gossip menu or `SMSG_QUESTGIVER_QUEST_LIST`.
 
-Until per-character quest status exists, any matching starter on the NPC is reported as **available** (yellow !, wire icon `2`). Gossip quest lines are filtered by `AllowableClasses` / `AllowableRaces` (Trinity `SatisfyQuestClass` / `SatisfyQuestRace`) so class-specific hubs like Jinthala show one line per player. Quest lines use Trinity `SendGossipMenu` layout; the byte after flags is blue-question styling for autocomplete repeatables only.
+Until per-character quest status exists, any matching starter on the NPC is reported as **available** (yellow !, wire icon `2`). Gossip quest lines are filtered by `AllowableClasses` / `AllowableRaces` (`SatisfyQuestClass` / `SatisfyQuestRace`) so class-specific hubs like Jinthala show one line per player. Quest lines use `SendGossipMenu` layout; the byte after flags is blue-question styling for autocomplete repeatables only.
 
 ### Not in this slice
 

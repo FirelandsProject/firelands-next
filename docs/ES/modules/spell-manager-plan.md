@@ -79,7 +79,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 ### Fase B — Definición de hechizo en memoria
 
-**Estado (parcial):** puerto `ISpellDefinitionStore`, modelo `SpellDefinition`, adaptador `SpellEntryDbcStore` que carga `Spell.dbc` con `SpellEntryfmt` TCPP, valida `fieldCount` + `recordSize`, mapa `unordered_map` O(1). Tras el DBC, `MergeSpellDbcRows(world)` aplica `firelands_world.spell_dbc`: hechizos solo en SQL = fila base + `Ov*`; en hechizos ya en DBC, `PowerType` y columnas `Ov*` no nulas pisan solo esos campos (NULL = heredar DBC). Sin columnas `Ov*` (BD antigua) el merge hace fallback. Integrado en login/GM/`SpellManager`. **Pendiente:** más campos en `SpellDefinition`, validación de rango en mundo, tuning avanzado.
+**Estado (parcial):** puerto `ISpellDefinitionStore`, modelo `SpellDefinition`, adaptador `SpellEntryDbcStore` que carga `Spell.dbc` con `SpellEntryfmt` WowPacketParser, valida `fieldCount` + `recordSize`, mapa `unordered_map` O(1). Tras el DBC, `MergeSpellDbcRows(world)` aplica `firelands_world.spell_dbc`: hechizos solo en SQL = fila base + `Ov*`; en hechizos ya en DBC, `PowerType` y columnas `Ov*` no nulas pisan solo esos campos (NULL = heredar DBC). Sin columnas `Ov*` (BD antigua) el merge hace fallback. Integrado en login/GM/`SpellManager`. **Pendiente:** más campos en `SpellDefinition`, validación de rango en mundo, tuning avanzado.
 
 1. Puerto `ISpellDefinitionStore` + `SpellDefinition` compacto.
 2. Loader infra: DBC (y opcionalmente merge con `spell_dbc` / `spelleffect_dbc` al arranque).
@@ -89,7 +89,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 ### Fase C — Validación de mundo
 
-1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` usa `ISpellCastTables::GetSpellRangeMinYards` / `GetSpellRangeMaxYards` eligiendo banda hostil vs amistoso (`SpellRange.dbc` índices 0/1): self → amistoso; otro objetivo: delta HP (`SpellEffect` merge) cura/daño; si delta 0, `Spell.dbc` `Attributes` (`SPELL_ATTR0_NEGATIVE_SPELL`, `SPELL_ATTR0_AURA_IS_DEBUFF`) y `AttributesEx` (`SPELL_ATTR_EX_INITIATES_COMBAT`). `SpellDefinition.attributesEx` se carga desde DBC y merge SQL en filas nuevas. Falta paridad total con TCPP `IsPositiveSpell` (efectos/aúras por objetivo). Tolerancias ~3 yd arriba del máximo y ~1.5 yd abajo del mínimo; por debajo del mínimo → `SPELL_FAILED_TOO_CLOSE` (128, referencia cmangos-wotlk / verificar UI 15595).
+1. Rango (distancia cheap antes que LoS). **Parcial:** `SpellCastRequest` lleva posiciones mundo opcionales; `SpellManager` usa `ISpellCastTables::GetSpellRangeMinYards` / `GetSpellRangeMaxYards` eligiendo banda hostil vs amistoso (`SpellRange.dbc` índices 0/1): self → amistoso; otro objetivo: delta HP (`SpellEffect` merge) cura/daño; si delta 0, `Spell.dbc` `Attributes` (`SPELL_ATTR0_NEGATIVE_SPELL`, `SPELL_ATTR0_AURA_IS_DEBUFF`) y `AttributesEx` (`SPELL_ATTR_EX_INITIATES_COMBAT`). `SpellDefinition.attributesEx` se carga desde DBC y merge SQL en filas nuevas. Falta paridad total con WowPacketParser `IsPositiveSpell` (efectos/aúras por objetivo). Tolerancias ~3 yd arriba del máximo y ~1.5 yd abajo del mínimo; por debajo del mínimo → `SPELL_FAILED_TOO_CLOSE` (128, referencia legacy WotLK reference / verificar UI 15595).
 2. LoS / colisión cuando exista datos; flag para desactivar en pruebas.
 
 **Rendimiento:** orden estricto cheap→caro; caché opcional de LoS documentada.
@@ -147,7 +147,7 @@ Estas reglas deben aplicarse **desde la Fase A**, no al final.
 
 - Cast actual: `WorldSession::HandleCastSpell`, `SpellCastWire`.
 - Definición de hechizos: `ISpellDefinitionStore` + `SpellEntryDbcStore` (`Spell.dbc`); dificultad: `SpellDifficultyDbc`.
-- Tablas world recientes: migración `16_world_spell_tables.sql` (paridad esquema con TCPP para datos/overrides).
+- Tablas world recientes: migración `16_world_spell_tables.sql` (paridad esquema con WowPacketParser para datos/overrides).
 
 ---
 

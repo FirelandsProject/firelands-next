@@ -57,7 +57,7 @@ Ajustar la semántica exacta cuando se implementen los handlers para que coincid
 
 ## Red (opcodes 15595)
 
-Constantes añadidas en `shared/network/WorldOpcodes.h` (fuente: [WowPacketParser `V4_3_4_15595/Opcodes.cs`](https://github.com/TrinityCore/WowPacketParser/blob/master/WowPacketParser/Enums/Version/V4_3_4_15595/Opcodes.cs)).
+Constantes añadidas en `shared/network/WorldOpcodes.h` (fuente: WowPacketParser `V4_3_4_15595/Opcodes.cs`).
 
 ### Cliente → servidor
 
@@ -87,7 +87,7 @@ Constantes añadidas en `shared/network/WorldOpcodes.h` (fuente: [WowPacketParse
 
 ### Construcción de paquetes
 
-No copiar ciegamente handlers de Trinity 3.3.5: Cataclysm cambió parte del soporte. Pasos recomendados:
+No copiar ciegamente handlers de 3.3.5: Cataclysm cambió parte del soporte. Pasos recomendados:
 
 1. Abrir un sniffer o **WowPacketParser** con un cliente 4.3.4 contra un servidor de referencia que ya tenga tickets, o leer structs generados en el árbol de WowPacketParser para **15595**.
 2. Implementar lectura/escritura en `WorldSession` (o un helper `GmTicketPackets.{h,cpp}` en infrastructure) con tests unitarios sobre **capturas hex** fijadas en `tests/data/`.
@@ -109,6 +109,6 @@ No copiar ciegamente handlers de Trinity 3.3.5: Cataclysm cambió parte del sopo
 
 - [x] `MySqlGmTicketRepository` (`sql/18_gm_ticket.sql`, columna `need_more_help` con `Ensure` si la tabla ya existía).
 - [x] `GmTicketService` (reglas de negocio + `TryAssign` en SQL).
-- [x] Handlers CMSG / SMSG principales (`WorldSessionGmTicketHandlers.cpp`, `GmTicketPackets.cpp`) alineados con TCPP 4.3.x.
+- [x] Handlers CMSG / SMSG principales (`WorldSessionGmTicketHandlers.cpp`, `GmTicketPackets.cpp`) alineados con WowPacketParser 4.3.x.
 - [x] Comandos `.ticket` in-game (`CommandService`, permiso `ManageGmTickets`).
-- [ ] Límites / saneamiento de hipervínculos al nivel Trinity (opcional).
+- [ ] Límites / saneamiento de hipervínculos al nivel (opcional).

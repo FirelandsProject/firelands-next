@@ -16,13 +16,13 @@ Firelands uses three logical databases:
 
 ```
 sql/
-├── init/              # Base schema (run once)
-│   ├── auth_schema.sql
-│   ├── characters_schema.sql
-│   └── world_schema.sql
-├── migrations/        # Incremental changes (ordered by prefix)
-│   └── *.sql
-└── bundled/          # Merged schema for Docker deployment
+├── init/ # Base schema (run once)
+│ ├── auth_schema.sql
+│ ├── characters_schema.sql
+│ └── world_schema.sql
+├── migrations/ # Incremental changes (ordered by prefix)
+│ └── *.sql
+└── bundled/ # Merged schema for Docker deployment
     ├── firelands_auth.sql
     ├── firelands_characters.sql
     └── firelands_world.sql
@@ -245,9 +245,9 @@ NPC dialog menus and copy (Cataclysm 4.3.4). Feature docs: [modules/gossip-npc-t
 **Import from reference clone:**
 
 ```bash
-python3 tools/sql/import_ref_gossip.py         # → sql/migrations/35_world_gossip_data.sql
-python3 tools/sql/import_ref_npc_text.py       # → sql/migrations/34_world_npc_text_data.sql
-python3 tools/sql/import_ref_quest_gossip.py   # → sql/migrations/38_world_quest_gossip_data.sql
+python3 tools/sql/import_ref_gossip.py # → sql/migrations/35_world_gossip_data.sql
+python3 tools/sql/import_ref_npc_text.py # → sql/migrations/34_world_npc_text_data.sql
+python3 tools/sql/import_ref_quest_gossip.py # → sql/migrations/38_world_quest_gossip_data.sql
 ```
 
 DDL: migrations `32` (gossip), `33` (`npc_text`), `36` (quest gossip). Data: `38_world_quest_gossip_data.sql` from `import_ref_quest_gossip.py`. Apply via runtime migrator or bundled `firelands_world.sql` after `merge-migrations`.
@@ -259,14 +259,14 @@ DDL: migrations `32` (gossip), `33` (`npc_text`), `36` (quest gossip). Data: `38
 ### Creating a New Migration
 
 1. Create file in `sql/migrations/`:
-   ```bash
+```bash
    touch sql/migrations/001_my_feature.sql
-   ```
+```
 
 2. Write SQL with idempotent operations:
    ```sql
    ALTER TABLE account ADD COLUMN new_column INT DEFAULT 0;
-   ```
+```
 
 3. The `DatabaseMigrator` runs files in lexicographic order and tracks applied migrations in `schema_migrations` table.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Borrow proven patterns from the EmulationServer architecture to improve Firelands Next:
+Borrow proven patterns from the legacy map host architecture to improve Firelands Next:
 1. **MapService isolation** — each map as an observable, independently-ticked service with snapshots
 2. **Graceful shutdown** — session draining with timeout before hard stop
 3. **Fail-fast config validation** — validate all settings at startup, not at first use
@@ -23,10 +23,10 @@ struct MapSnapshot {
     uint32 mapId;
     int playerCount;
     int creatureCount;
-    int loadedGridCells;       // cells with at least 1 object
-    double avgTickTimeMs;      // rolling average of TickAuras duration
-    double lastTickTimeMs;     // last individual tick duration
-    bool isEmpty;              // no players, no creatures
+  int loadedGridCells; // cells with at least 1 object
+  double avgTickTimeMs; // rolling average of TickAuras duration
+  double lastTickTimeMs; // last individual tick duration
+  bool isEmpty; // no players, no creatures
 };
 ```
 
@@ -41,7 +41,7 @@ Add to `Map`:
 
 ```cpp
 void RecordTickTime(double ms);
-MapSnapshot CreateSnapshot() const;  // thread-safe, takes lock
+MapSnapshot CreateSnapshot() const; // thread-safe, takes lock
 ```
 
 - Internally track exponential moving average (alpha=0.1) of tick times
@@ -138,9 +138,9 @@ Add a "Map Status" panel:
 
 ```
 Map Status:
-  Eastern Kingdoms (0)  Players: 3  Tick: 2.1ms  Grids: 12
-  Kalimdor (1)          Players: 1  Tick: 1.4ms  Grids: 5
-  Outland (530)         Players: 0  Tick: 0.0ms  Grids: 0  [empty]
+  Eastern Kingdoms (0) Players: 3 Tick: 2.1ms Grids: 12
+  Kalimdor (1) Players: 1 Tick: 1.4ms Grids: 5
+  Outland (530) Players: 0 Tick: 0.0ms Grids: 0 [empty]
 ```
 
 ---
@@ -190,7 +190,7 @@ New shutdown order:
 
 ```
 1. stopRealmLink.store(true)
-2. worldServer->StopGraceful(5s)     // NEW: drain sessions
+2. worldServer->StopGraceful(5s) // NEW: drain sessions
 3. WorldService::Instance().ResetForShutdown()
 4. realmLinkThread->join()
 5. Logger::Shutdown()
@@ -218,11 +218,11 @@ Already exists on `WorldSession` via `IAuthSession` port. Ensure `AuthSession` a
 class ConfigValidator {
 public:
     struct Rule {
-        std::string path;                         // e.g. "Database.Auth.URI"
+  std::string path; // e.g. "Database.Auth.URI"
         std::string description;
         std::function<bool(std::string_view)> validate;
         std::string errorMessage;
-    };
+};
 
     static void Validate(std::vector<Rule> rules);
     // Throws std::runtime_error with all accumulated errors
@@ -309,30 +309,30 @@ Show per-realm map status in the auth server dashboard.
 
 ```
 Phase 1 (MapService) ──────────────────────────────────────┐
-  1.1 MapSnapshot (domain, no deps)                         │
-  1.2 Map tick timing (domain, no deps)                     │  Can be
-  1.3 MapService (application, depends on 1.1, 1.2)         │  done in
-  1.4 MapRegistry (application, depends on 1.3)             │  parallel
-  1.5 WorldService refactor (application, depends on 1.4)   │  with
-  1.6 MapAuraTicker update (infrastructure, depends on 1.5) │  Phase 2
-  1.7 FTXUI dashboard (world exe, depends on 1.6)          ─┘
+  1.1 MapSnapshot (domain, no deps) │
+  1.2 Map tick timing (domain, no deps) │ Can be
+  1.3 MapService (application, depends on 1.1, 1.2) │ done in
+  1.4 MapRegistry (application, depends on 1.3) │ parallel
+  1.5 WorldService refactor (application, depends on 1.4) │ with
+  1.6 MapAuraTicker update (infrastructure, depends on 1.5) │ Phase 2
+  1.7 FTXUI dashboard (world exe, depends on 1.6) ─┘
 
 Phase 2 (Graceful Shutdown) ───────────────────────────────┐
-  2.1 Session tracking (infrastructure)                     │
-  2.2 StopGraceful (infrastructure, depends on 2.1)         │
+  2.1 Session tracking (infrastructure) │
+  2.2 StopGraceful (infrastructure, depends on 2.1) │
   2.3 WorldApplication shutdown (world exe, depends on 2.2) │
-  2.4 AuthSession disconnect (infrastructure)              ─┘
+  2.4 AuthSession disconnect (infrastructure) ─┘
 
 Phase 3 (Config Validation) ───────────────────────────────┐
-  3.1 ConfigValidator (shared, no deps)                     │  Can be
-  3.2 Validation rules (auth + world)                       │  done
-  3.3 Startup validation (auth + world, depends on 3.1, 3.2)│  anytime
+  3.1 ConfigValidator (shared, no deps) │ Can be
+  3.2 Validation rules (auth + world) │ done
+  3.3 Startup validation (auth + world, depends on 3.1, 3.2)│ anytime
                                                            ─┘
 
 Phase 4 (Realm-Link Status) ───────────────────────────────┐
-  4.1 Protocol extension (infrastructure)                   │
-  4.2 Auth aggregation (infrastructure, depends on 4.1)     │  Depends
-  4.3 Auth TUI (auth exe, depends on 4.2)                  ─┘  on Phase 1
+  4.1 Protocol extension (infrastructure) │
+  4.2 Auth aggregation (infrastructure, depends on 4.1) │ Depends
+  4.3 Auth TUI (auth exe, depends on 4.2) ─┘ on Phase 1
 ```
 
 ---

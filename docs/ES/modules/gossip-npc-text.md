@@ -1,6 +1,6 @@
 # Gossip NPC y `npc_text`
 
-Gossip Cataclysm **4.3.4**: menús desde world DB, texto de diálogo, hooks Lua y paquetes alineados a referencia Trinity/TCPP.
+Gossip Cataclysm **4.3.4**: menús desde world DB, texto de diálogo, hooks Lua y paquetes alineados a referencia WowPacketParser / firelands-cata-ref.
 
 **Seguimiento:** [ROADMAP.md](../ROADMAP.md) (snapshot del workspace, matriz de paridad, bitácora).
 
