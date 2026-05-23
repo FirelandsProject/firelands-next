@@ -52,4 +52,5 @@ INSERT IGNORE INTO `firelands_auth`.`schema_migrations` (`migration`) VALUES
   ('58_characters_queststatus.sql'),
   ('59_world_creature_trigger_phase_fix.sql'),
   ('60_world_hunter_auto_shot_call_pet_starter.sql'),
-  ('61_world_starter_learn_on_skill_spells.sql');
+  ('61_world_starter_learn_on_skill_spells.sql'),
+  ('62_world_playercreateinfo_dbc_spells.sql');

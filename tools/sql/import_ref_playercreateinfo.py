@@ -6,6 +6,9 @@ Emits:
   sql/migrations/42_world_playercreateinfo_tables.sql
   sql/migrations/43_world_playercreateinfo_data.sql
 
+For weapon/armor/racial/learn-on-skill spells from client DBCs, also run:
+  tools/sql/generate_playercreateinfo_dbc_spells.py  → migration 62
+
 Usage:
   python3 tools/sql/import_ref_playercreateinfo.py
 """
@@ -189,12 +192,19 @@ _EXCLUDED_STARTER_SKILL_IDS = frozenset(
     )
 
 
+_LANGUAGE_SKILL_IDS = frozenset(
+    {98, 109, 111, 113, 115, 137, 313, 315, 673, 759, 792}
+)
+
+
 def map_skill_row(fields: list[str]) -> str | None:
     if len(fields) < 4:
         raise ValueError("playercreateinfo_skills row too short")
     race_mask, class_mask, skill_id, rank = fields[0], fields[1], fields[2], fields[3]
     if int(skill_id) in _EXCLUDED_STARTER_SKILL_IDS:
         return None
+    if int(skill_id) in _LANGUAGE_SKILL_IDS and int(rank) < 300:
+        rank = "300"
     return f"{race_mask},{class_mask},{skill_id},{rank}"
 
 
@@ -268,9 +278,9 @@ def main() -> None:
     )
     args.data_out.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {args.tables_out} and {args.data_out}")
-  print(f" playercreateinfo: {len(spawn_rows)} rows")
-  print(f" playercreateinfo_spell: {len(spell_rows)} rows")
-  print(f" playercreateinfo_skill: {len(skill_rows)} rows")
+    print(f" playercreateinfo: {len(spawn_rows)} rows")
+    print(f" playercreateinfo_spell: {len(spell_rows)} rows")
+    print(f" playercreateinfo_skill: {len(skill_rows)} rows")
 
 
 if __name__ == "__main__":
