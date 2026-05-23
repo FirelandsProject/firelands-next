@@ -66,8 +66,8 @@ void WorldSession::FinalizeWorldExit() {
 
   if (!_charService->SaveCharacterOnLogout(
           _accountId, charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,
-          persistPos.z, persistPos.orientation, _moneyCopper, _playerXp, _tutorialInts,
-          liveHealth, livePower1)) {
+          persistPos.z, persistPos.orientation, _moneyCopper, _playerXp, _playerRestBonus,
+          _tutorialInts, liveHealth, livePower1)) {
     LOG_ERROR("SaveCharacterOnLogout failed for guid {}, account {}",
               charGuidLow, _accountId);
   } else {
@@ -101,6 +101,8 @@ void WorldSession::FinalizeWorldExit() {
   _playerRace = 0;
   _playerClass = 0;
   _playerXp = 0;
+  _playerRestBonus = 0.f;
+  _playerFacialHair = 0;
   _sentOpeningCinematic = false;
   _tutorialInts.fill(0);
   _knownSpells.clear();

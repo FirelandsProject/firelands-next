@@ -5,10 +5,12 @@
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/game/ExperienceLogic.h>
+#include <shared/game/RestExperienceLogic.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/UpdateFields.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
+#include <shared/network/packets/server/ExperiencePackets.h>
 
 #include <map>
 
@@ -34,25 +36,35 @@ void WorldSession::MaybeGrantKillExperience(Creature &creature, uint32 hpBefore)
   if (award == 0)
     return;
 
+  uint32_t const nextLevelXp = _charService->GetXpToNextLevelForLevel(_playerLevel);
+  RestExperienceLogic::RestConsumeResult const rest =
+      RestExperienceLogic::ConsumeForKill(_playerRestBonus, award, nextLevelXp);
+  _playerRestBonus = rest.restBonusAfter;
+
+  uint32_t const totalAward = award + rest.restedBonus;
+
   auto xpToNext = [this](uint8_t level) -> uint32_t {
     return _charService->GetXpToNextLevelForLevel(level);
   };
 
   ExperienceLogic::ExperienceGainResult const gained = ExperienceLogic::ApplyExperienceGain(
-      _playerLevel, _playerXp, award, ExperienceLogic::kMaxPlayerLevelCata, xpToNext);
+      _playerLevel, _playerXp, totalAward, ExperienceLogic::kMaxPlayerLevelCata, xpToNext);
 
   if (!_charService->UpdateCharacterLevelAndXp(
-          _accountId, static_cast<uint32_t>(_playerGuid), gained.level, gained.xp)) {
+          _accountId, static_cast<uint32_t>(_playerGuid), gained.level, gained.xp,
+          _playerRestBonus)) {
     return;
   }
 
   _playerLevel = gained.level;
   _playerXp = gained.xp;
   PublishPlayerXpLevelUpdate(gained.level, gained.xp);
+  PublishPlayerRestStateUpdate();
 
-  if (gained.levelsGained == 0) {
-    SendNotification("You gain " + std::to_string(award) + " experience.");
-  }
+  WorldPacket xpGain = experience_wire::BuildLogXpGain(
+      creature.GetGuid(), static_cast<int32_t>(totalAward),
+      static_cast<int32_t>(award));
+  SendPacket(xpGain);
 
   if (gained.levelsGained > 0) {
     SendNotification("You have reached level " +
@@ -93,6 +105,15 @@ void WorldSession::PublishPlayerXpLevelUpdate(uint8 level, uint32 xp) {
   update.AddValuesUpdate(_playerGuid, fields);
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
+  SendPacket(pkt);
+}
+
+void WorldSession::PublishPlayerRestStateUpdate() {
+  if (_playerGuid == 0)
+    return;
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  ws_obj::BuildPlayerRestStateValuesUpdate(static_cast<uint16>(_mapId), _playerGuid,
+                                           _playerRestBonus, _playerFacialHair, pkt);
   SendPacket(pkt);
 }
 

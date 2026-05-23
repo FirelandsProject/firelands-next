@@ -52,7 +52,7 @@ public:
   virtual bool SaveCharacterOnLogout(
       uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
       float x, float y, float z, float orientation, uint32_t moneyCopper,
-      uint32_t xp,
+      uint32_t xp, float restBonus,
       std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
       std::optional<uint32_t> liveHealth = std::nullopt,
       std::optional<uint32_t> livePower1 = std::nullopt) = 0;
@@ -62,7 +62,8 @@ public:
   virtual bool UpdateCharacterLevel(uint32_t accountId, uint32_t characterGuid,
                                     uint8_t level) = 0;
   virtual bool UpdateCharacterLevelAndXp(uint32_t accountId, uint32_t characterGuid,
-                                         uint8_t level, uint32_t xp) = 0;
+                                         uint8_t level, uint32_t xp,
+                                         float restBonus) = 0;
   virtual std::vector<uint32_t> GetCharacterSpellIds(uint32_t characterGuid) = 0;
   virtual CharacterCooldownState LoadCharacterCooldowns(uint32_t characterGuid) = 0;
   virtual bool SaveCharacterCooldowns(uint32_t characterGuid,

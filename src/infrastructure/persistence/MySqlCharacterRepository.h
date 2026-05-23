@@ -33,7 +33,7 @@ namespace Firelands {
         bool SaveCharacterOnLogout(
             uint32_t accountId, uint32_t characterGuid, uint16_t mapId,
             uint16_t zoneId, float x, float y, float z, float orientation,
-            uint32_t moneyCopper, uint32_t xp,
+            uint32_t moneyCopper, uint32_t xp, float restBonus,
             std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
             std::optional<uint32_t> liveHealth = std::nullopt,
             std::optional<uint32_t> livePower1 = std::nullopt) override;
@@ -42,7 +42,8 @@ namespace Firelands {
         bool UpdateCharacterLevel(uint32_t accountId, uint32_t characterGuid,
                                    uint8_t level) override;
         bool UpdateCharacterLevelAndXp(uint32_t accountId, uint32_t characterGuid,
-                                        uint8_t level, uint32_t xp) override;
+                                        uint8_t level, uint32_t xp,
+                                        float restBonus) override;
         std::vector<uint32_t> GetCharacterSpellIds(uint32_t characterGuid) override;
         CharacterCooldownState LoadCharacterCooldowns(uint32_t characterGuid) override;
         bool SaveCharacterCooldowns(uint32_t characterGuid,

@@ -58,6 +58,10 @@ void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 healt
 void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power1,
                                    uint32 maxPower1, WorldPacket &outPacket);
 
+/// `PLAYER_REST_STATE_EXPERIENCE` + `PLAYER_BYTES_2` rest icon (clear when pool is 0).
+void BuildPlayerRestStateValuesUpdate(uint16 mapId, uint64 playerGuid, float restBonus,
+                                      uint8_t facialHair, WorldPacket &outPacket);
+
 void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
                                              uint8 actionBarToggles,
                                              WorldPacket &outPacket);

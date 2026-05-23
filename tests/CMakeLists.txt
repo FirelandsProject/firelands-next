@@ -41,6 +41,8 @@ add_executable(FirelandsUnitTests
     unit/shared/SpellPowerCostTests.cpp
     unit/shared/MovementStateQueriesTests.cpp
     unit/shared/CombatPacketsTest.cpp
+    unit/shared/ExperiencePacketsTest.cpp
+    unit/shared/RestExperienceLogicTests.cpp
     unit/shared/MeleeRangeTest.cpp
     unit/shared/WorldSessionMovementChecksTest.cpp
     unit/shared/MonsterMovePacketsTest.cpp

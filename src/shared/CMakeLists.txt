@@ -25,6 +25,7 @@ add_library(FirelandsShared STATIC
     game/PlayerGmAppearance.cpp
     game/StatFormulas.cpp
     game/ExperienceLogic.cpp
+    game/RestExperienceLogic.cpp
     game/SpellPowerResolve.cpp
     game/ActionButton.cpp
     network/MovementWire.cpp

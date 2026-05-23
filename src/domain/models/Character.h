@@ -28,7 +28,7 @@ public:
             std::array<uint32_t, kPackSlotCount> packItemEntries = {},
             std::array<uint32_t, kPackSlotCount> packItemGuids = {},
             std::array<uint32_t, kPackSlotCount> packItemStacks = {},
-            uint32 moneyCopper = 0, uint32_t xp = 0,
+            uint32 moneyCopper = 0, uint32_t xp = 0, float restBonus = 0.f,
             std::array<uint32_t, kTutorialMaskInts> tutorialMask = {},
             uint8 actionBarToggles = 0xFF)
       : m_guid(guid), m_account(account), m_name(std::move(name)), m_race(race),
@@ -42,7 +42,8 @@ public:
         m_visibleItems(visibleItems), m_visibleItemGuids(visibleItemGuids),
         m_visibleItemStacks(visibleItemStacks), m_packItemEntries(packItemEntries),
         m_packItemGuids(packItemGuids), m_packItemStacks(packItemStacks),
-        m_moneyCopper(moneyCopper), m_xp(xp), m_tutorialMask(tutorialMask),
+        m_moneyCopper(moneyCopper), m_xp(xp), m_restBonus(restBonus),
+        m_tutorialMask(tutorialMask),
         m_actionBarToggles(actionBarToggles), m_health(100), m_maxHealth(100),
         m_factionTemplate(1),
         m_displayId(GetDefaultDisplayId(race, gender)),
@@ -225,6 +226,10 @@ public:
   uint32_t GetXp() const { return m_xp; }
   void SetXp(uint32_t xp) { m_xp = xp; }
 
+  /// Rested XP pool; persisted in `characters.rest_bonus` (`PLAYER_REST_STATE_EXPERIENCE`).
+  float GetRestBonus() const { return m_restBonus; }
+  void SetRestBonus(float restBonus) { m_restBonus = restBonus; }
+
   /// STR, AGI, STA, INT, SPI (`UNIT_FIELD_STAT0`..`STAT4`) after world template apply.
   uint32 GetPrimaryStat(uint8_t index) const {
     return index < 5 ? m_primaryStats[index] : 0u;
@@ -300,6 +305,7 @@ private:
 
   uint32 m_moneyCopper = 0;
   uint32_t m_xp = 0;
+  float m_restBonus = 0.f;
   std::array<uint32_t, kTutorialMaskInts> m_tutorialMask{};
   uint8 m_actionBarToggles = 0xFF;
 

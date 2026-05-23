@@ -101,6 +101,8 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   _loginMaxPower1 = character.GetMaxPower1();
   _moneyCopper = character.GetMoney();
   _playerXp = character.GetXp();
+  _playerRestBonus = character.GetRestBonus();
+  _playerFacialHair = character.GetFacialHair();
 
   LOG_DEBUG("PlayerLogin: Account={} GUID={} Name='{}' Level={} Map={}",
             _accountId, guid, character.GetName(), character.GetLevel(),

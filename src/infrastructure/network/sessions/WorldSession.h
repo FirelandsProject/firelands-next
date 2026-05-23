@@ -166,6 +166,21 @@ public:
     return _gmAppearance;
   }
 
+  /// Per-creature combat chase / return-home state (world session combat movement).
+  struct CreatureCombatRuntime {
+    MovementInfo home{};
+    uint32_t moveCounter = 0;
+    /// While set and in the future, the client is still playing the last `SMSG_ON_MONSTER_MOVE`.
+    std::optional<std::chrono::steady_clock::time_point> activeSplineUntil;
+    /// Last chase destination used for spline replanning (ref `_lastTargetPosition`).
+    std::optional<MovementInfo> lastChaseTargetPos;
+    std::chrono::steady_clock::time_point nextMeleeSwingAt{};
+    std::chrono::steady_clock::time_point nextSpellTryAt{};
+    std::vector<uint32_t> combatSpells;
+    size_t nextSpellIndex = 0;
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> spellCooldownUntil;
+  };
+
  private:
   void ResetGmStateForLogout();
   void PublishGmVisualPatchIfInWorld();
@@ -239,16 +254,6 @@ public:
   void ScheduleMeleeAutoAttack();
   void ProcessMeleeAutoAttackTick();
 
-  struct CreatureCombatRuntime {
-    MovementInfo home{};
-    uint32_t moveCounter = 0;
-    std::chrono::steady_clock::time_point nextMeleeSwingAt{};
-    std::chrono::steady_clock::time_point nextSpellTryAt{};
-    std::vector<uint32_t> combatSpells;
-    size_t nextSpellIndex = 0;
-    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> spellCooldownUntil;
-  };
-
   void StartCreatureAggro(uint64_t creatureGuid);
   void StopCreatureAggro(uint64_t creatureGuid, bool sendAttackStopPackets);
   void StopAllCreatureCombat(bool sendAttackStopPackets);
@@ -267,6 +272,7 @@ public:
   void TryAggroCreatureFromSpellDamage(uint64_t targetGuid, int32_t healthDelta);
   void MaybeGrantKillExperience(Creature &creature, uint32 hpBefore);
   void PublishPlayerXpLevelUpdate(uint8 level, uint32 xp);
+  void PublishPlayerRestStateUpdate();
   void EvadeCreatureCombat(uint64_t creatureGuid);
   bool ShouldCreatureAbandonChase(std::shared_ptr<Map> const &map,
                                   std::shared_ptr<Creature> const &creature,
@@ -529,6 +535,9 @@ public:
   uint32_t _moneyCopper = 0;
   /// Persisted experience (`characters.xp`); mirrored on logout and GM level.
   uint32_t _playerXp = 0;
+  /// Rested XP pool (`characters.rest_bonus` / `PLAYER_REST_STATE_EXPERIENCE`).
+  float _playerRestBonus = 0.f;
+  uint8 _playerFacialHair = 0;
   bool _sentOpeningCinematic = false;
   std::array<uint32_t, Character::kTutorialMaskInts> _tutorialInts{};
   uint32 _mapId = 0;

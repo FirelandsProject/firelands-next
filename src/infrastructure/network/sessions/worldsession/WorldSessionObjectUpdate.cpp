@@ -8,6 +8,7 @@
 #include <shared/game/StatFormulas.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
+#include <shared/game/RestExperienceLogic.h>
 #include <shared/network/MovementStateQueries.h>
 #include <shared/network/WorldOpcodes.h>
 
@@ -41,6 +42,16 @@ void SetPlayerFieldByte(std::map<uint16, uint32> &fields, uint16 field, uint8 of
   if (offset < 4)
     bytes[offset] = value;
   std::memcpy(&packed, bytes, sizeof(bytes));
+}
+
+void ApplyRestExperienceWireFields(std::map<uint16, uint32> &fields, float restBonus,
+                                   uint8_t facialHair) {
+  fields[PLAYER_REST_STATE_EXPERIENCE] =
+      RestExperienceLogic::RestBonusWireAmount(restBonus);
+  SetPlayerFieldByte(fields, PLAYER_BYTES_2, 0, facialHair);
+  SetPlayerFieldByte(
+      fields, PLAYER_BYTES_2, RestExperienceLogic::kPlayerBytes2OffsetRestState,
+      static_cast<uint8_t>(RestExperienceLogic::RestStateForBonus(restBonus)));
 }
 
 void SetPlayerSkillSlot(std::map<uint16, uint32> &fields, uint16 baseField,
@@ -483,6 +494,7 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
     if (lv >= kMaxLevelCata) {
       fields[PLAYER_XP] = 0;
       fields[PLAYER_NEXT_LEVEL_XP] = 0;
+      ApplyRestExperienceWireFields(fields, 0.f, character.GetFacialHair());
     } else {
       uint32_t next = nextLevelXpFromWorld;
       if (next == 0)
@@ -492,6 +504,8 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
         xp = next;
       fields[PLAYER_XP] = xp;
       fields[PLAYER_NEXT_LEVEL_XP] = next;
+      ApplyRestExperienceWireFields(fields, character.GetRestBonus(),
+                                    character.GetFacialHair());
     }
   }
 
@@ -577,6 +591,15 @@ void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power
   std::map<uint16, uint32> fields;
   fields[UNIT_FIELD_POWER1] = power1;
   fields[UNIT_FIELD_MAXPOWER1] = maxPower1;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
+}
+
+void BuildPlayerRestStateValuesUpdate(uint16 mapId, uint64 playerGuid, float restBonus,
+                                      uint8_t facialHair, WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  ApplyRestExperienceWireFields(fields, restBonus, facialHair);
   UpdateData update(mapId);
   update.AddValuesUpdate(playerGuid, fields);
   update.Build(outPacket);

@@ -217,13 +217,13 @@ public:
   bool SaveCharacterOnLogout(
       uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
       float x, float y, float z, float orientation, uint32_t moneyCopper,
-      uint32_t xp,
+      uint32_t xp, float restBonus,
       std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
       std::optional<uint32_t> liveHealth = std::nullopt,
       std::optional<uint32_t> livePower1 = std::nullopt) {
     return m_repository->SaveCharacterOnLogout(
         accountId, characterGuid, mapId, zoneId, x, y, z, orientation, moneyCopper,
-        xp, tutorialMask, liveHealth, livePower1);
+        xp, restBonus, tutorialMask, liveHealth, livePower1);
   }
 
 bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
@@ -258,8 +258,9 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
   }
 
   bool UpdateCharacterLevelAndXp(uint32_t accountId, uint32_t characterGuid,
-                                 uint8_t level, uint32_t xp) {
-    return m_repository->UpdateCharacterLevelAndXp(accountId, characterGuid, level, xp);
+                                 uint8_t level, uint32_t xp, float restBonus) {
+    return m_repository->UpdateCharacterLevelAndXp(accountId, characterGuid, level, xp,
+                                                   restBonus);
   }
 
   std::vector<uint32_t> GetCharacterSpellIds(uint32_t characterGuid) {

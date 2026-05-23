@@ -790,7 +790,7 @@ MySqlCharacterRepository::GetCharactersByAccount(uint32_t accountId) {
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
           std::array<uint32_t, kPackSlotCount>{},
-          r.money, r.xp, r.tutorialMask);
+          r.money, r.xp, 0.f, r.tutorialMask);
       ApplyInitialFactionTemplate(*ch, r.race);
       characters.push_back(std::move(ch));
     }
@@ -1031,7 +1031,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
         "SELECT guid, account, name, race, class, gender, skin, face, "
         "hairStyle, hairColor, facialHair, outfitId, equipmentCache, "
         "level, zoneId, mapId, x, y, z, orientation, guildId, characterFlags, "
-        "customizationFlags, firstLogin, money, xp, live_health, live_power1, "
+        "customizationFlags, firstLogin, money, xp, rest_bonus, live_health, live_power1, "
         "tutorial0, tutorial1, tutorial2, tutorial3, tutorial4, tutorial5, "
         "tutorial6, tutorial7, actionBarToggles "
         "FROM characters WHERE guid = ?"));
@@ -1068,6 +1068,9 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                                         : std::string(res->getString("equipmentCache"));
       uint32_t const money = res->getUInt("money");
       uint32_t const xp = res->getUInt("xp");
+      float const restBonus =
+          res->isNull("rest_bonus") ? 0.f
+                                    : static_cast<float>(res->getDouble("rest_bonus"));
       std::array<uint32_t, Character::kTutorialMaskInts> tutorialMask{};
       tutorialMask[0] = res->getUInt("tutorial0");
       tutorialMask[1] = res->getUInt("tutorial1");
@@ -1091,7 +1094,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
                    pz, po, guildId, characterFlags, customizationFlags, firstLogin,
                    outfitId, equipmentCache, bag0.equipEntries, bag0.equipGuids,
                    bag0.equipStacks, bag0.packEntries, bag0.packGuids,
-                   bag0.packStacks, money, xp, tutorialMask, actionBarToggles);
+                   bag0.packStacks, money, xp, restBonus, tutorialMask, actionBarToggles);
       ApplyInitialFactionTemplate(ch, race);
       std::optional<uint32> liveH;
       std::optional<uint32> liveP1;
@@ -1113,7 +1116,7 @@ MySqlCharacterRepository::GetCharacterByGuid(uint64_t guid) {
 bool MySqlCharacterRepository::SaveCharacterOnLogout(
     uint32_t accountId, uint32_t characterGuid, uint16_t mapId, uint16_t zoneId,
     float x, float y, float z, float orientation, uint32_t moneyCopper,
-    uint32_t xp,
+    uint32_t xp, float restBonus,
     std::array<uint32_t, Character::kTutorialMaskInts> const &tutorialMask,
     std::optional<uint32_t> liveHealth,
     std::optional<uint32_t> livePower1) {
@@ -1124,7 +1127,7 @@ bool MySqlCharacterRepository::SaveCharacterOnLogout(
         persistVitals ? _connection->prepareStatement(
                           "UPDATE characters SET mapId = ?, zoneId = ?, x = ?, y = "
                           "?, z = ?, "
-                          "orientation = ?, firstLogin = 0, money = ?, xp = ?, "
+                          "orientation = ?, firstLogin = 0, money = ?, xp = ?, rest_bonus = ?, "
                           "tutorial0 = ?, tutorial1 = ?, tutorial2 = ?, tutorial3 = ?, "
                           "tutorial4 = ?, tutorial5 = ?, tutorial6 = ?, tutorial7 = ?, "
                           "live_health = ?, "
@@ -1132,7 +1135,7 @@ bool MySqlCharacterRepository::SaveCharacterOnLogout(
                       : _connection->prepareStatement(
                           "UPDATE characters SET mapId = ?, zoneId = ?, x = ?, y = "
                           "?, z = ?, "
-                          "orientation = ?, firstLogin = 0, money = ?, xp = ?, "
+                          "orientation = ?, firstLogin = 0, money = ?, xp = ?, rest_bonus = ?, "
                           "tutorial0 = ?, tutorial1 = ?, tutorial2 = ?, tutorial3 = ?, "
                           "tutorial4 = ?, tutorial5 = ?, tutorial6 = ?, tutorial7 = ? "
                           "WHERE guid = ? AND "
@@ -1145,16 +1148,17 @@ bool MySqlCharacterRepository::SaveCharacterOnLogout(
     stmnt->setDouble(6, static_cast<double>(FiniteOrZero(orientation)));
     stmnt->setUInt(7, moneyCopper);
     stmnt->setUInt(8, xp);
+    stmnt->setDouble(9, static_cast<double>(restBonus));
     for (size_t i = 0; i < tutorialMask.size(); ++i)
-      stmnt->setUInt(static_cast<unsigned>(9 + i), tutorialMask[i]);
+      stmnt->setUInt(static_cast<unsigned>(10 + i), tutorialMask[i]);
     if (persistVitals) {
-      stmnt->setUInt(17, static_cast<uint32>(*liveHealth));
-      stmnt->setUInt(18, static_cast<uint32>(*livePower1));
-      stmnt->setUInt(19, characterGuid);
-      stmnt->setUInt(20, accountId);
+      stmnt->setUInt(18, static_cast<uint32>(*liveHealth));
+      stmnt->setUInt(19, static_cast<uint32>(*livePower1));
+      stmnt->setUInt(20, characterGuid);
+      stmnt->setUInt(21, accountId);
     } else {
-      stmnt->setUInt(17, characterGuid);
-      stmnt->setUInt(18, accountId);
+      stmnt->setUInt(18, characterGuid);
+      stmnt->setUInt(19, accountId);
     }
 
     auto affected = stmnt->executeUpdate();
@@ -1203,14 +1207,17 @@ bool MySqlCharacterRepository::UpdateCharacterLevel(uint32_t accountId,
 bool MySqlCharacterRepository::UpdateCharacterLevelAndXp(uint32_t accountId,
                                                          uint32_t characterGuid,
                                                          uint8_t level,
-                                                         uint32_t xp) {
+                                                         uint32_t xp,
+                                                         float restBonus) {
   try {
     std::shared_ptr<sql::PreparedStatement> st(_connection->prepareStatement(
-        "UPDATE characters SET level = ?, xp = ? WHERE guid = ? AND account = ?"));
+        "UPDATE characters SET level = ?, xp = ?, rest_bonus = ? WHERE guid = ? AND "
+        "account = ?"));
     st->setUInt(1, level);
     st->setUInt(2, xp);
-    st->setUInt(3, characterGuid);
-    st->setUInt(4, accountId);
+    st->setDouble(3, static_cast<double>(restBonus));
+    st->setUInt(4, characterGuid);
+    st->setUInt(5, accountId);
     return st->executeUpdate() > 0;
   } catch (sql::SQLException &e) {
     LOG_ERROR("UpdateCharacterLevelAndXp failed: {}", e.what());
