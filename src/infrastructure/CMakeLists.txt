@@ -18,6 +18,8 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlCreatureClassLevelStatsRepository.cpp
     persistence/MySqlPhaseGroupCatalogRepository.cpp
     persistence/MySqlPhaseAreaCatalogRepository.cpp
+    persistence/MySqlPhaseConditionRepository.cpp
+    persistence/MySqlPlayerQuestProgressRepository.cpp
     world/DbCreatureSpawnBootstrap.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
