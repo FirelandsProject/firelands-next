@@ -25,10 +25,18 @@ public:
   /// `maxHealth` seeds runtime HP from `creature_classlevelstats` / spawn bootstrap.
   Creature(uint64 guid, uint32 entry, uint32 displayId, uint32 maxHealth = 100u,
            uint8 level = 1u, uint32 factionTemplate = kDefaultFactionTemplate,
-           uint32 npcFlags = 0u, float experienceModifier = 1.0f);
+           uint32 npcFlags = 0u, uint32 unitFieldFlags = 0u, uint32 unitFieldFlags2 = 0u,
+           uint32 extraFlags = 0u, float experienceModifier = 1.0f);
 
   uint32 GetEntry() const { return m_entry; }
   uint32 GetNpcFlags() const { return m_npcFlags; }
+  /// `creature_template.unit_flags` → `UNIT_FIELD_FLAGS` on create/update.
+  uint32 GetUnitFieldFlags() const { return m_unitFieldFlags; }
+  uint32 GetUnitFieldFlags2() const { return m_unitFieldFlags2; }
+  /// `creature_template.flags_extra` (server-only template metadata).
+  uint32 GetExtraFlags() const { return m_extraFlags; }
+  /// Script/quest proxy units: no `UNIT_NPC_FLAGS`, not selectable, trigger extra flag.
+  bool ActsAsScriptTrigger() const noexcept;
   uint32 GetDisplayId() const { return m_displayId; }
   uint8 GetLevel() const { return m_level; }
   /// `creature_template.ExperienceModifier` (1.0 = normal kill XP).
@@ -72,6 +80,9 @@ private:
   uint32 m_entry;
   uint32 m_displayId;
   uint32 m_npcFlags = 0;
+  uint32 m_unitFieldFlags = 0;
+  uint32 m_unitFieldFlags2 = 0;
+  uint32 m_extraFlags = 0;
   uint32 m_factionTemplate = kDefaultFactionTemplate;
   uint8 m_level = 1;
   float m_experienceModifier = 1.0f;

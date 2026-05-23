@@ -1,19 +1,29 @@
 #include <domain/world/Creature.h>
 
+#include <shared/game/CreatureExtraFlags.h>
+#include <shared/game/UnitFieldFlags.h>
 #include <algorithm>
 
 namespace Firelands {
 
 Creature::Creature(uint64 guid, uint32 entry, uint32 displayId, uint32 maxHealth,
                    uint8 level, uint32 factionTemplate, uint32 npcFlags,
+                   uint32 unitFieldFlags, uint32 unitFieldFlags2, uint32 extraFlags,
                    float experienceModifier)
     : WorldObject(guid), m_entry(entry), m_displayId(displayId), m_npcFlags(npcFlags),
+      m_unitFieldFlags(unitFieldFlags), m_unitFieldFlags2(unitFieldFlags2),
+      m_extraFlags(extraFlags),
       m_level(level == 0 ? 1 : level),
       m_experienceModifier(experienceModifier > 0.0f ? experienceModifier : 1.0f),
       m_factionTemplate(factionTemplate == 0 ? kDefaultFactionTemplate
                                               : factionTemplate) {
   m_liveMaxHealth = std::max(1u, maxHealth);
   m_liveHealth = m_liveMaxHealth;
+}
+
+bool Creature::ActsAsScriptTrigger() const noexcept {
+  return m_npcFlags == 0u && (m_unitFieldFlags & kUnitFieldFlagNotSelectable) != 0u &&
+         (m_extraFlags & kCreatureExtraFlagTrigger) != 0u;
 }
 
 bool Creature::TryMarkKillExperienceAwarded() {

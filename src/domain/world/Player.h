@@ -1,6 +1,6 @@
 #pragma once
 
-#include <application/ports/IMapNotifier.h>
+#include <domain/ports/IMapNotifier.h>
 #include <domain/world/Aura.h>
 #include <domain/world/UnitAuraState.h>
 #include <domain/world/WorldObject.h>
