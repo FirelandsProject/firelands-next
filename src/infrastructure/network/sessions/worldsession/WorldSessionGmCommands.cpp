@@ -12,6 +12,7 @@
 #include <shared/game/ChatLanguages.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/ReputationRank.h>
+#include <shared/game/UnitCombatStats.h>
 #include <shared/game/WowGuid.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/UpdateFields.h>
@@ -154,6 +155,7 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
   auto spawned = std::make_shared<Creature>(guid, creatureEntry, resolvedDisplay, kSeedHp,
                                             1u, factionForCreature, npcFlagsForSpawn);
   spawned->SetPosition(_position);
+  spawned->SetCombatStats(BuildCreatureCombatStats(1u, 1u));
   WorldService::Instance().AddCreatureToMap(_mapId, std::move(spawned));
 
   auto map = WorldService::Instance().GetMap(_mapId);

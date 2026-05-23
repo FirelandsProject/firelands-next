@@ -16,6 +16,8 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlNpcTemplateSearchRepository.cpp
     persistence/MySqlCreatureSpawnRepository.cpp
     persistence/MySqlCreatureClassLevelStatsRepository.cpp
+    persistence/MySqlPhaseGroupCatalog.cpp
+    persistence/MySqlPhaseAreaCatalog.cpp
     world/DbCreatureSpawnBootstrap.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp
@@ -36,6 +38,7 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/worldsession/WorldSessionCharacterHandlers.cpp
     network/sessions/worldsession/WorldSessionItemHandlers.cpp
     network/sessions/worldsession/WorldSessionLoginFlow.cpp
+    network/sessions/worldsession/WorldSessionPhasing.cpp
     network/sessions/worldsession/WorldSessionNetwork.cpp
     network/sessions/worldsession/WorldSessionOutboundPackets.cpp
     network/sessions/worldsession/WorldSessionSpellCast.cpp
@@ -44,6 +47,7 @@ add_library(FirelandsInfrastructure STATIC
     network/sessions/worldsession/WorldSessionCombat.cpp
     network/sessions/worldsession/WorldSessionExperience.cpp
     world/MapAuraTicker.cpp
+    world/MapPlayerRegenTicker.cpp
     network/sessions/worldsession/WorldSessionTimeMirror.cpp
     network/sessions/worldsession/WorldSessionWorldLifecycle.cpp
     network/sessions/worldsession/WorldSessionActionButtons.cpp

@@ -1,6 +1,8 @@
 #include <application/services/WorldService.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionMovementChecks.h>
+#include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
+#include <shared/game/PlayerGmAppearance.h>
 #include <shared/Logger.h>
 #include <shared/network/BitReader.h>
 #include <shared/network/MovementFlags.h>
@@ -11,6 +13,26 @@
 #include <shared/network/movement/ClientMovementMse.h>
 
 namespace Firelands {
+
+namespace ws_obj = WorldSessionObjectUpdate;
+
+void WorldSession::SyncPlayerMovementHintsIfNeeded(bool inLiquidForBreath) {
+  if (_playerGuid == 0)
+    return;
+
+  uint8 const tier = MovementAnimTierForLiquid(_position, inLiquidForBreath);
+  if (_movementAnimTierSent.has_value() && *_movementAnimTierSent == tier)
+    return;
+  _movementAnimTierSent = tier;
+
+  WorldPacket pkt;
+  ws_obj::BuildPlayerMovementHintsValuesUpdate(
+      static_cast<uint16>(_mapId), _playerGuid, _position,
+      GetGmAppearanceForPlayerUpdates(), pkt);
+  SendPacket(pkt);
+  if (auto map = WorldService::Instance().GetMap(_mapId))
+    map->BroadcastPacketToNearby(_playerGuid, pkt, true);
+}
 
 void WorldSession::TeleportTo(uint32 mapId, float x, float y, float z,
                               float orientation) {
@@ -123,6 +145,8 @@ void WorldSession::HandleMoveTeleportAck(WorldPacket &packet) {
   }
 
   ResetBreathMirrorState();
+  _movementAnimTierSent.reset();
+  SyncPlayerMovementHintsIfNeeded();
 
   // Login merges nearby creatures into the initial SMSG_UPDATE_OBJECT; teleport does not,
   // so the client would see an empty cell until we send CREATE for units here.
@@ -194,6 +218,7 @@ void WorldSession::HandleMovement(WorldPacket &packet) {
     else if (op == MSG_MOVE_STOP_SWIM)
       inLiquidForBreath = false;
     UpdateBreathFromSwimmingState(inLiquidForBreath);
+    SyncPlayerMovementHintsIfNeeded(inLiquidForBreath);
   }
 }
 

@@ -43,6 +43,10 @@ add_executable(FirelandsUnitTests
     unit/shared/CombatPacketsTest.cpp
     unit/shared/ExperiencePacketsTest.cpp
     unit/shared/RestExperienceLogicTests.cpp
+    unit/shared/CombatDamageTests.cpp
+    unit/shared/PhaseShiftTests.cpp
+    unit/shared/PlayerResourceRegenTests.cpp
+    unit/application/PlayerAuraRegenEffectsTests.cpp
     unit/shared/MeleeRangeTest.cpp
     unit/shared/WorldSessionMovementChecksTest.cpp
     unit/shared/MonsterMovePacketsTest.cpp
@@ -57,9 +61,11 @@ add_executable(FirelandsUnitTests
     unit/application/PlayerCreateInfoServiceStatsTests.cpp
     unit/application/PlayerSpellbookTests.cpp
     unit/application/PassiveSpellAurasTests.cpp
+    unit/application/PlayerPhaseShiftTests.cpp
     unit/application/PlayerAuraStatEffectsTests.cpp
     unit/application/WorldServiceCreatureScriptTests.cpp
     unit/application/CreatureSpawnLogicTests.cpp
+    unit/application/CreatureProximityAggroTests.cpp
     unit/application/GossipLogicTests.cpp
     unit/application/QuestGiverLogicTests.cpp
     unit/application/QuestGossipFilterTests.cpp
@@ -67,10 +73,13 @@ add_executable(FirelandsUnitTests
     unit/infrastructure/ActionButtonPacketTests.cpp
     unit/infrastructure/ActionBarTogglesObjectUpdateTests.cpp
     unit/infrastructure/Power1ObjectUpdateTests.cpp
+    unit/infrastructure/PlayerBaselineStatsObjectUpdateTests.cpp
     unit/infrastructure/GossipPacketTests.cpp
+    unit/infrastructure/VendorPacketTests.cpp
     unit/infrastructure/GmTicketGossipUiTests.cpp
     unit/domain/MapTests.cpp
     unit/domain/CreatureCombatTests.cpp
+    unit/domain/CreatureEvadeTests.cpp
     unit/domain/PlayerCombatTests.cpp
     unit/combat/CombatEngineTest.cpp
     unit/combat/CombatHostilityTests.cpp

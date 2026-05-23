@@ -16,6 +16,7 @@
 #include <shared/network/packets/server/SimpleOutboundPackets.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/packets/server/NpcTextPackets.h>
+#include <shared/network/packets/server/VendorPackets.h>
 #include <application/logic/GossipLogic.h>
 #include <domain/repositories/IQuestGossipRepository.h>
 #include <shared/network/WorldOpcodes.h>
@@ -189,8 +190,11 @@ void WorldSession::HandleCalendarGetNumPending(WorldPacket & /*packet*/) {
 void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
   WorldPackets::Client::ZoneUpdateRequest z{};
   WorldPackets::Client::ZoneUpdateRequest::Read(packet, z);
-  if (z.newZoneId != 0)
+  if (z.newZoneId != 0 && z.newZoneId != _zoneId) {
     _zoneId = z.newZoneId;
+    if (_playerGuid != 0)
+      RefreshPlayerPhaseVisibilityFromAuras();
+  }
 }
 
 void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*packet*/) {
@@ -532,6 +536,20 @@ void WorldSession::HandleNpcTextQuery(WorldPacket &packet) {
   LOG_DEBUG("CMSG_NPC_TEXT_QUERY textId={} guid={:#x}", textId, guid);
 
   SendNpcTextForGossipWindow(textId);
+}
+
+void WorldSession::HandleListInventory(WorldPacket &packet) {
+  uint64_t const vendorGuid = ws_obj::ReadClientTargetGuid(packet);
+  if (vendorGuid == 0 || _playerGuid == 0)
+    return;
+
+  LOG_DEBUG("CMSG_LIST_INVENTORY vendor={:#x}", vendorGuid);
+  SendVendorInventory(vendorGuid);
+}
+
+void WorldSession::SendVendorInventory(uint64_t vendorGuid) {
+  WorldPacket pkt = vendor_wire::BuildVendorInventory(vendorGuid, {});
+  SendPacket(pkt);
 }
 
 void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {

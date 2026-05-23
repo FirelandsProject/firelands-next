@@ -1,6 +1,7 @@
 #include "WorldFtxuiConsole.h"
 
 #include <infrastructure/world/MapAuraTicker.h>
+#include <infrastructure/world/MapPlayerRegenTicker.h>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_options.hpp>
@@ -188,6 +189,7 @@ void RunWorldFtxuiConsoleImpl(
         auto const tickNow = std::chrono::steady_clock::now();
         if (tickNow - lastAuraTick >= auraTickInterval) {
           TickMapAuras(tickNow);
+          TickMapPlayerResourceRegen(tickNow);
           lastAuraTick = tickNow;
         }
         if (ic && ic->ShutdownRequested()) {

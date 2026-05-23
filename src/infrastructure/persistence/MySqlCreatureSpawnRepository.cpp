@@ -18,6 +18,7 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
     std::unique_ptr<sql::ResultSet> res(stmt->executeQuery(
         "SELECT c.`guid`, c.`id`, c.`map`, c.`position_x`, c.`position_y`, "
         "c.`position_z`, c.`orientation`, c.`modelid`, "
+        "c.`phaseUseFlags`, c.`PhaseId`, c.`PhaseGroup`, "
         "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4`, "
         "ct.`unit_class`, ct.`minlevel`, ct.`maxlevel`, ct.`faction`, ct.`npcflag`, "
         "ct.`ExperienceModifier` "
@@ -33,6 +34,12 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
       row.z = res->getDouble("position_z");
       row.orientation = static_cast<float>(res->getDouble("orientation"));
       row.modelId = res->getUInt("modelid");
+      if (!res->isNull("phaseUseFlags"))
+        row.phaseUseFlags = static_cast<uint8>(res->getUInt("phaseUseFlags"));
+      if (!res->isNull("PhaseId"))
+        row.phaseId = static_cast<uint16>(res->getUInt("PhaseId"));
+      if (!res->isNull("PhaseGroup"))
+        row.phaseGroup = res->getUInt("PhaseGroup");
       row.templateModelId1 = res->getUInt("modelid1");
       row.templateModelId2 = res->getUInt("modelid2");
       row.templateModelId3 = res->getUInt("modelid3");

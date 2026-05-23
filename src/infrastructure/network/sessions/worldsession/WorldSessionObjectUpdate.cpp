@@ -1,4 +1,5 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
+#include <application/combat/PlayerCombatStats.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/UpdateFields.h>
@@ -6,6 +7,7 @@
 #include <shared/game/EquipmentCache.h>
 #include <shared/dbc/GtPlayerStatGameTables.h>
 #include <shared/game/StatFormulas.h>
+#include <shared/game/UnitCombatStats.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
 #include <shared/game/RestExperienceLogic.h>
@@ -96,21 +98,15 @@ uint32 PackFloat(float value) {
   return bits;
 }
 
-bool UsesAgilityForMeleeAttackPower(uint8 classId) {
-  // Simplified baseline until full stat system / shapeshift auras are wired.
-  return classId == 3 || classId == 4 || classId == 11;
+void SetBaselinePercentMultipliers(std::map<uint16, uint32> &fields, uint16 baseField,
+                                   uint32 count) {
+  uint32 const one = PackFloat(1.0f);
+  for (uint32 i = 0; i < count; ++i)
+    fields[static_cast<uint16>(baseField + i)] = one;
 }
 
-int32 ComputeBaseMeleeAttackPower(Character const &character) {
-  uint32 const str = character.GetPrimaryStat(0);
-  uint32 const agi = character.GetPrimaryStat(1);
-  uint32 const level = character.GetLevel();
-  int32 ap = static_cast<int32>(level) * 3;
-  if (UsesAgilityForMeleeAttackPower(character.GetClass()))
-    ap += static_cast<int32>(agi) * 2;
-  else
-    ap += static_cast<int32>(str) * 2;
-  return ap < 0 ? 0 : ap;
+bool UsesBaselineHealingPower(uint8 classId) {
+  return classId == 2 || classId == 5 || classId == 7 || classId == 11;
 }
 
 void AddBaselineMeleeFields(std::map<uint16, uint32> &fields,
@@ -132,28 +128,13 @@ void AddBaselineMeleeFields(std::map<uint16, uint32> &fields,
   fields[UNIT_FIELD_MAXDAMAGE] = PackFloat(maxDmg);
   fields[UNIT_FIELD_MINOFFHANDDAMAGE] = PackFloat(0.0f);
   fields[UNIT_FIELD_MAXOFFHANDDAMAGE] = PackFloat(0.0f);
-}
-
-/// Classes that should show non-trivial spell/healing numbers in the Spell panel
-/// before gear, talents, and auras are implemented.
-bool UsesBaselineSpellPowerFromIntellect(uint8 classId) {
-  switch (classId) {
-  case 2:  // Paladin
-  case 3:  // Hunter (minimal magical scaling; still avoids an empty pane)
-  case 5:  // Priest
-  case 6:  // Death Knight
-  case 7:  // Shaman
-  case 8:  // Mage
-  case 9:  // Warlock
-  case 11: // Druid
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool UsesBaselineHealingPower(uint8 classId) {
-  return classId == 2 || classId == 5 || classId == 7 || classId == 11;
+  fields[UNIT_FIELD_RANGED_ATTACK_POWER] = 0;
+  fields[UNIT_FIELD_RANGED_ATTACK_POWER_MOD_POS] = 0;
+  fields[UNIT_FIELD_RANGED_ATTACK_POWER_MOD_NEG] = 0;
+  fields[UNIT_FIELD_RANGED_ATTACK_POWER_MULTIPLIER] = PackFloat(0.0f);
+  fields[UNIT_FIELD_MINRANGEDDAMAGE] = PackFloat(0.0f);
+  fields[UNIT_FIELD_MAXRANGEDDAMAGE] = PackFloat(0.0f);
+  SetBaselinePercentMultipliers(fields, UNIT_FIELD_POWER_COST_MULTIPLIER, 7);
 }
 
 void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
@@ -164,15 +145,14 @@ void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
   uint32 const inte = character.GetPrimaryStat(3);
   uint32 const spi = character.GetPrimaryStat(4);
 
-  // Cast speed / haste multipliers on the unit (1.0 = baseline until aura system).
+  // Ref `Player::InitStatsForLevel` (cata): cast/haste multipliers start at 1.0 (not 0).
   fields[UNIT_MOD_CAST_SPEED] = PackFloat(1.0f);
-  fields[UNIT_MOD_CAST_HASTE] = PackFloat(0.0f);
+  fields[UNIT_MOD_CAST_HASTE] = PackFloat(1.0f);
 
-  // Player spell haste modifier (rating → multiplier comes later).
-  fields[PLAYER_FIELD_MOD_HASTE] = PackFloat(0.0f);
-  fields[PLAYER_FIELD_MOD_RANGED_HASTE] = PackFloat(0.0f);
-  fields[PLAYER_FIELD_MOD_PET_HASTE] = PackFloat(0.0f);
-  fields[PLAYER_FIELD_MOD_HASTE_REGEN] = PackFloat(0.0f);
+  fields[PLAYER_FIELD_MOD_HASTE] = PackFloat(1.0f);
+  fields[PLAYER_FIELD_MOD_RANGED_HASTE] = PackFloat(1.0f);
+  fields[PLAYER_FIELD_MOD_PET_HASTE] = PackFloat(1.0f);
+  fields[PLAYER_FIELD_MOD_HASTE_REGEN] = PackFloat(1.0f);
 
   fields[PLAYER_FIELD_UI_SPELL_HIT_MODIFIER] = PackFloat(
       StatFormulas::SpellHitPercentFromRating(level, 0, statGameTables));
@@ -183,8 +163,9 @@ void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
   for (uint32_t i = 0; i < 7; ++i) {
     fields[static_cast<uint16>(PLAYER_FIELD_MOD_DAMAGE_DONE_POS + i)] = 0;
     fields[static_cast<uint16>(PLAYER_FIELD_MOD_DAMAGE_DONE_NEG + i)] = 0;
-    fields[static_cast<uint16>(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + i)] = 0;
   }
+  // Wire type is float in 4.3.4 client; 0.0 displays as 0% and breaks derived spell stats (#inf).
+  SetBaselinePercentMultipliers(fields, PLAYER_FIELD_MOD_DAMAGE_DONE_PCT, 7);
 
   uint32 spellPower = 0;
   if (UsesBaselineSpellPowerFromIntellect(klass))
@@ -221,31 +202,6 @@ void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
   }
 
   fields[PLAYER_PET_SPELL_POWER] = 0;
-}
-
-uint32 ComputeBaselineArmor(uint8 classId, uint8 level, uint32 agi, uint32 str,
-                            uint32 sta) {
-  uint32 const lv = static_cast<uint32>(level);
-  uint32 a = lv * 12u;
-  switch (classId) {
-  case 1:  // Warrior
-  case 2:  // Paladin
-  case 6:  // Death Knight
-    a += sta * 2u + str + agi / 2u;
-    break;
-  case 3:  // Hunter
-  case 7:  // Shaman
-    a += agi * 3u + sta + lv;
-    break;
-  case 4:  // Rogue
-  case 11: // Druid
-    a += agi * 4u + lv * 2u;
-    break;
-  default: // Cloth casters
-    a += lv * 6u + sta;
-    break;
-  }
-  return std::max(10u, a);
 }
 
 void AddBaselineDefenseAndResistanceFields(
@@ -334,15 +290,23 @@ void ApplyMovementHintsToPlayerCreateFields(std::map<uint16, uint32> &fields,
   uint8 const stand = 0;
   uint8 const petTalents = 0;
   uint8 const visFlags = 0;
-  uint8 animTier = 0;
-  if (MovementIsSwimming(move))
-    animTier = 1;
-  else if (MovementIsAirborneTier(move))
-    animTier = 3;
+  uint8 const animTier = MovementAnimTier(move);
   uint32 const bytes1 =
       uint32(stand) | (uint32(petTalents) << 8) | (uint32(visFlags) << 16) |
       (uint32(animTier) << 24);
   fields[static_cast<uint16>(UNIT_FIELD_BYTES_1)] = bytes1;
+}
+
+void BuildPlayerMovementHintsValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                          MovementInfo const &move,
+                                          PlayerGmAppearanceForUpdates const &gmAppearance,
+                                          WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  MergeGmAppearanceIntoPlayerFields(fields, gmAppearance);
+  ApplyMovementHintsToPlayerCreateFields(fields, move);
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
 }
 
 std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
@@ -468,6 +432,8 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
     fields[UNIT_FIELD_POWER1] = character.GetPower1();
     fields[UNIT_FIELD_MAXPOWER1] = character.GetMaxPower1();
   }
+  fields[UNIT_FIELD_BASE_HEALTH] = fields[UNIT_FIELD_MAXHEALTH];
+  fields[UNIT_FIELD_BASE_MANA] = fields[UNIT_FIELD_MAXPOWER1];
   fields[UNIT_FIELD_LEVEL] = character.GetLevel();
   for (uint8_t i = 0; i < 5; ++i) {
     fields[static_cast<uint16>(UNIT_FIELD_STAT0 + i)] =
@@ -573,6 +539,9 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
     fields[static_cast<uint16>(packBase + 1)] = ihi;
   }
 
+  // Reference `Player::Create`: client power regen requires this flag on login.
+  fields[UNIT_FIELD_FLAGS_2] = UNIT_FLAG2_REGENERATE_POWER;
+
   return fields;
 }
 
@@ -618,7 +587,9 @@ void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
 
 void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
                                      PlayerAuraStatBonus const &bonus,
-                                     WorldPacket &outPacket) {
+                                     WorldPacket &outPacket,
+                                     UnitCombatStats const *baseline,
+                                     float baselineDodgePct) {
   std::map<uint16, uint32> fields;
   for (uint8_t i = 0; i < 5; ++i) {
     fields[static_cast<uint16>(UNIT_FIELD_POSSTAT0 + i)] =
@@ -637,6 +608,27 @@ void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
   fields[UNIT_FIELD_ATTACK_POWER_MOD_NEG] =
       static_cast<uint32>(std::max<int32>(0, bonus.attackPowerModNeg));
   fields[UNIT_FIELD_ATTACK_POWER_MULTIPLIER] = PackFloat(bonus.attackPowerMultiplier);
+  if (bonus.dodgePctBonus != 0.f || baselineDodgePct != 0.f)
+    fields[PLAYER_DODGE_PERCENTAGE] = PackFloat(baselineDodgePct + bonus.dodgePctBonus);
+  for (uint8_t school = 0; school < 7; ++school) {
+    int32 const basePos =
+        baseline ? baseline->spellDamageDonePos[school] : 0;
+    int32 const dmgPos = basePos + bonus.damageDonePos[school] - bonus.damageDoneNeg[school];
+    if (dmgPos != 0 || bonus.damageDonePos[school] != 0 || bonus.damageDoneNeg[school] != 0)
+      fields[static_cast<uint16>(PLAYER_FIELD_MOD_DAMAGE_DONE_POS + school)] =
+          static_cast<uint32>(std::max<int32>(0, dmgPos));
+    if (bonus.damageDonePctMultiplier[school] > 0.f)
+      fields[static_cast<uint16>(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + school)] =
+          PackFloat(bonus.damageDonePctMultiplier[school]);
+    int32 const resPos = bonus.resistanceBuffPos[school];
+    int32 const resNeg = bonus.resistanceBuffNeg[school];
+    if (resPos != 0)
+      fields[static_cast<uint16>(UNIT_FIELD_RESISTANCEBUFFMODSPOSITIVE + school)] =
+          static_cast<uint32>(std::max<int32>(0, resPos));
+    if (resNeg != 0)
+      fields[static_cast<uint16>(UNIT_FIELD_RESISTANCEBUFFMODSNEGATIVE + school)] =
+          static_cast<uint32>(std::max<int32>(0, resNeg));
+  }
   UpdateData update(mapId);
   update.AddValuesUpdate(playerGuid, fields);
   update.Build(outPacket);

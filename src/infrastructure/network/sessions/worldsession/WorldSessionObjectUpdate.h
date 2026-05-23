@@ -51,6 +51,12 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
 void ApplyMovementHintsToPlayerCreateFields(std::map<uint16, uint32> &fields,
                                             MovementInfo const &move);
 
+/// Swim / fly anim tier + `UNIT_FLAG_CAN_SWIM` while moving (call after GM merge).
+void BuildPlayerMovementHintsValuesUpdate(uint16 mapId, uint64 playerGuid,
+                                          MovementInfo const &move,
+                                          PlayerGmAppearanceForUpdates const &gmAppearance,
+                                          WorldPacket &outPacket);
+
 /// `SMSG_UPDATE_OBJECT` with `UPDATETYPE_VALUES` for `UNIT_FIELD_HEALTH` / max only.
 void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
                                    uint32 maxHealth, WorldPacket &outPacket);
@@ -66,10 +72,13 @@ void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
                                              uint8 actionBarToggles,
                                              WorldPacket &outPacket);
 
-/// `UNIT_FIELD_POSSTAT*` / `NEGSTAT*` / `PLAYER_FIELD_COMBAT_RATING_*` from aura bonuses.
+/// Aura-driven stat/rating/resistance/damage fields. When `baseline` is set, spell damage
+/// and resistance buff mods include template values (login zeros those until this runs).
 void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
                                      PlayerAuraStatBonus const &bonus,
-                                             WorldPacket &outPacket);
+                                     WorldPacket &outPacket,
+                                     UnitCombatStats const *baseline = nullptr,
+                                     float baselineDodgePct = 0.f);
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_FACTIONTEMPLATE` only (players or units).
 void BuildUnitFactionTemplateValuesUpdate(uint16 mapId, uint64 unitGuid,

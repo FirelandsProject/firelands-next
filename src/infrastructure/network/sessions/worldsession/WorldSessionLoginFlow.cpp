@@ -1,6 +1,9 @@
+#include <application/combat/PlayerCombatStats.h>
 #include <application/ports/IMapNotifier.h>
+#include <shared/game/PlayerPowerType.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
 #include <application/spell/PassiveSpellAuras.h>
+#include <shared/game/StatFormulas.h>
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/WorldService.h>
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
@@ -13,7 +16,6 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionSpellEffects.h>
 #include <shared/Logger.h>
-#include <shared/dbc/GtPlayerStatGameTables.h>
 #include <shared/game/ChatLanguages.h>
 #include <shared/game/PlayerFactionTeam.h>
 #include <shared/game/PlayerGmAppearance.h>
@@ -320,6 +322,28 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
   player->SetRaceAndFaction(character.GetRace(), character.GetFactionTemplate());
   player->InitCombatResources(character.GetHealth(), character.GetMaxHealth(),
                                character.GetPower1(), character.GetMaxPower1());
+  player->SetBaselineCombatStats(BuildPlayerCombatStats(character));
+  {
+    std::array<uint32, 5> prim{};
+    for (uint8_t i = 0; i < 5; ++i)
+      prim[i] = character.GetPrimaryStat(i);
+    player->SetPrimaryStats(prim);
+  }
+  {
+    auto const *gt = _charService ? _charService->GetStatGameTables() : nullptr;
+    float dimDodge = 0.f;
+    float nondimDodge = 0.f;
+    StatFormulas::ComputeDodgeContributionsFromAgility(
+        character.GetLevel(), character.GetClass(), character.GetPrimaryStat(1),
+        dimDodge, nondimDodge, gt);
+    StatFormulas::AvoidanceClassParams const av =
+        StatFormulas::AvoidanceParamsForClass(character.GetClass());
+    player->SetBaselineDodgePct(StatFormulas::AvoidanceAfterDiminishingReturns(
+        av.dodgeCap, av.diminishingK, nondimDodge, dimDodge));
+  }
+  player->InitRegenContext(
+      static_cast<uint8>(GetDefaultPlayerPowerType(character.GetClass())),
+      character.GetPrimaryStat(4), character.GetLevel());
   WorldService::Instance().AddPlayerToMap(_mapId, player);
 
   if (auto map = WorldService::Instance().GetMap(_mapId)) {
@@ -327,6 +351,7 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
     if (_spellDefinitions) {
       std::vector<uint32_t> const passiveCandidates =
           CollectLoginPassiveSpellIds(_knownSpellIds, _spellDefinitions.get());
+      player->SetKnownPermanentPassiveSpellIds(passiveCandidates);
       ApplyPassiveAurasForKnownSpellsOnMap(_mapId, map, guid, _playerLevel,
                                            passiveCandidates, now);
 }
@@ -354,12 +379,15 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
   if (!map)
     return;
 
+  RebuildPlayerPhaseShiftFromActiveAuras();
+
   // Login log showed a single SMSG_UPDATE_OBJECT ~400KiB+ with full-ref spawns; the 4.3.4
   // client handles visibility poorly / shows nothing when one update blob is huge.
   constexpr uint32_t kMaxCreatureCreatesPerPacket = 48;
   uint16 const mapIdU16 = static_cast<uint16>(_mapId);
   UpdateData batch(mapIdU16);
   uint32_t inBatch = 0;
+  _visibleCreatureGuids.clear();
 
   auto flushBatch = [this, mapIdU16, &batch, &inBatch]() {
     if (batch.GetBlockCount() == 0)
@@ -372,6 +400,9 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
   };
 
   map->ForEachCreatureNear(x, y, 1, [&](std::shared_ptr<Creature> const &cr) {
+    if (!IsCreatureVisibleToPlayer(*cr))
+      return;
+    _visibleCreatureGuids.insert(cr->GetGuid());
     const uint32_t npcFlags = ResolveEffectiveNpcFlagsForCreature(*cr);
     auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
         cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
@@ -432,6 +463,8 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
   update.Build(updatePacket);
   SendPacket(updatePacket);
+  RebuildPlayerPhaseShiftFromActiveAuras();
+  SendPlayerPhaseShiftToClient();
   SendNearbyCreatureCreatesInChunks(move.x, move.y);
   SendQuestGiverStatusMultipleNearby();
 
@@ -502,6 +535,8 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
 
   // If login spawn already has swim flags (rare persisted state), show breath UI immediately.
   UpdateBreathFromSwimmingState(MovementIsSwimming(_position));
+  _movementAnimTierSent =
+      MovementAnimTierForLiquid(_position, MovementIsSwimming(_position));
 
   SendClientActiveSpellCooldowns();
   SendClientActiveCategoryCooldowns();

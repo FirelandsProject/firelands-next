@@ -15,7 +15,9 @@ void WorldSession::FinalizeWorldExit() {
     return;
 
   CancelPeriodicTimeSync();
+  _visibleCreatureGuids.clear();
   ResetBreathMirrorState();
+  _movementAnimTierSent.reset();
   CancelPendingClientSpellCast();
   StopAllCreatureCombat(true);
   StopMeleeAutoAttack(true);

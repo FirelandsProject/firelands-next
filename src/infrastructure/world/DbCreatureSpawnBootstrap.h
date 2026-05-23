@@ -7,6 +7,7 @@ namespace Firelands {
 class ICreatureSpawnRepository;
 class ICreatureClassLevelStatsRepository;
 class FactionTemplateDbc;
+class PhaseGroupCatalog;
 
 /// Instantiates `Creature` objects from `creature` + applies `creature_classlevelstats`
 /// for max health. Notifies players already online via map-wide broadcast (startup is
@@ -15,6 +16,7 @@ class FactionTemplateDbc;
 ///        unknown ids fall back to `Creature` default faction (see `Creature::kDefaultFactionTemplate`).
 std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo,
                                        ICreatureClassLevelStatsRepository const &statsRepo,
+                                       PhaseGroupCatalog const &phaseGroups,
                                        FactionTemplateDbc const *factionTemplateDbc = nullptr);
 
 } // namespace Firelands

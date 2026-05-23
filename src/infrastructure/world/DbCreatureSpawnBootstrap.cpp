@@ -1,10 +1,13 @@
 #include "DbCreatureSpawnBootstrap.h"
+#include <application/world/PhaseGroupCatalog.h>
+#include <shared/game/PhaseShift.h>
 #include <application/logic/CreatureSpawnLogic.h>
 #include <application/services/WorldService.h>
 #include <domain/repositories/ICreatureClassLevelStatsRepository.h>
 #include <domain/repositories/ICreatureSpawnRepository.h>
 #include <domain/world/Creature.h>
 #include <shared/dbc/FactionTemplateDbc.h>
+#include <shared/game/UnitCombatStats.h>
 #include <shared/Logger.h>
 #include <shared/game/WowGuid.h>
 #include <shared/network/MovementInfo.h>
@@ -15,7 +18,11 @@ namespace Firelands {
 
 std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo,
                                        ICreatureClassLevelStatsRepository const &statsRepo,
+                                       PhaseGroupCatalog const &phaseGroups,
                                        FactionTemplateDbc const *factionTemplateDbc) {
+  auto const resolveGroup = [&phaseGroups](uint32 groupId) {
+    return phaseGroups.Resolve(groupId);
+  };
   std::vector<CreatureSpawnRow> const rows = spawnRepo.LoadAllSpawns();
   if (rows.empty()) {
     LOG_INFO("Database creature spawns: none (or missing creature/creature_template)");
@@ -58,6 +65,11 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
         objectGuid, row.entry, display, maxHp, level, faction, row.npcFlags,
         row.experienceModifier);
     spawned->SetPosition(mi);
+    spawned->SetCombatStats(BuildCreatureCombatStats(level, unitClass));
+    PhaseShift spawnPhase;
+    InitDbCreaturePhaseShift(spawnPhase, row.phaseUseFlags, row.phaseId, row.phaseGroup,
+                             resolveGroup);
+    spawned->SetPhaseShift(std::move(spawnPhase));
     WorldService::Instance().AddCreatureToMap(row.mapId, std::move(spawned));
     ++count;
   }

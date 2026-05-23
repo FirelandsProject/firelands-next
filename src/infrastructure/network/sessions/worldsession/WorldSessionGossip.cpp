@@ -161,6 +161,8 @@ void WorldSession::SendQuestGiverStatusMultipleNearby() {
   std::vector<quest::QuestGiverStatusEntry> entries;
   map->ForEachCreatureNear(_position.x, _position.y, 2,
                            [&](std::shared_ptr<Creature> const &cr) {
+                             if (!IsCreatureVisibleToPlayer(*cr))
+                               return;
                              auto const status = ResolveQuestGiverDialogStatus(
                                  _questGossipRepo.get(), cr->GetEntry(),
                                  _playerClass, _playerRace);

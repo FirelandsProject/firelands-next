@@ -153,6 +153,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_NPC_TEXT_QUERY:
     HandleNpcTextQuery(packet);
     break;
+  case CMSG_LIST_INVENTORY:
+    HandleListInventory(packet);
+    break;
   case CMSG_QUESTGIVER_HELLO:
     HandleQuestGiverHello(packet);
     break;

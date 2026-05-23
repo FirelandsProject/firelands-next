@@ -1,11 +1,15 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionSpellEffects.h>
 
+#include <application/combat/MapCombatDamage.h>
 #include <application/spell/PassiveSpellAuras.h>
+#include <application/spell/PlayerAuraRegenEffects.h>
 #include <application/spell/PlayerAuraStatEffects.h>
+#include <unordered_set>
 #include <application/spell/SpellHitEffects.h>
 #include <application/spell/SpellImpactEffects.h>
 #include <application/services/WorldService.h>
 #include <shared/game/SpellEffectMagnitude.h>
+#include <domain/models/SpellDefinition.h>
 #include <domain/world/Aura.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
@@ -14,6 +18,7 @@
 #include <shared/Logger.h>
 #include <shared/game/SpellAttributes.h>
 #include <shared/game/SpellAuraTypes.h>
+#include <infrastructure/network/sessions/WorldSession.h>
 #include <shared/dbc/SpellVisualDbc.h>
 #include <shared/network/AuraUpdateWire.h>
 #include <shared/network/PlaySpellVisualKitWire.h>
@@ -30,6 +35,29 @@ namespace Firelands {
 namespace {
 
 namespace ws_obj = WorldSessionObjectUpdate;
+
+bool SpellDefinitionHasPhaseAura(SpellDefinition const *def) {
+  if (!def)
+    return false;
+  for (SpellAuraEffectRow const &row : def->auraEffects) {
+    if (row.auraType == kSpellAuraPhase || row.auraType == kSpellAuraPhaseGroup ||
+        row.auraType == kSpellAuraPhaseAlwaysVisible) {
+      return true;
+    }
+  }
+  return def->hasAuraEffect &&
+         (def->auraEffectType == kSpellAuraPhase ||
+          def->auraEffectType == kSpellAuraPhaseGroup ||
+          def->auraEffectType == kSpellAuraPhaseAlwaysVisible);
+}
+
+void MaybeRefreshPlayerPhaseAfterAuraChange(std::shared_ptr<Player> const &player,
+                                            SpellDefinition const *def) {
+  if (!SpellDefinitionHasPhaseAura(def))
+    return;
+  if (auto ws = std::dynamic_pointer_cast<WorldSession>(player->GetNotifier()))
+    ws->RefreshPlayerPhaseVisibilityFromAuras();
+}
 
 void BroadcastAuraPacket(std::shared_ptr<Map> const &map, uint64 unitGuid,
                          std::function<void(WorldPacket &)> const &buildPacket) {
@@ -162,6 +190,7 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
               outcome.auraPeriodicPeriodMs, outcome.auraPeriodicHealthDeltaPerTick,
               nextTick, wire);
     target->AddAura(aura);
+    MaybeRefreshPlayerPhaseAfterAuraChange(target, defPtr);
   } else if (auto creature = map->TryGetCreature(outcome.auraTargetGuid)) {
     slot = creature->AllocateAuraVisualSlot(outcome.auraSpellId);
     auto const nextTick = now;
@@ -241,11 +270,41 @@ void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const 
   if (!target)
     return;
 
-  PlayerAuraStatBonus const bonus = ComputePlayerAuraStatBonus(
+  std::unordered_set<uint32_t> activeSpellIds;
+  for (Aura const &aura : target->GetActiveAuras())
+    activeSpellIds.insert(aura.GetSpellId());
+
+  PlayerAuraStatBonus bonus = ComputePlayerAuraStatBonus(
+      target->GetActiveAuras(), defs.get(), casterLevel, &target->GetPrimaryStats());
+  MergePermanentPassiveSpellBonuses(target->GetKnownPermanentPassiveSpellIds(),
+                                    activeSpellIds, defs.get(), casterLevel,
+                                    &target->GetPrimaryStats(), bonus);
+
+  UnitCombatStats stats = target->GetBaselineCombatStats();
+  ApplyPlayerAuraStatBonusToCombatStats(stats, bonus);
+  target->SetCombatStats(stats);
+  target->ApplyPassiveHealthPctBonus(bonus.healthPctBonus);
+
+  ResourceRegenModifiers regenMods = ComputePlayerResourceRegenModifiers(
       target->GetActiveAuras(), defs.get(), casterLevel);
+  MergePermanentPassiveRegenModifiers(target->GetKnownPermanentPassiveSpellIds(),
+                                      activeSpellIds, defs.get(), casterLevel,
+                                      regenMods);
+  target->SetResourceRegenModifiers(regenMods);
+
   WorldPacket pkt;
-  ws_obj::BuildPlayerAuraStatValuesUpdate(static_cast<uint16>(mapId), unitGuid, bonus,
-                                          pkt);
+  ws_obj::BuildPlayerAuraStatValuesUpdate(static_cast<uint16>(mapId), unitGuid, bonus, pkt,
+                                          &target->GetBaselineCombatStats(),
+                                          target->GetBaselineDodgePct());
+  if (bonus.healthPctBonus > 0.f) {
+    WorldPacket hpPkt;
+    ws_obj::BuildPlayerHealthValuesUpdate(static_cast<uint16>(mapId), unitGuid,
+                                          target->GetLiveHealth(), target->GetLiveMaxHealth(),
+                                          hpPkt);
+    if (auto notifier = target->GetNotifier())
+      notifier->SendPacket(hpPkt);
+    map->BroadcastPacketToNearby(unitGuid, hpPkt, true);
+  }
   // Always deliver to the target session first (login/cast use the same pattern as GM
   // spawns — grid `BroadcastPacketToNearby` can miss the initiating player).
   if (auto notifier = target->GetNotifier())
@@ -312,11 +371,16 @@ void SendAuraRemovalOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
 
   SendUnitAurasUpdateAll(map, unitGuid, now);
 
-  if (mapId != 0u && map->TryGetPlayer(unitGuid)) {
+  if (auto player = map->TryGetPlayer(unitGuid)) {
     uint8 const level =
         removal.wire.casterLevel > 0 ? removal.wire.casterLevel : 1u;
     BroadcastPlayerAuraStatBonusOnMap(mapId, map, unitGuid, level);
-}
+    if (auto defs = WorldService::Instance().GetSpellDefinitions()) {
+      std::optional<SpellDefinition> def = defs->GetDefinition(removal.spellId);
+      if (def)
+        MaybeRefreshPlayerPhaseAfterAuraChange(player, &*def);
+    }
+  }
 }
 
 void SendPeriodicHealTickOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -483,12 +547,17 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
   std::optional<CreatureKillByPlayerHint> killHint;
 
   if (outcome.hasDirectHealthEffect && outcome.directHealthDelta != 0) {
+    int32 const healthDelta = MitigateHealthDeltaOnMap(
+        map, outcome.directHealthDelta, outcome.directHealthSchoolMask, casterGuid,
+        outcome.directHealthTargetGuid);
     if (auto target = map->TryGetPlayer(outcome.directHealthTargetGuid)) {
-      target->ApplyHealthDelta(outcome.directHealthDelta);
+      target->ApplyHealthDelta(healthDelta);
+      if (healthDelta < 0)
+        target->MarkInCombat(now);
       uint32_t const healthAfter = target->GetLiveHealth();
-      if (outcome.directHealthDelta < 0 && spellId != 0) {
+      if (healthDelta < 0 && spellId != 0) {
         uint32_t const damage =
-            static_cast<uint32_t>(-outcome.directHealthDelta);
+            static_cast<uint32_t>(-healthDelta);
         WorldPacket dmgLog = combat_wire::BuildSpellNonMeleeDamageLog(
             outcome.directHealthTargetGuid, casterGuid, spellId, damage, healthAfter);
         map->BroadcastPacketToNearby(casterGuid, dmgLog, true);
@@ -497,11 +566,11 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
                                     healthAfter, target->GetLiveMaxHealth());
     } else if (auto cr = map->TryGetCreature(outcome.directHealthTargetGuid)) {
       uint32_t const hpBefore = cr->GetLiveHealth();
-      cr->ApplyHealthDelta(outcome.directHealthDelta);
+      cr->ApplyHealthDelta(healthDelta);
       uint32_t const healthAfter = cr->GetLiveHealth();
-      if (outcome.directHealthDelta < 0 && spellId != 0) {
+      if (healthDelta < 0 && spellId != 0) {
         uint32_t const damage =
-            static_cast<uint32_t>(-outcome.directHealthDelta);
+            static_cast<uint32_t>(-healthDelta);
         WorldPacket dmgLog = combat_wire::BuildSpellNonMeleeDamageLog(
             outcome.directHealthTargetGuid, casterGuid, spellId, damage, healthAfter);
         map->BroadcastPacketToNearby(casterGuid, dmgLog, true);

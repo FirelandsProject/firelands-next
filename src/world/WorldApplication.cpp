@@ -14,6 +14,7 @@
 #include <application/services/WorldRatesConfig.h>
 #include <application/spell/SpellManager.h>
 #include <infrastructure/world/MapAuraTicker.h>
+#include <infrastructure/world/MapPlayerRegenTicker.h>
 #include <atomic>
 #include <chrono>
 #include <conncpp.hpp>
@@ -31,6 +32,10 @@
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
+#include <infrastructure/persistence/MySqlPhaseAreaCatalog.h>
+#include <infrastructure/persistence/MySqlPhaseGroupCatalog.h>
+#include <application/world/PhaseAreaCatalog.h>
+#include <application/world/PhaseGroupCatalog.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
 #include <infrastructure/persistence/MySqlGossipRepository.h>
 #include <infrastructure/persistence/MySqlNpcTextRepository.h>
@@ -265,6 +270,7 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
 
     if (auto script = WorldService::Instance().GetScriptHost())
       script->AttachFactionTemplateDbc(factionTemplateDbc);
+    WorldService::Instance().SetFactionTemplateDbc(factionTemplateDbc);
 
     auto npcTemplateSearchRepo =
         std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
@@ -278,8 +284,14 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         std::make_shared<MySqlCreatureClassLevelStatsRepository>(worldConn);
     auto creatureSpawnRepo =
         std::make_shared<MySqlCreatureSpawnRepository>(worldConn);
+    auto phaseGroupCatalogOwned = std::make_shared<PhaseGroupCatalog>();
+    LoadPhaseGroupCatalogFromConnection(*worldConn, *phaseGroupCatalogOwned);
+    WorldService::Instance().SetPhaseGroupCatalog(phaseGroupCatalogOwned);
+    auto phaseAreaCatalogOwned = std::make_shared<PhaseAreaCatalog>();
+    LoadPhaseAreaCatalogFromConnection(*worldConn, *phaseAreaCatalogOwned);
+    WorldService::Instance().SetPhaseAreaCatalog(phaseAreaCatalogOwned);
     LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo,
-                               factionTemplateDbc.get());
+                               *phaseGroupCatalogOwned, factionTemplateDbc.get());
 
     auto combatService = std::make_shared<application::CombatService>(
         std::make_shared<combat::CombatEngine>(
@@ -354,6 +366,7 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         auto const tickNow = std::chrono::steady_clock::now();
         if (tickNow - lastAuraTick >= auraTickInterval) {
           TickMapAuras(tickNow);
+          TickMapPlayerResourceRegen(tickNow);
           lastAuraTick = tickNow;
     }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -365,6 +378,7 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         auto const tickNow = std::chrono::steady_clock::now();
         if (tickNow - lastAuraTick >= auraTickInterval) {
           TickMapAuras(tickNow);
+          TickMapPlayerResourceRegen(tickNow);
           lastAuraTick = tickNow;
     }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));

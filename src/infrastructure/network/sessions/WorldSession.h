@@ -16,6 +16,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <unordered_set>
 #include <shared/network/BitReader.h>
 #include <shared/network/BitWriter.h>
 #include <shared/network/ByteBuffer.h>
@@ -28,6 +29,7 @@
 #include <shared/dbc/LanguagesDbc.h>
 #include <shared/game/ActionButton.h>
 #include <shared/game/AccessLevel.h>
+#include <shared/game/PhaseShift.h>
 #include <shared/game/PlayerGmAppearance.h>
 #include <domain/models/GossipMenu.h>
 #include <domain/models/PlayerCreateInfo.h>
@@ -87,7 +89,7 @@ public:
       std::shared_ptr<GmTicketService> gmTicketService,
       std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix,
       std::shared_ptr<SpellManager> spellManager,
-      std::shared_ptr<application::CombatService> combatService,
+      std::shared_ptr<::application::CombatService> combatService,
       std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch,
       std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc,
       std::shared_ptr<IGossipRepository> gossipRepo,
@@ -181,6 +183,9 @@ public:
     std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> spellCooldownUntil;
   };
 
+  /// After phase-related auras apply or expire (spell effects, scripts).
+  void RefreshPlayerPhaseVisibilityFromAuras();
+
  private:
   void ResetGmStateForLogout();
   void PublishGmVisualPatchIfInWorld();
@@ -232,6 +237,8 @@ public:
   void HandleGossipHello(WorldPacket &packet);
   void HandleGossipSelectOption(WorldPacket &packet);
   void HandleNpcTextQuery(WorldPacket &packet);
+  void HandleListInventory(WorldPacket &packet);
+  void SendVendorInventory(uint64_t vendorGuid);
   void HandleQuestGiverHello(WorldPacket &packet);
   void HandleQuestGiverQueryQuest(WorldPacket &packet);
   void HandleQuestGiverStatusQuery(WorldPacket &packet);
@@ -413,6 +420,9 @@ public:
   boost::asio::awaitable<void> TimeSyncLoop();
   void ResetBreathMirrorState();
   void UpdateBreathFromSwimmingState(bool swimming);
+  /// Pushes `UNIT_FIELD_BYTES_1` anim tier when swim/fly state changes (login uses create).
+  /// `inLiquidForBreath` matches breath logic (swim opcodes can lead movement flags).
+  void SyncPlayerMovementHintsIfNeeded(bool inLiquidForBreath = false);
   void SendStartMirrorTimerPacket(int32_t timerType, int32_t value, int32_t maxValue,
                                   int32_t scale, bool paused, int32_t spellId);
   void SendStopMirrorTimerPacket(int32_t timerType);
@@ -433,6 +443,10 @@ public:
   void SendNearbyCreatureCreatesInChunks(float x, float y);
   /// After same-map teleport ACK: client needs CREATE for units near the new cell.
   void SendNearbyCreatureCreatesToSelf(float x, float y);
+  void RebuildPlayerPhaseShiftFromActiveAuras();
+  void SendPlayerPhaseShiftToClient();
+  void RefreshNearbyCreaturePhaseVisibility(float x, float y);
+  bool IsCreatureVisibleToPlayer(Creature const &creature) const;
   void LoginFinalizeWorldEntry(uint64 guid);
   void TrySendFirstLoginOpeningCinematic(Character const &character);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
@@ -494,7 +508,7 @@ public:
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::shared_ptr<ItemDbHotfixStore const> _itemDbHotfix;
   std::shared_ptr<SpellManager> _spellManager;
-  std::shared_ptr<application::CombatService> _combatService;
+  std::shared_ptr<::application::CombatService> _combatService;
   std::shared_ptr<INpcTemplateSearchRepository const> _npcTemplateSearch;
   std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
   std::shared_ptr<IGossipRepository> _gossipRepo;
@@ -628,12 +642,16 @@ public:
   int32_t _breathRemainingMs = 0;
   std::optional<std::chrono::steady_clock::time_point> _breathLastMonotonicTick;
   int32_t _breathLastSentValueMs = -1;
+  std::optional<uint8_t> _movementAnimTierSent;
 
   /// Faction.dbc id → forced `ReputationRank` for `SMSG_SET_FORCED_REACTIONS` (quest/script overrides).
   std::map<uint32, uint32> _forcedFactionReactions;
 
   /// Set when this session sends `SMSG_GOSSIP_MESSAGE` (Lua may add APIs later).
   bool _gossipMenuSent = false;
+
+  PhaseShift _playerPhaseShift;
+  std::unordered_set<uint64> _visibleCreatureGuids;
   };
 
 } // namespace Firelands

@@ -158,6 +158,7 @@ void WorldSession::UpdateBreathFromSwimmingState(bool swimming) {
         ws_obj::BuildPlayerHealthValuesUpdate(
             static_cast<uint16>(_mapId), _playerGuid, pl->GetLiveHealth(),
             pl->GetLiveMaxHealth(), hpUpdate);
+        SendPacket(hpUpdate);
         map->BroadcastPacketToNearby(_playerGuid, hpUpdate, true);
         if (pl->GetLiveHealth() == 0) {
           ResetBreathMirrorState();

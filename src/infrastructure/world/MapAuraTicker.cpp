@@ -1,6 +1,8 @@
 #include <infrastructure/world/MapAuraTicker.h>
 
+#include <application/combat/MapCombatDamage.h>
 #include <application/services/WorldService.h>
+#include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
 #include <domain/world/Player.h>
@@ -9,6 +11,14 @@
 namespace Firelands {
 
 namespace {
+
+uint32 SchoolMaskForSpell(uint32 spellId) {
+  auto const defs = WorldService::Instance().GetSpellDefinitions();
+  if (!defs)
+    return 0u;
+  std::optional<SpellDefinition> def = defs->GetDefinition(spellId);
+  return def ? def->schoolMask : 0u;
+}
 
 template <typename UnitPtr>
 void TickUnitAuras(uint32 mapId, std::shared_ptr<Map> const &map, uint64 guid,
@@ -21,8 +31,11 @@ void TickUnitAuras(uint32 mapId, std::shared_ptr<Map> const &map, uint64 guid,
   for (AuraPeriodicTick const &periodic : tick.periodicTicks) {
     if (periodic.healthDelta == 0)
       continue;
+    uint32 const schoolMask = SchoolMaskForSpell(periodic.spellId);
+    int32 const healthDelta = MitigateHealthDeltaOnMap(
+        map, periodic.healthDelta, schoolMask, periodic.casterGuid, guid, true);
     uint32_t const hpBefore = unit->GetLiveHealth();
-    unit->ApplyHealthDelta(periodic.healthDelta);
+    unit->ApplyHealthDelta(healthDelta);
     SendPeriodicHealTickOnMap(mapId, map, guid, periodic);
     if (hpBefore > 0 && unit->GetLiveHealth() == 0 && periodic.casterGuid != 0) {
       if (auto killer = map->TryGetPlayer(periodic.casterGuid)) {
