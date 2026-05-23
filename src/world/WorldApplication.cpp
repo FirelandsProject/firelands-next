@@ -46,6 +46,7 @@
 #include <shared/Banner.h>
 #include <shared/Config.h>
 #include <shared/Logger.h>
+#include <shared/system/SystemBeep.h>
 #include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/game/SkillLineCategories.h>
 #include <shared/dbc/ItemDbHotfixStore.h>
@@ -130,8 +131,8 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     auto charRepo = std::make_shared<MySqlCharacterRepository>(charConn);
     auto playerCreateInfoRepo =
         std::make_shared<MySqlPlayerCreateInfoRepository>(worldConn);
-    const std::string dbcBasePath =
-        config.GetNested<std::string>({"Data", "DbcPath"}, "data/dbc");
+        const std::string dbcBasePath = Config::ResolveDataDirectory(
+                config.GetNested<std::string>({"Data", "DbcPath"}, "data/dbc"));
     const std::string charStartOutfitDbcPath =
         dbcBasePath + "/CharStartOutfit.dbc";
     auto playerCreateInfoService = std::make_shared<PlayerCreateInfoService>(
@@ -169,8 +170,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
 
     bool const spellDbcOk = spellEntryStore->Load(dbcBasePath + "/Spell.dbc");
     if (!spellDbcOk) {
-      LOG_WARN("Spell.dbc not loaded from {}; definitions come only from "
-               "`spell_dbc` if present.",
+            LOG_ERROR("Spell.dbc not loaded from {}; spell definitions lack SpellPower "
+                                "ids — all casts will have zero cost. Fix Data.DbcPath or run "
+                                "world from the repo root.",
                dbcBasePath + "/Spell.dbc");
     }
 
@@ -187,8 +189,27 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
                  "times, range, cooldowns, "
                  "power, categories, duration); timed auras may not expire.",
                  dbcBasePath);
-      }
+    }
+            if (!tables->HasSpellPowerRows()) {
+                LOG_ERROR("SpellPower.dbc not loaded from {}; all spell costs resolve "
+                                    "to zero. Resolved DbcPath={}",
+                                    dbcBasePath + "/SpellPower.dbc", dbcBasePath);
+    } else {
+                LOG_INFO("SpellPower.dbc: {} cost rows (DbcPath={}).",
+                                  tables->SpellPowerRowCount(), dbcBasePath);
+    }
       spellCastTables = std::move(tables);
+    }
+
+        if (spellDbcOk) {
+            if (auto fireball = spellEntryStore->GetDefinition(133u)) {
+                uint32 const sampleCost = spellCastTables->ResolveSpellPowerCost(
+                        fireball->spellPowerId, fireball->powerType, 10, 1, 1000u);
+                LOG_INFO(
+                        "Spell.dbc loaded ({} definitions). Fireball(133) spellPowerId={} "
+                        "sampleCost@1000 mana={}",
+                        spellEntryStore->DefinitionCount(), fireball->spellPowerId, sampleCost);
+    }
     }
     WorldService::Instance().SetSpellCastTables(spellCastTables);
 
@@ -274,8 +295,8 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
           std::make_shared<WorldSession>(
               std::move(socket), authService, charService, commandService,
               accountDataRepo, languagesDbc, spellDefinitions, realmRepo,
-              onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
-              combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo, npcTextRepo,
+         onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
+         combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo, npcTextRepo,
               questGossipRepo, emotesTextDbc)
               ->Start();
         };
@@ -306,18 +327,23 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     if (tui_runtime) {
       interactiveConsole->Start(console_enabled, false);
       LOG_DEBUG("Terminal UI (FTXUI): logs above, command input fixed below.");
-      {
+    {
         std::lock_guard<std::mutex> lock(tui_runtime->mutex);
         tui_runtime->world_server = worldServer;
         tui_runtime->interactive_console = interactiveConsole;
         tui_runtime->command_service = commandService;
         tui_runtime->services_ready = true;
-      }
-      return 0;
+    }
+            LOG_INFO("World Server is ready and accepting connections.");
+            PlaySystemBeep();
+    return 0;
     }
 
     auto const auraTickInterval = std::chrono::milliseconds(100);
     auto lastAuraTick = std::chrono::steady_clock::now();
+
+        LOG_INFO("World Server is ready and accepting connections.");
+        PlaySystemBeep();
 
     if (console_enabled) {
       interactiveConsole->Start(console_enabled, true);
@@ -329,9 +355,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         if (tickNow - lastAuraTick >= auraTickInterval) {
           TickMapAuras(tickNow);
           lastAuraTick = tickNow;
-        }
+    }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      }
+    }
     } else {
       while (!interactiveConsole->ShutdownRequested()) {
         worldServer->Update();
@@ -340,9 +366,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         if (tickNow - lastAuraTick >= auraTickInterval) {
           TickMapAuras(tickNow);
           lastAuraTick = tickNow;
-        }
+    }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      }
+    }
     }
 
     stopRealmLink.store(true);
@@ -358,9 +384,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
 
   } catch (std::exception &e) {
     LOG_CRITICAL("Fatal error: {}", e.what());
-    return 1;
-  }
-}
+      return 1;
+    }
+    }
 
 int RunWorldApplication(int argc, char **argv) {
   (void)argc;
@@ -370,19 +396,19 @@ int RunWorldApplication(int argc, char **argv) {
   const bool stickyYaml = config.GetNestedBool({"Log", "StickyBanner"}, false);
   const bool stickyWant = ResolveStickyBanner(stickyYaml);
   if (stickyWant && !StdoutIsInteractiveTerminal()) {
-    LOG_WARN(
+      LOG_WARN(
         "Log.StickyBanner is enabled but stdout is not a TTY (pipe/redirect); "
         "using normal console layout.");
-  }
+    }
   bool consoleEnabledForBanner =
       config.GetNested<bool>({"Console", "Enabled"}, true);
   if (consoleEnabledForBanner && !StdoutIsInteractiveTerminal()) {
     consoleEnabledForBanner = false;
-  }
+    }
   const bool useTerminalUiForBanner = consoleEnabledForBanner;
   if (!useTerminalUiForBanner) {
     PrintBanner(BannerType::World, stickyWant);
-  }
+    }
 
   Logger::Shutdown();
   Logger::Init(
@@ -402,7 +428,7 @@ int RunWorldApplication(int argc, char **argv) {
     LOG_DEBUG("Console.Enabled is true but stdout is not a TTY; interactive "
               "console disabled.");
     console_enabled = false;
-  }
+    }
 
   const bool use_terminal_ui = console_enabled && StdoutIsInteractiveTerminal();
 
@@ -412,19 +438,19 @@ int RunWorldApplication(int argc, char **argv) {
   if (use_terminal_ui) {
     auto rt = std::make_shared<WorldFtxuiRuntime>();
     RunWorldFtxuiConsole(rt, [&](std::shared_ptr<WorldFtxuiRuntime> rt_in) {
-      try {
+  try {
         int const rc = RunWorldGameStack(rt_in, stopRealmLink, realmLinkThread,
                                          console_enabled);
         if (rc != 0) {
           std::lock_guard<std::mutex> lock(rt_in->mutex);
           rt_in->bootstrap_failed = true;
-        }
+    }
       } catch (std::exception const &e) {
-        LOG_CRITICAL("Fatal error: {}", e.what());
-        std::lock_guard<std::mutex> lock(rt_in->mutex);
-        rt_in->bootstrap_failed = true;
-      }
-    });
+    LOG_CRITICAL("Fatal error: {}", e.what());
+          std::lock_guard<std::mutex> lock(rt_in->mutex);
+          rt_in->bootstrap_failed = true;
+    }
+      });
 
     stopRealmLink.store(true);
 
@@ -439,40 +465,40 @@ int RunWorldApplication(int argc, char **argv) {
     }
     if (failed) {
       if (ws) {
-        WorldService::Instance().ResetForShutdown();
+    WorldService::Instance().ResetForShutdown();
         ws->Stop();
-      }
-      if (cs) {
-        cs->SetShutdownRequestHandler({});
-      }
-      if (realmLinkThread && realmLinkThread->joinable()) {
-        realmLinkThread->join();
-      }
-      Logger::Shutdown();
-      return 1;
     }
-
-    if (ws) {
-      LOG_INFO("World server main loop stopped.");
-      LOG_INFO("World server shutting down...");
-      WorldService::Instance().ResetForShutdown();
-      ws->Stop();
       if (cs) {
         cs->SetShutdownRequestHandler({});
-      }
     }
     if (realmLinkThread && realmLinkThread->joinable()) {
       realmLinkThread->join();
     }
-    Logger::Shutdown();
-    return 0;
-  }
+  Logger::Shutdown();
+      return 1;
+    }
 
-  LOG_INFO("Starting World Server...");
+      if (ws) {
+    LOG_INFO("World server main loop stopped.");
+    LOG_INFO("World server shutting down...");
+    WorldService::Instance().ResetForShutdown();
+        ws->Stop();
+      if (cs) {
+        cs->SetShutdownRequestHandler({});
+    }
+    }
+    if (realmLinkThread && realmLinkThread->joinable()) {
+      realmLinkThread->join();
+    }
+  Logger::Shutdown();
+    return 0;
+    }
+
+      LOG_INFO("Starting World Server...");
   int const rc = RunWorldGameStack(nullptr, stopRealmLink, realmLinkThread,
-                                   console_enabled);
+                                         console_enabled);
   Logger::Shutdown();
   return rc;
-}
+    }
 
 } // namespace Firelands

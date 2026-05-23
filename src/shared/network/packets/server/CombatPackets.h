@@ -6,7 +6,7 @@
 
 namespace Firelands::combat_wire {
 
-/// Trinity Cataclysm 4.3.4.15595 — `SMSG_ATTACK_START` (attacker then victim).
+/// Cataclysm 4.3.4.15595 — `SMSG_ATTACK_START` (attacker then victim).
 inline WorldPacket BuildAttackStart(uint64_t attackerGuid, uint64_t victimGuid) {
   WorldPacket pkt(SMSG_ATTACK_START, 32);
   pkt.WritePackedGuid(attackerGuid);
@@ -60,6 +60,16 @@ inline WorldPacket BuildAttackerStateUpdate(uint64_t attackerGuid, uint64_t vict
   pkt.Append<uint8_t>(kVictimStateHit);
   pkt.Append<uint32_t>(0u);
   pkt.Append<uint32_t>(0u);
+  return pkt;
+}
+
+/// `SMSG_POWER_UPDATE` — Cataclysm 4.3.4 (`WorldPackets::Combat::PowerUpdate::Write` in cata-ref).
+inline WorldPacket BuildPowerUpdate(uint64_t unitGuid, uint8_t powerType, int32_t amount) {
+  WorldPacket pkt(SMSG_POWER_UPDATE, 32);
+  pkt.WritePackedGuid(unitGuid);
+  pkt.Append<uint32_t>(1u);
+  pkt.Append<uint8_t>(powerType);
+  pkt.Append<int32_t>(amount);
   return pkt;
 }
 

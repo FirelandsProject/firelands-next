@@ -55,7 +55,7 @@ using boost::asio::ip::tcp;
 struct AuthSecureAddonEntry {
   std::string name;
   bool hasKey = false;
-};
+  };
 
 class MySqlAccountDataRepository;
 class IRealmRepository;
@@ -186,7 +186,7 @@ public:
                                   int32 &loginServerId);
   void HandleAuthSessionStandard(WorldPacket &packet, uint16 &build,
                                  uint8 *digest,
-                                 std::vector<uint8> &localChallenge,
+                                  std::vector<uint8> &localChallenge,
                                  uint32 &realmId);
   void HandleCharEnum(WorldPacket &packet);
   void HandleCharCreate(WorldPacket &packet);
@@ -257,8 +257,8 @@ public:
   void ScheduleCreatureCombatMovement();
   void ProcessCreatureCombatMovementTick();
   void ProcessCreatureCombatAttack(std::shared_ptr<Map> const &map,
-                                   std::shared_ptr<Creature> const &creature,
-                                   std::shared_ptr<Player> const &target,
+                                  std::shared_ptr<Creature> const &creature,
+                                  std::shared_ptr<Player> const &target,
                                    CreatureCombatRuntime &runtime);
   bool TryCastCreatureCombatSpell(std::shared_ptr<Map> const &map,
                                   std::shared_ptr<Creature> const &creature,
@@ -287,11 +287,11 @@ public:
   void SendClientActiveCategoryCooldowns();
   /// Updates session CD maps and pushes spell + category cooldown packets to the client.
   void CommitSpellCooldownsFromCast(uint32 spellId, SpellCastOutcome const &out,
-                                    std::chrono::steady_clock::time_point now);
+      std::chrono::steady_clock::time_point now);
   /// Deferred `SMSG_SPELL_GO` completion: spell recovery only (GCD was sent at cast start).
   void CommitSpellRecoveryCooldownFromDeferred(uint32 spellId,
                                                uint32 spellCooldownDurationMs,
-                                               std::chrono::steady_clock::time_point now);
+      std::chrono::steady_clock::time_point now);
   void RestorePersistedSpellCooldowns(uint32 characterGuid);
   void SavePersistedSpellCooldowns(uint32 characterGuid);
   void HandleSwapInvItem(WorldPacket &packet);
@@ -319,7 +319,7 @@ public:
   void SendAuthResponse();
   void SendAddonInfo();
   void SendClientCacheVersion(uint32 version = 0);
-  /// Character-select / pre-player socket parity (Trinity `SendTutorialsData` without player).
+    /// Character-select / pre-player socket parity (`SendTutorialsData` without player).
   void SendTutorialFlagsUnauthenticated();
   /// In-world mask (`SMSG_TUTORIAL_FLAGS`): set bits mark completed tutorial triggers.
   void SendTutorialMask(std::array<uint32_t, Character::kTutorialMaskInts> const &mask);
@@ -336,7 +336,7 @@ public:
   void SendInitialObjectUpdate(uint64 guid);
   /// Matches WorldPackets::Spells::SendKnownSpells (Cataclysm 4.3.4).
   void SendKnownSpells(bool initialLogin, std::vector<uint32> const &spellIds);
-  /// Same payload as Trinity `Player::LearnSpell` → `SMSG_LEARNED_SPELL`.
+    /// Same payload as `Player::LearnSpell` → `SMSG_LEARNED_SPELL`.
   void SendLearnedSpell(uint32 spellId);
   void SendUnlearnSpellsEmpty();
   void SendUnlearnSpells(std::vector<uint32> const &spellIds);
@@ -400,7 +400,7 @@ public:
   std::optional<GmTicketUiSession> _gmTicketUi;
 
   // Helpers
-  /// Trinity schedules the next time-sync ~5s after SendTimeSync; never chains on
+    /// schedules the next time-sync ~5s after SendTimeSync; never chains on
   /// every CMSG_TIME_SYNC_RESP (that floods the client and breaks map loading).
   void SchedulePeriodicTimeSync();
   void CancelPeriodicTimeSync();
@@ -421,7 +421,7 @@ public:
   void LoginSpawnInWorld(uint64 guid, Character const &character,
                          MovementInfo const &move);
   void LoginSendCreateUpdatesAndMutualVisibility(uint64 guid, Character const &character,
-                                                 MovementInfo const &move);
+                         MovementInfo const &move);
   /// Sends UNIT CREATE blocks for creatures in the 3×3 grid neighbourhood using multiple
   /// `SMSG_UPDATE_OBJECT` packets (dense zones exceed safe single-packet sizes on 4.3.4).
   void SendNearbyCreatureCreatesInChunks(float x, float y);
@@ -522,6 +522,9 @@ public:
   uint8 _playerRace = 0;
   uint8 _playerClass = 0;
   uint8 _playerLevel = 1;
+    /// Login combat snapshot for casts when the live map `Player` is not found yet.
+    uint32 _loginPower1 = 0;
+    uint32 _loginMaxPower1 = 0;
   /// Persisted copper; mirrored on logout and after `.money` GM commands.
   uint32_t _moneyCopper = 0;
   /// Persisted experience (`characters.xp`); mirrored on logout and GM level.
@@ -622,7 +625,7 @@ public:
 
   /// Set when this session sends `SMSG_GOSSIP_MESSAGE` (Lua may add APIs later).
   bool _gossipMenuSent = false;
-};
+  };
 
 } // namespace Firelands
 

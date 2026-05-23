@@ -10,6 +10,7 @@ void Player::InitCombatResources(uint32 health, uint32 maxHealth, uint32 power1,
     m_liveHealth = m_liveMaxHealth;
 
   m_liveMaxPower1 = std::max<uint32>(1u, maxPower1);
+    m_liveBasePower1 = m_liveMaxPower1;
   m_livePower1 = power1;
   if (m_livePower1 > m_liveMaxPower1)
     m_livePower1 = m_liveMaxPower1;

@@ -88,7 +88,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
     LOG_ERROR("PlayerLogin failed: Account={} GUID={} Reason=NotFound", _accountId, guid);
     Close();
     return;
-  }
+}
   Character const &character = *characterOpt;
   _actionBarToggles = character.GetActionBarToggles();
   _activeActionBarSpec = 0;
@@ -97,6 +97,8 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   _playerRace = character.GetRace();
   _playerClass = character.GetClass();
   _playerLevel = std::max<uint8>(1, character.GetLevel());
+  _loginPower1 = character.GetPower1();
+  _loginMaxPower1 = character.GetMaxPower1();
   _moneyCopper = character.GetMoney();
   _playerXp = character.GetXp();
 
@@ -139,9 +141,9 @@ void WorldSession::LoginSendAccountDataAndPreMapPackets(
         _accountDataRepo->UpsertCharacter(
             _activeCharacterGuid, static_cast<uint8_t>(t), _accountData[t].time,
             _accountData[t].data);
-    }
+}
     _preLoginPerCharAccountDirtyMask = 0;
-  }
+}
   ReloadCharacterAccountDataFromDb(_activeCharacterGuid);
   SendAccountDataTimes(kPerCharacterAccountDataMask);
   SendLearnedDanceMoves();
@@ -167,7 +169,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       _knownSpells.clear();
       AppendRacialLanguageSpells(character.GetRace(), _knownSpells);
       _knownSkills.clear();
-    }
+}
     if (character.GetClass() == 9u) {
       _knownSpells.erase(
           std::remove_if(_knownSpells.begin(), _knownSpells.end(),
@@ -175,7 +177,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
                            return IsWarlockQuestGatedSummonSpell(sid);
                          }),
           _knownSpells.end());
-    }
+}
     RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
 
     for (uint32_t const persisted :
@@ -199,7 +201,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       }();
       if (strip)
         _charService->RemoveCharacterSpell(character.GetGuid(), persisted);
-    }
+}
 
     SendSetProficiency(kItemClassWeapon,
                        ComputeWeaponProficiencyMask(_knownSkills));
@@ -208,13 +210,13 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
 
     uint32 const defaultLang = DefaultLanguageForRace(character.GetRace());
     uint32 const defaultLangSpell = LanguageSpellIdForLang(defaultLang);
-    {
+  {
       std::string ids;
       for (size_t i = 0; i < _knownSpells.size(); ++i) {
         if (i)
           ids.push_back(',');
         ids += std::to_string(_knownSpells[i]);
-      }
+}
       LOG_DEBUG("[CHAT] login race={} class={} defaultLang={} langSpell={} known={} "
                 "spells={} ids=[{}]",
                 static_cast<uint32>(character.GetRace()),
@@ -222,8 +224,8 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
                 defaultLangSpell,
                 PlayerKnowsLanguage(_knownSpellIds, defaultLang) ? 1 : 0,
                 _knownSpells.size(), ids);
-    }
-  }
+}
+}
   _gcdReady = {};
   _gcdTriggerSpellId = 0;
   _spellCooldownUntil.clear();
@@ -233,7 +235,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
   // including passive language spells. Existing characters may have
   // `firstLogin = false`, but the client still expects InitialLogin=1 here.
   SendKnownSpells(true, _knownSpells);
-  // Ref Trinity Player::SendUnlearnSpells: superseded-rank cleanup for spells the
+  // Ref Player::SendUnlearnSpells: superseded-rank cleanup for spells the
   // player already has — not a list of quest-gated trainable ids. Sending 688 here
   // made Summon Imp show as learnable (yellow) on the client.
   SendUnlearnSpellsEmpty();
@@ -250,14 +252,14 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
 }
 
 void WorldSession::RefreshKnownSpellsForCharacter(Character const &character) {
-  PlayerCreateInfoService const *pci = _charService->GetPlayerCreateInfoService();
+    PlayerCreateInfoService const *pci = _charService->GetPlayerCreateInfoService();
   if (!pci)
     return;
-  _knownSpells = PlayerSpellbook::BuildKnownSpells(
-      character.GetRace(), character.GetClass(), character.GetLevel(), *pci,
-      _spellDefinitions.get(),
-      _charService->GetCharacterSpellIds(character.GetGuid()));
-  RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
+      _knownSpells = PlayerSpellbook::BuildKnownSpells(
+          character.GetRace(), character.GetClass(), character.GetLevel(), *pci,
+          _spellDefinitions.get(),
+          _charService->GetCharacterSpellIds(character.GetGuid()));
+    RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
   SendKnownSpells(true, _knownSpells);
 }
 
@@ -301,8 +303,8 @@ void WorldSession::LoginResolveMapPosition(uint64 guid, Character const &charact
     } else {
       LOG_WARN("Invalid saved position for guid {} and no race fallback; "
                "keeping DB values.", guid);
-    }
-  }
+}
+}
   // Seed session position immediately on login. If the user logs out before the
   // first movement heartbeat arrives, logout persistence must still save a valid
   // location instead of default zeros.
@@ -325,9 +327,9 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
           CollectLoginPassiveSpellIds(_knownSpellIds, _spellDefinitions.get());
       ApplyPassiveAurasForKnownSpellsOnMap(_mapId, map, guid, _playerLevel,
                                            passiveCandidates, now);
-    }
+}
     SendActiveAurasOnMap(map, guid, now);
-  }
+}
 
   SendLoginVerifyWorld(_mapId, move.x, move.y, move.z, move.orientation);
 
@@ -359,7 +361,7 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
 
   auto flushBatch = [this, mapIdU16, &batch, &inBatch]() {
     if (batch.GetBlockCount() == 0)
-      return;
+    return;
     WorldPacket pkt;
     batch.Build(pkt);
     SendPacket(pkt);
@@ -378,7 +380,7 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
     if (inBatch >= kMaxCreatureCreatesPerPacket)
       flushBatch();
   });
-  flushBatch();
+      flushBatch();
 }
 
 void WorldSession::SendNearbyCreatureCreatesToSelf(float x, float y) {
@@ -406,24 +408,24 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
     uint32 const itemGuidLow = character.GetVisibleItemGuidLow(slot);
     uint32 const entry = character.GetVisibleItemEntry(slot);
     if (itemGuidLow == 0 || entry == 0)
-      continue;
+        continue;
     uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
     update.AddCreateObject(
         itemOg, TYPEID_ITEM, itemMove,
         ws_obj::BuildItemCreateFields(itemOg, guid, entry,
                               character.GetVisibleItemStackCount(slot)));
-  }
+}
   for (size_t pi = 0; pi < kPackSlotCount; ++pi) {
     uint32 const itemGuidLow = character.GetPackItemGuidLow(pi);
     uint32 const entry = character.GetPackItemEntry(pi);
     if (itemGuidLow == 0 || entry == 0)
-      continue;
+        continue;
     uint64 const itemOg = MakeItemObjectGuid(itemGuidLow);
     update.AddCreateObject(
         itemOg, TYPEID_ITEM, itemMove,
         ws_obj::BuildItemCreateFields(itemOg, guid, entry,
                               character.GetPackItemStackCount(pi)));
-  }
+}
 
   WorldPacket updatePacket(SMSG_UPDATE_OBJECT);
   update.Build(updatePacket);
@@ -436,32 +438,32 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
     map->ForEachPlayer([this, guid, &character, &move, statGt, selfNextXp](
                            std::shared_ptr<Player> const &other) {
       if (!other || other->GetGuid() == guid)
-        return;
+    return;
       PlayerGmAppearanceForUpdates const newPlayerGm =
           GetGmAppearanceForPlayerUpdates();
       if (auto n = other->GetNotifier()) {
         ws_obj::SendPlayerCreateToNotifier(
             n, _mapId, guid, character, move, newPlayerGm, statGt, selfNextXp,
             TryLivePlayerHealth(_mapId, guid), TryLivePlayerPower1(_mapId, guid));
-      }
+}
       if (auto otherCh = _charService->GetCharacterByGuid(other->GetGuid())) {
         PlayerGmAppearanceForUpdates otherGm{};
         if (auto ows =
                 std::dynamic_pointer_cast<WorldSession>(other->GetNotifier())) {
           otherGm = ows->GetGmAppearanceForPlayerUpdates();
-        }
+}
         uint32_t const otherNext =
             otherCh->GetLevel() < 85
                 ? _charService->GetXpToNextLevelForLevel(otherCh->GetLevel())
-                : 0u;
+          : 0u;
         ws_obj::SendPlayerCreateToNotifier(
             std::static_pointer_cast<IMapNotifier>(shared_from_this()), _mapId,
             other->GetGuid(), *otherCh, other->GetPosition(), otherGm, statGt,
             otherNext, TryLivePlayerHealth(_mapId, other->GetGuid()),
             TryLivePlayerPower1(_mapId, other->GetGuid()));
-      }
-    });
-  }
+}
+  });
+}
 }
 
 void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
@@ -471,7 +473,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
   WorldPacket timeSync(SMSG_TIME_SYNC_REQ);
   timeSync.Append<uint32>(_timeSyncNextCounter++);
   SendPacket(timeSync);
-  // Match Trinity: next time-sync is periodic via timer, not on each RESP.
+  // Match next time-sync is periodic via timer, not on each RESP.
   CancelPeriodicTimeSync();
   SchedulePeriodicTimeSync();
   SendLoadCUFProfiles();
@@ -480,7 +482,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
 
   if (auto host = WorldService::Instance().GetScriptHost()) {
     host->FireEvent("player_login", guid);
-  }
+}
 
   if (_onlineCharRegistry) {
     if (auto ch = _charService->GetCharacterByGuid(guid)) {
@@ -490,8 +492,8 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
           std::weak_ptr<ICommandSession>(
               std::static_pointer_cast<ICommandSession>(shared_from_this())),
           FactionSideFromPlayableRace(ch->GetRace()));
-    }
-  }
+}
+}
 
   if (_gmFlyEnabled || std::fabs(_gmRunSpeed - 7.0f) > 1e-3f)
     PublishGmMovementPacketsIfInWorld();
@@ -511,7 +513,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
   if (auto map = WorldService::Instance().GetMap(_mapId)) {
     if (_playerLevel > 0)
       BroadcastPlayerAuraStatBonusOnMap(_mapId, map, guid, _playerLevel);
-  }
+}
 }
 
 } // namespace Firelands

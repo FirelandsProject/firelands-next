@@ -34,3 +34,13 @@ TEST(CombatPacketsTest, SpellNonMeleeDamageLogUsesExpectedOpcode) {
   EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_SPELLNONMELEEDAMAGELOG));
   EXPECT_GE(pkt.Size(), 20u);
 }
+
+TEST(CombatPacketsTest, PowerUpdateMatchesCataclysmRefLayout) {
+  WorldPacket pkt = combat_wire::BuildPowerUpdate(TestPlayerGuid(), 0u, 900);
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_POWER_UPDATE));
+  EXPECT_GE(pkt.Size(), 12u);
+  EXPECT_EQ(pkt.ReadPackedGuid(), TestPlayerGuid());
+  EXPECT_EQ(pkt.Read<uint32_t>(), 1u);
+  EXPECT_EQ(pkt.Read<uint8_t>(), 0u);
+  EXPECT_EQ(pkt.Read<int32_t>(), 900);
+}

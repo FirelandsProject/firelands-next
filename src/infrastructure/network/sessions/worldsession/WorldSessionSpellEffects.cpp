@@ -41,7 +41,7 @@ void BroadcastAuraPacket(std::shared_ptr<Map> const &map, uint64 unitGuid,
 }
 
 AuraUpdateWire::AuraApplyParams ParamsFromAura(Aura const &aura,
-                                             std::chrono::steady_clock::time_point now) {
+                          std::chrono::steady_clock::time_point now) {
   AuraClientWireMeta const &wire = aura.GetClientWireMeta();
   AuraUpdateWire::AuraApplyParams params{};
   params.visualSlot = aura.GetVisualSlot();
@@ -71,7 +71,7 @@ CollectActiveAuraParams(Unit const &unit, std::chrono::steady_clock::time_point 
 }
 
 void SendUnitAurasUpdateAll(std::shared_ptr<Map> const &map, uint64 unitGuid,
-                            std::chrono::steady_clock::time_point now) {
+                          std::chrono::steady_clock::time_point now) {
   if (!map || unitGuid == 0)
     return;
 
@@ -81,14 +81,14 @@ void SendUnitAurasUpdateAll(std::shared_ptr<Map> const &map, uint64 unitGuid,
       AuraUpdateWire::BuildAuraUpdateAll(pkt, unitGuid, params);
     });
     return;
-  }
+}
 
   if (auto creature = map->TryGetCreature(unitGuid)) {
     auto const params = CollectActiveAuraParams(*creature, now);
     BroadcastAuraPacket(map, unitGuid, [&](WorldPacket &pkt) {
       AuraUpdateWire::BuildAuraUpdateAll(pkt, unitGuid, params);
     });
-  }
+}
 }
 
 int32 ResolveAuraWireEffectAmount(SpellCastOutcome const &outcome,
@@ -114,7 +114,7 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
     def = defs->GetDefinition(outcome.auraSpellId);
     if (def)
       defPtr = &*def;
-  }
+}
   auto const tables = WorldService::Instance().GetSpellCastTables();
   uint32 const durationMs = SpellHitEffects::ResolveAuraDurationMs(
       outcome.auraSpellId, outcome.auraCasterLevel, outcome.auraDurationMs, defPtr,
@@ -126,7 +126,7 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
              "timer would desync)",
              outcome.auraSpellId);
     return false;
-  }
+}
 
   int32 const wireEffectAmount = ResolveAuraWireEffectAmount(outcome, defPtr);
   auto const expireTime = infiniteAura
@@ -156,7 +156,7 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
     if (sendAmount) {
       wire.effectAmount = wireEffectAmount;
       wire.sendEffectAmount = true;
-    }
+}
     Aura aura(outcome.auraSpellId, outcome.auraEffectType, outcome.auraBasePoints,
               outcome.auraDieSides, outcome.auraCasterGuid, expireTime, slot,
               outcome.auraPeriodicPeriodMs, outcome.auraPeriodicHealthDeltaPerTick,
@@ -183,7 +183,7 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
     if (sendAmount) {
       wire.effectAmount = wireEffectAmount;
       wire.sendEffectAmount = true;
-    }
+}
     Aura aura(outcome.auraSpellId, outcome.auraEffectType, outcome.auraBasePoints,
               outcome.auraDieSides, outcome.auraCasterGuid, expireTime, slot,
               outcome.auraPeriodicPeriodMs, outcome.auraPeriodicHealthDeltaPerTick,
@@ -191,14 +191,14 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
     creature->AddAura(aura);
   } else {
     return false;
-  }
+}
 
-  uint8 const effectMask =
-      defPtr && defPtr->auraActiveEffectMask != 0u
-          ? defPtr->auraActiveEffectMask
-          : static_cast<uint8>(1u << outcome.auraEffectIndex);
-  bool const sendAmount =
-      defPtr && defPtr->sendsAuraEffectAmountOnWire() && wireEffectAmount != 0;
+    uint8 const effectMask =
+        defPtr && defPtr->auraActiveEffectMask != 0u
+            ? defPtr->auraActiveEffectMask
+            : static_cast<uint8>(1u << outcome.auraEffectIndex);
+    bool const sendAmount =
+        defPtr && defPtr->sendsAuraEffectAmountOnWire() && wireEffectAmount != 0;
 
   AuraUpdateWire::AuraApplyParams params{};
   params.visualSlot = slot;
@@ -210,14 +210,14 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
   params.durationMs = wireDurationMs;
   params.remainingMs = wireDurationMs;
   params.isNegative = outcome.auraIsNegative;
-  if (sendAmount) {
+    if (sendAmount) {
     params.effectAmount = wireEffectAmount;
     params.sendEffectAmount = true;
-  }
+}
   BroadcastAuraPacket(map, outcome.auraTargetGuid, [&](WorldPacket &pkt) {
     AuraUpdateWire::BuildAuraApply(pkt, outcome.auraTargetGuid, params);
-  });
-  return true;
+    });
+    return true;
 }
 
 } // namespace
@@ -254,15 +254,15 @@ void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const 
 }
 
 void ApplySpellCastAuraOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
-                             SpellCastOutcome const &outcome,
-                             std::chrono::steady_clock::time_point now) {
+                          SpellCastOutcome const &outcome,
+                          std::chrono::steady_clock::time_point now) {
   if (!map)
     return;
   if (!ApplyAuraFromOutcome(map, outcome, now))
     return;
   if (outcome.auraTargetGuid != 0)
     BroadcastPlayerAuraStatBonusOnMap(mapId, map, outcome.auraTargetGuid,
-                                    outcome.auraCasterLevel);
+      outcome.auraCasterLevel);
 }
 
 void SendActiveAurasOnMap(std::shared_ptr<Map> const &map, uint64 unitGuid,
@@ -273,7 +273,7 @@ void SendActiveAurasOnMap(std::shared_ptr<Map> const &map, uint64 unitGuid,
 void ApplyPassiveAurasForKnownSpellsOnMap(
     uint32 mapId, std::shared_ptr<Map> const &map, uint64_t unitGuid,
     uint8_t casterLevel, std::vector<uint32_t> const &knownSpellIds,
-    std::chrono::steady_clock::time_point now) {
+                          std::chrono::steady_clock::time_point now) {
   if (!map || unitGuid == 0u)
     return;
 
@@ -289,9 +289,9 @@ void ApplyPassiveAurasForKnownSpellsOnMap(
     if (auto player = map->TryGetPlayer(unitGuid)) {
       if (player->HasAura(outcome.auraSpellId))
         continue;
-    }
+}
     ApplyAuraFromOutcome(map, outcome, now);
-  }
+}
   if (!outcomes.empty())
     BroadcastPlayerAuraStatBonusOnMap(mapId, map, unitGuid, casterLevel);
 }
@@ -306,9 +306,9 @@ void SendAuraRemovalOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
   LOG_DEBUG("Aura remove: unit={:#x} slot={} spell={}", unitGuid, removal.visualSlot,
             removal.spellId);
 
-  BroadcastAuraPacket(map, unitGuid, [&](WorldPacket &pkt) {
+    BroadcastAuraPacket(map, unitGuid, [&](WorldPacket &pkt) {
     AuraUpdateWire::BuildAuraRemove(pkt, unitGuid, removal.visualSlot);
-  });
+    });
 
   SendUnitAurasUpdateAll(map, unitGuid, now);
 
@@ -316,7 +316,7 @@ void SendAuraRemovalOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
     uint8 const level =
         removal.wire.casterLevel > 0 ? removal.wire.casterLevel : 1u;
     BroadcastPlayerAuraStatBonusOnMap(mapId, map, unitGuid, level);
-  }
+}
 }
 
 void SendPeriodicHealTickOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -331,7 +331,7 @@ void SendPeriodicHealTickOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
       SpellPeriodicAuraLogWire::BuildPeriodicHeal(pkt, unitGuid, tick.casterGuid,
                                                   tick.spellId, healAmount);
     });
-  }
+}
 
   if (tick.wire.maxDurationMs > 0u) {
     AuraUpdateWire::AuraApplyParams refresh{};
@@ -352,7 +352,7 @@ void SendPeriodicHealTickOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
     BroadcastAuraPacket(map, unitGuid, [&](WorldPacket &pkt) {
       AuraUpdateWire::BuildAuraApply(pkt, unitGuid, refresh);
     });
-  }
+}
 
   if (auto target = map->TryGetPlayer(unitGuid)) {
     BroadcastUnitHealthAfterDelta(mapId, map, unitGuid, target->GetLiveHealth(),
@@ -360,7 +360,7 @@ void SendPeriodicHealTickOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
   } else if (auto creature = map->TryGetCreature(unitGuid)) {
     BroadcastUnitHealthAfterDelta(mapId, map, unitGuid, creature->GetLiveHealth(),
                                   creature->GetLiveMaxHealth());
-  }
+}
 }
 
 bool RemovePlayerAuraOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -371,20 +371,20 @@ bool RemovePlayerAuraOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
   if (auto target = map->TryGetPlayer(unitGuid)) {
     auto const removal = target->TryRemoveAura(spellId);
     if (!removal)
-      return false;
+    return false;
     SendAuraRemovalOnMap(mapId, map, unitGuid, *removal);
     return true;
-  }
+}
 
   if (auto creature = map->TryGetCreature(unitGuid)) {
     auto const removal = creature->TryRemoveAura(spellId);
     if (!removal)
-      return false;
+    return false;
     SendAuraRemovalOnMap(mapId, map, unitGuid, *removal);
     return true;
-  }
+}
 
-  return false;
+    return false;
 }
 
 bool RemoveAuraOnMapBySpellId(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -395,7 +395,7 @@ bool RemoveAuraOnMapBySpellId(uint32 mapId, std::shared_ptr<Map> const &map,
   auto tryRemove = [&](uint64 guid, auto &unit) -> bool {
     auto const removal = unit.TryRemoveAura(spellId, casterGuid);
     if (!removal)
-      return false;
+    return false;
     SendAuraRemovalOnMap(mapId, map, guid, *removal);
     return true;
   };
@@ -404,11 +404,11 @@ bool RemoveAuraOnMapBySpellId(uint32 mapId, std::shared_ptr<Map> const &map,
   map->ForEachPlayer([&](std::shared_ptr<Player> const &player) {
     if (tryRemove(player->GetGuid(), *player))
       removed = true;
-  });
+    });
   map->ForEachCreature([&](std::shared_ptr<Creature> const &creature) {
     if (tryRemove(creature->GetGuid(), *creature))
       removed = true;
-  });
+    });
   return removed;
 }
 
@@ -438,6 +438,40 @@ void BroadcastSpellImpactVisualOnMap(std::shared_ptr<Map> const &map,
                                impactPkt, true);
 }
 
+bool ApplyPlayerPower1DeltaOnMap(std::shared_ptr<Map> const &map, uint64 casterGuid,
+                                                                  int32 power1Delta) {
+    if (!map || casterGuid == 0 || power1Delta == 0)
+    return false;
+    auto casterPl = map->TryGetPlayer(casterGuid);
+    if (!casterPl)
+    return false;
+    casterPl->ApplyPower1Delta(power1Delta);
+    return true;
+}
+
+void BroadcastPlayerPower1OnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                uint64 playerGuid, uint8 primaryPowerType) {
+  if (!map || playerGuid == 0)
+    return;
+  auto pl = map->TryGetPlayer(playerGuid);
+  if (!pl)
+    return;
+
+  int32 const power = static_cast<int32_t>(pl->GetLivePower1());
+  WorldPacket powerPkt =
+      combat_wire::BuildPowerUpdate(playerGuid, primaryPowerType, power);
+
+  if (auto notifier = pl->GetNotifier()) {
+    notifier->SendPacket(powerPkt);
+  }
+  map->BroadcastPacketToNearby(playerGuid, powerPkt, true);
+}
+
+bool ApplyPlayerSpellPowerCostOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                                                        uint64 casterGuid, int32 power1Delta) {
+    return ApplyPlayerPower1DeltaOnMap(map, casterGuid, power1Delta);
+}
+
 std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
     uint32 mapId, std::shared_ptr<Map> const &map, uint64 casterGuid, uint32 spellId,
     SpellCastOutcome const &outcome, std::chrono::steady_clock::time_point now) {
@@ -458,7 +492,7 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
         WorldPacket dmgLog = combat_wire::BuildSpellNonMeleeDamageLog(
             outcome.directHealthTargetGuid, casterGuid, spellId, damage, healthAfter);
         map->BroadcastPacketToNearby(casterGuid, dmgLog, true);
-      }
+}
       BroadcastUnitHealthAfterDelta(mapId, map, outcome.directHealthTargetGuid,
                                     healthAfter, target->GetLiveMaxHealth());
     } else if (auto cr = map->TryGetCreature(outcome.directHealthTargetGuid)) {
@@ -471,7 +505,7 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
         WorldPacket dmgLog = combat_wire::BuildSpellNonMeleeDamageLog(
             outcome.directHealthTargetGuid, casterGuid, spellId, damage, healthAfter);
         map->BroadcastPacketToNearby(casterGuid, dmgLog, true);
-      }
+}
       BroadcastUnitHealthAfterDelta(mapId, map, outcome.directHealthTargetGuid,
                                     healthAfter, cr->GetLiveMaxHealth());
       if (hpBefore > 0 && healthAfter == 0) {
@@ -479,22 +513,11 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
           if (auto notifier = killer->GetNotifier())
             notifier->OnCreatureKilledByPlayer(outcome.directHealthTargetGuid,
                                                hpBefore);
-        }
+}
         killHint = CreatureKillByPlayerHint{outcome.directHealthTargetGuid, hpBefore};
-      }
-    }
-  }
-
-  if (outcome.power1Delta != 0 && casterGuid != 0) {
-    if (auto casterPl = map->TryGetPlayer(casterGuid)) {
-      casterPl->ApplyPower1Delta(outcome.power1Delta);
-      WorldPacket pwUpdate;
-      ws_obj::BuildPlayerPower1ValuesUpdate(static_cast<uint16>(mapId), casterGuid,
-                                            casterPl->GetLivePower1(),
-                                            casterPl->GetLiveMaxPower1(), pwUpdate);
-      map->BroadcastPacketToNearby(casterGuid, pwUpdate, true);
-    }
-  }
+}
+}
+}
 
   return killHint;
 }

@@ -21,7 +21,7 @@ public:
   bool HasSpell(uint32 /*spellId*/) const override { return false; }
   std::optional<SpellDefinition> GetDefinition(uint32 /*spellId*/) const override {
     return std::nullopt;
-  }
+}
 };
 
 class SpellDefinitionStoreWithCasting final : public ISpellDefinitionStore {
@@ -35,7 +35,7 @@ public:
     d.id = spellId;
     d.castingTimeIndex = m_castingTimeIndex;
     return d;
-  }
+}
 
 private:
   uint32 m_castingTimeIndex;
@@ -48,15 +48,15 @@ public:
 
   uint32 GetCastTimeMs(uint32 castingTimeIndex) const override {
     return castingTimeIndex == m_respondForIndex ? m_castTimeMs : 0u;
-  }
+}
 
   float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.f;
-  }
+}
 
   float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.0f;
-  }
+}
 
   void GetCooldownTiming(uint32 /*cooldownsId*/, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -66,21 +66,61 @@ public:
       *recoveryMs = 0;
     if (startRecoveryMs)
       *startRecoveryMs = 0;
-  }
+}
 
-  uint32 GetSpellPowerManaCost(uint32 /*spellPowerId*/) const override { return 0u; }
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 /*spellPowerType*/,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 /*casterMaxPower1*/) const override {
+    return 0u;
+}
 
   uint32 GetSpellCategoryGroupForCategoriesId(uint32 /*categoriesId*/) const override {
     return 0u;
-  }
+}
 
   uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
     return 0u;
-  }
+}
 
 private:
   uint32 m_castTimeMs;
   uint32 m_respondForIndex;
+};
+
+class MockSpellCastTablesWithPowerCost final : public ISpellCastTables {
+public:
+    explicit MockSpellCastTablesWithPowerCost(uint32 powerCost) : m_powerCost(powerCost) {}
+
+  uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
+  float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+}
+  float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+}
+  void GetCooldownTiming(uint32 /*cooldownsId*/, uint32 *categoryRecoveryMs,
+                         uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
+    if (categoryRecoveryMs)
+      *categoryRecoveryMs = 0;
+    if (recoveryMs)
+      *recoveryMs = 0;
+    if (startRecoveryMs)
+      *startRecoveryMs = 0;
+}
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 /*spellPowerType*/,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 /*casterMaxPower1*/) const override {
+        return m_powerCost;
+}
+  uint32 GetSpellCategoryGroupForCategoriesId(uint32 /*categoriesId*/) const override {
+    return 0u;
+}
+  uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
+    return 0u;
+}
+
+private:
+    uint32 m_powerCost;
 };
 
 class SpellDefinitionWithRange final : public ISpellDefinitionStore {
@@ -110,7 +150,7 @@ public:
     d.spellEffectHasHealKind = m_spellEffectHasHealKind;
     d.spellEffectHasHarmKind = m_spellEffectHasHarmKind;
     return d;
-  }
+}
 
 private:
   uint32 m_rangeIndex;
@@ -134,7 +174,7 @@ public:
     d.castingTimeIndex = 1;
     d.attributesEx2 = m_attributesEx2;
     return d;
-  }
+}
 
 private:
   uint32 m_rangeIndex;
@@ -156,15 +196,15 @@ public:
 
   float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const override {
     if (rangeIndex != m_rangeIndex)
-      return 0.f;
+    return 0.f;
     return friendlyTarget ? m_friendlyMin : m_hostileMin;
-  }
+}
 
   float GetSpellRangeMaxYards(uint32 rangeIndex, bool friendlyTarget) const override {
     if (rangeIndex != m_rangeIndex)
-      return 0.f;
+    return 0.f;
     return friendlyTarget ? m_friendlyMax : m_hostileMax;
-  }
+}
 
   void GetCooldownTiming(uint32 /*cooldownsId*/, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -174,17 +214,21 @@ public:
       *recoveryMs = 0;
     if (startRecoveryMs)
       *startRecoveryMs = 0;
-  }
+}
 
-  uint32 GetSpellPowerManaCost(uint32 /*spellPowerId*/) const override { return 0u; }
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 /*spellPowerType*/,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 /*casterMaxPower1*/) const override {
+    return 0u;
+}
 
   uint32 GetSpellCategoryGroupForCategoriesId(uint32 /*categoriesId*/) const override {
     return 0u;
-  }
+}
 
   uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
     return 0u;
-  }
+}
 
 private:
   float m_hostileMax;
@@ -207,7 +251,7 @@ public:
     d.rangeIndex = 0;
     d.immediateHealthEffectDelta = m_healthDelta;
     return d;
-  }
+}
 
 private:
   int32 m_healthDelta;
@@ -222,11 +266,11 @@ public:
 
   float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.f;
-  }
+}
 
   float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.f;
-  }
+}
 
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -236,17 +280,21 @@ public:
       *recoveryMs = (cooldownsId == m_match) ? m_recovery : 0u;
     if (startRecoveryMs)
       *startRecoveryMs = (cooldownsId == m_match) ? m_start : 0u;
-  }
+}
 
-  uint32 GetSpellPowerManaCost(uint32 /*spellPowerId*/) const override { return 0u; }
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 /*spellPowerType*/,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 /*casterMaxPower1*/) const override {
+    return 0u;
+}
 
   uint32 GetSpellCategoryGroupForCategoriesId(uint32 /*categoriesId*/) const override {
     return 0u;
-  }
+}
 
   uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
     return 0u;
-  }
+}
 
 private:
   uint32 m_start;
@@ -263,11 +311,11 @@ public:
 
   float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.f;
-  }
+}
 
   float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
     return 0.f;
-  }
+}
 
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
@@ -278,17 +326,21 @@ public:
       *recoveryMs = 0;
     if (startRecoveryMs)
       *startRecoveryMs = 0;
-  }
+}
 
-  uint32 GetSpellPowerManaCost(uint32 /*spellPowerId*/) const override { return 0u; }
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 /*spellPowerType*/,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 /*casterMaxPower1*/) const override {
+    return 0u;
+}
 
   uint32 GetSpellCategoryGroupForCategoriesId(uint32 categoriesId) const override {
     return categoriesId == 100u ? 7u : 0u;
-  }
+}
 
   uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
     return 0u;
-  }
+}
 
 private:
   uint32 m_catMs;
@@ -309,7 +361,7 @@ public:
     d.categoriesId = m_categoriesId;
     d.cooldownsId = m_cooldownsId;
     return d;
-  }
+}
 
 private:
   uint32 m_categoriesId;
@@ -328,7 +380,7 @@ public:
     d.rangeIndex = 0;
     d.cooldownsId = m_cdId;
     return d;
-  }
+}
 
 private:
   uint32 m_cdId;
@@ -343,7 +395,7 @@ public:
   bool LineOfSight(uint32_t /*mapId*/, float /*x0*/, float /*y0*/, float /*z0*/,
                    float /*x1*/, float /*y1*/, float /*z1*/) const override {
     return m_lineOpen;
-  }
+}
 
 private:
   bool m_lineOpen;
@@ -387,7 +439,7 @@ public:
     d.auraDieSides = m_dieSides;
     d.auraDurationIndex = m_durationIndex;
     return d;
-  }
+}
 
 private:
   uint32 m_auraEffectType;
@@ -415,17 +467,19 @@ static SpellCastRequest MakeRequest(uint64 casterGuid, int32 spellId,
 
 TEST(SpellManagerTests, AuraSpell_FillsAuraApplyOnSuccess) {
   class DurationOnlyTables final : public ISpellCastTables {
-  public:
+public:
     uint32 GetCastTimeMs(uint32) const override { return 0u; }
     float GetSpellRangeMinYards(uint32, bool) const override { return 0.f; }
     float GetSpellRangeMaxYards(uint32, bool) const override { return 0.f; }
     void GetCooldownTiming(uint32, uint32 *, uint32 *, uint32 *) const override {}
-    uint32 GetSpellPowerManaCost(uint32) const override { return 0u; }
+        uint32 ResolveSpellPowerCost(uint32, uint32, uint8, uint8, uint32) const override {
+    return 0u;
+}
     uint32 GetSpellCategoryGroupForCategoriesId(uint32) const override { return 0u; }
     uint32 GetDurationMs(uint32 durationIndex, uint8 /*casterLevel*/) const override {
       return durationIndex == 9u ? 18000u : 0u;
-    }
-  };
+}
+};
 
   auto defs = std::make_shared<SpellDefinitionWithAura>(8, 12, 0, 9);
   auto tables = std::make_shared<DurationOnlyTables>();
@@ -449,7 +503,7 @@ TEST(SpellManagerTests, AuraEffectFieldsAreSetCorrectly) {
   SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
   SpellCastOutcome out;
   mgr.ProcessCastRequest(req, &out);
-  
+
   ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
   // Verify that the aura fields were correctly set in the definition
   // This test primarily verifies that our SpellDefinitionStore implementation works correctly
@@ -899,9 +953,10 @@ public:
     d.castingTimeIndex = 1;
     d.rangeIndex = 0;
     d.powerType = m_powerType;
+        d.spellPowerId = 1u;
     d.manaCost = m_cost;
     return d;
-  }
+}
 
 private:
   uint32 m_powerType;
@@ -910,7 +965,7 @@ private:
 
 TEST(SpellManagerTests, SufficientMana_SetsPower1Delta) {
   auto defs = std::make_shared<SpellDefinitionWithPowerCost>(0u, 30u);
-  auto tables = std::make_shared<MockSpellCastTables>(0u);
+    auto tables = std::make_shared<MockSpellCastTablesWithPowerCost>(30u);
   SpellManager mgr(defs, tables);
   std::unordered_set<uint32> known = {555};
   SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
@@ -924,9 +979,58 @@ TEST(SpellManagerTests, SufficientMana_SetsPower1Delta) {
   EXPECT_EQ(out.power1Delta, -30);
 }
 
+class PercentManaPowerTables final : public ISpellCastTables {
+public:
+  uint32 GetCastTimeMs(uint32 /*castingTimeIndex*/) const override { return 0u; }
+  float GetSpellRangeMinYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+}
+  float GetSpellRangeMaxYards(uint32 /*rangeIndex*/, bool /*friendlyTarget*/) const override {
+    return 0.f;
+}
+  void GetCooldownTiming(uint32 /*cooldownsId*/, uint32 *categoryRecoveryMs,
+                         uint32 *recoveryMs, uint32 *startRecoveryMs) const override {
+    if (categoryRecoveryMs)
+      *categoryRecoveryMs = 0;
+    if (recoveryMs)
+      *recoveryMs = 0;
+    if (startRecoveryMs)
+      *startRecoveryMs = 0;
+}
+    uint32 ResolveSpellPowerCost(uint32 /*spellPowerId*/, uint32 spellPowerType,
+                                                              uint8 /*casterLevel*/, uint8 /*spellLevel*/,
+                                                              uint32 casterMaxPower1) const override {
+        if (spellPowerType != 0u)
+    return 0u;
+        return casterMaxPower1 * 9u / 100u;
+}
+  uint32 GetSpellCategoryGroupForCategoriesId(uint32 /*categoriesId*/) const override {
+    return 0u;
+}
+  uint32 GetDurationMs(uint32 /*durationIndex*/, uint8 /*casterLevel*/) const override {
+    return 0u;
+}
+};
+
+TEST(SpellManagerTests, PercentManaCostUsesFallbackMaxWhenLiveMaxIsOne) {
+    auto defs = std::make_shared<SpellDefinitionWithPowerCost>(0u, 0u);
+    SpellManager mgr(defs, std::make_shared<PercentManaPowerTables>());
+    std::unordered_set<uint32> known = {133};
+    SpellCastRequest req = MakeRequest(0x10ULL, 133, &known);
+  req.hasCasterPowerSnapshot = true;
+  req.casterPrimaryPowerType = 0;
+  req.casterLevel = 10;
+    req.casterPower1 = 200;
+    req.casterMaxPower1 = 1;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartAndGo);
+    EXPECT_EQ(out.power1Delta, -18);
+}
+
 TEST(SpellManagerTests, InsufficientMana_ReturnsNoPower) {
   auto defs = std::make_shared<SpellDefinitionWithPowerCost>(0u, 100u);
-  auto tables = std::make_shared<MockSpellCastTables>(0u);
+    auto tables = std::make_shared<MockSpellCastTablesWithPowerCost>(100u);
   SpellManager mgr(defs, tables);
   std::unordered_set<uint32> known = {555};
   SpellCastRequest req = MakeRequest(0x10ULL, 555, &known);
@@ -944,7 +1048,8 @@ TEST(SpellManagerTests, InsufficientMana_ReturnsNoPower) {
 TEST(SpellManagerTests, SufficientRage_SetsPower1Delta) {
   auto defs = std::make_shared<SpellDefinitionWithPowerCost>(
       static_cast<uint32>(PlayerPowerType::Rage), 20u);
-  SpellManager mgr(defs, nullptr);
+    auto tables = std::make_shared<MockSpellCastTablesWithPowerCost>(20u);
+  SpellManager mgr(defs, tables);
   std::unordered_set<uint32> known = {78};
   SpellCastRequest req = MakeRequest(0x10ULL, 78, &known);
   req.hasCasterPowerSnapshot = true;
@@ -959,7 +1064,8 @@ TEST(SpellManagerTests, SufficientRage_SetsPower1Delta) {
 TEST(SpellManagerTests, RageSpellOnManaCaster_ReturnsNoPower) {
   auto defs = std::make_shared<SpellDefinitionWithPowerCost>(
       static_cast<uint32>(PlayerPowerType::Rage), 10u);
-  SpellManager mgr(defs, nullptr);
+    auto tables = std::make_shared<MockSpellCastTablesWithPowerCost>(10u);
+  SpellManager mgr(defs, tables);
   std::unordered_set<uint32> known = {78};
   SpellCastRequest req = MakeRequest(0x10ULL, 78, &known);
   req.hasCasterPowerSnapshot = true;
@@ -975,7 +1081,8 @@ TEST(SpellManagerTests, RageSpellOnManaCaster_ReturnsNoPower) {
 TEST(SpellManagerTests, InsufficientRage_ReturnsNoPower) {
   auto defs = std::make_shared<SpellDefinitionWithPowerCost>(
       static_cast<uint32>(PlayerPowerType::Rage), 30u);
-  SpellManager mgr(defs, nullptr);
+    auto tables = std::make_shared<MockSpellCastTablesWithPowerCost>(30u);
+  SpellManager mgr(defs, tables);
   std::unordered_set<uint32> known = {78};
   SpellCastRequest req = MakeRequest(0x10ULL, 78, &known);
   req.hasCasterPowerSnapshot = true;
@@ -1099,7 +1206,7 @@ public:
     d.id = spellId;
     d.attributes = SpellAttr0::kPassive;
     return d;
-  }
+}
 };
 
 class SpellDefinitionWithRequiredLevel final : public ISpellDefinitionStore {
@@ -1113,7 +1220,7 @@ public:
     d.id = spellId;
     d.requiredLevel = m_requiredLevel;
     return d;
-  }
+}
 
 private:
   uint8 m_requiredLevel;
@@ -1173,7 +1280,7 @@ public:
     d.hasAuraEffect = true;
     d.auraEffectType = 99u;
     return d;
-  }
+}
 };
 
 TEST(SpellManagerTests, ActivatablePassiveRacialCastSucceeds) {

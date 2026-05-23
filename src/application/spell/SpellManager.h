@@ -55,6 +55,8 @@ struct SpellCastRequest {
   uint8 casterPrimaryPowerType = 0;
   uint32 casterPower1 = 0;
   uint32 casterMaxPower1 = 0;
+  /// Base POWER1 for `%` costs (`GetCreateMana`; seeded at login from template max).
+  uint32 casterBasePower1 = 0;
   /// Player-vs-player team hint (Alliance/Horde by race). When false, beneficial spells on other
   /// units keep optimistic friendly `SpellRange.dbc` columns (legacy behaviour).
   bool hasTargetFactionReactionHint = false;

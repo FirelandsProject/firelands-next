@@ -58,8 +58,8 @@ struct SpellDefinition {
   uint32 levelsId = 0;
   /// Required character level from `SpellLevels.dbc` (`SpellLevel`); 0 = always allowed.
   uint8 requiredLevel = 0;
-  /// Primary-resource cost from `SpellPower.dbc` (`ManaCost` field) via `spellPowerId`.
-  /// Applies to POWER1 when `powerType` matches the caster's primary power.
+    /// Legacy flat cost slot (unused at cast; cost is resolved from `spellPowerId` via
+    /// `ISpellCastTables::ResolveSpellPowerCost` using caster level and max POWER1).
   uint32 manaCost = 0;
   /// `Spell.dbc` `SpellVisualID[0]` / `[1]` (4.3.4 fields 19 / 23) → `SpellVisual.dbc`.
   uint32 spellVisualId0 = 0;

@@ -21,6 +21,8 @@ public:
   /// Seeded from `Character` at world login; authoritative until logout (Phase D/E).
   void InitCombatResources(uint32 health, uint32 maxHealth, uint32 power1,
                            uint32 maxPower1);
+  /// Base POWER1 pool at login (`GetCreateMana` proxy for % spell costs).
+  void SetLiveBasePower1(uint32 basePower1) { m_liveBasePower1 = basePower1; }
   /// Race / faction template mirror `Character` for server-side targeting hints (spell range).
   void SetRaceAndFaction(uint8 race, uint32 factionTemplate);
   void SetFactionTemplate(uint32 factionTemplate);
@@ -32,6 +34,7 @@ public:
   void ApplyHealthDelta(int32 delta);
   uint32 GetLivePower1() const { return m_livePower1; }
   uint32 GetLiveMaxPower1() const { return m_liveMaxPower1; }
+  uint32 GetLiveBasePower1() const { return m_liveBasePower1; }
   void ApplyPower1Delta(int32 delta);
 
   void AddAura(Aura const &aura);
@@ -58,6 +61,7 @@ private:
   uint32 m_liveMaxHealth = 1;
   uint32 m_livePower1 = 0;
   uint32 m_liveMaxPower1 = 1;
+  uint32 m_liveBasePower1 = 1;
 
   UnitAuraState m_auraState;
 };

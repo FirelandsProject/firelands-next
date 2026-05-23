@@ -23,9 +23,11 @@ public:
   virtual void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                                  uint32 *recoveryMs, uint32 *startRecoveryMs) const = 0;
 
-  /// `SpellPower.dbc` `ManaCost` for row id `spellPowerId` (Spell.dbc `PowerDisplayID`); 0 if
-  /// id is 0 or row missing.
-  virtual uint32 GetSpellPowerManaCost(uint32 spellPowerId) const = 0;
+    /// Resolved POWER1 cost from `SpellPower.dbc` at cast time (flat, per-level, % of base POWER1).
+    /// `spellPowerType` is the caster's primary power; `power1PoolForPercent` is base mana for % rows.
+    virtual uint32 ResolveSpellPowerCost(uint32 spellPowerId, uint32 spellPowerType,
+                                                                          uint8 casterLevel, uint8 spellLevel,
+                                                                          uint32 power1PoolForPercent) const = 0;
 
   /// `SpellCategories.dbc` `Category` field for row id `categoriesId` from `Spell.dbc`
   /// (`CategoriesID`). Used with `SpellCooldowns.dbc` `CategoryRecoveryTime` for category

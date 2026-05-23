@@ -1,6 +1,7 @@
 add_library(FirelandsShared STATIC 
     Config.cpp
     system/SystemClipboard.cpp
+    system/SystemBeep.cpp
     dbc/DbcReader.cpp
     dbc/CharStartOutfitDbc.cpp
     dbc/StarterSpellsDbc.cpp
@@ -24,6 +25,7 @@ add_library(FirelandsShared STATIC
     game/PlayerGmAppearance.cpp
     game/StatFormulas.cpp
     game/ExperienceLogic.cpp
+    game/SpellPowerResolve.cpp
     game/ActionButton.cpp
     network/MovementWire.cpp
     network/movement/ClientMovementMse.cpp

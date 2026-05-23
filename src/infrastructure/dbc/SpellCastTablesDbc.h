@@ -1,6 +1,7 @@
 #pragma once
 
 #include <domain/repositories/ISpellCastTables.h>
+#include <shared/game/SpellPowerResolve.h>
 #include <string>
 #include <unordered_map>
 
@@ -42,6 +43,8 @@ public:
   bool HasRanges() const { return !m_spellRangeRows.empty(); }
   bool HasCooldowns() const { return !m_cooldowns.empty(); }
   bool HasSpellCategories() const { return !m_spellCategoryGroupByCategoriesRowId.empty(); }
+    bool HasSpellPowerRows() const { return !m_spellPowerById.empty(); }
+    size_t SpellPowerRowCount() const { return m_spellPowerById.size(); }
 
   uint32 GetCastTimeMs(uint32 castingTimeIndex) const override;
   float GetSpellRangeMinYards(uint32 rangeIndex, bool friendlyTarget) const override;
@@ -49,7 +52,9 @@ public:
   void GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                          uint32 *recoveryMs, uint32 *startRecoveryMs) const override;
 
-  uint32 GetSpellPowerManaCost(uint32 spellPowerId) const override;
+    uint32 ResolveSpellPowerCost(uint32 spellPowerId, uint32 spellPowerType,
+                                                              uint8 casterLevel, uint8 spellLevel,
+                                                              uint32 power1PoolForPercent) const override;
 
   uint32 GetSpellCategoryGroupForCategoriesId(uint32 categoriesId) const override;
 
@@ -59,10 +64,10 @@ private:
   std::unordered_map<uint32, int32> m_castBaseMs;
   std::unordered_map<uint32, SpellRangeRow> m_spellRangeRows;
   std::unordered_map<uint32, CooldownRow> m_cooldowns;
-  std::unordered_map<uint32, uint32> m_spellPowerManaCost;
+    std::unordered_map<uint32, SpellPowerDbcRow> m_spellPowerById;
   /// `SpellCategories.dbc` row id → `Category` field (shared cooldown group key).
   std::unordered_map<uint32, uint32> m_spellCategoryGroupByCategoriesRowId;
   std::unordered_map<uint32, DurationRow> m_durationRows;
-};
+  };
 
 } // namespace Firelands

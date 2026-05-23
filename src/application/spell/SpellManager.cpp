@@ -5,6 +5,7 @@
 #include <shared/game/SpellAttributes.h>
 #include <shared/game/SpellLevelGate.h>
 #include <shared/game/SpellPowerCost.h>
+#include <domain/repositories/ISpellCastTables.h>
 
 #include <algorithm>
 #include <cmath>
@@ -13,6 +14,19 @@
 namespace Firelands {
 
 namespace {
+
+uint32 ResolveCastPowerCost(SpellDefinition const &def, SpellCastRequest const &req,
+                                                        ISpellCastTables const *tables) {
+    if (!tables || def.spellPowerId == 0u || !req.hasCasterPowerSnapshot)
+        return 0u;
+    uint32 const powerType = static_cast<uint32>(req.casterPrimaryPowerType);
+    uint32 const poolForPercent = MaxPower1ForSpellPercentCost(
+            req.casterPrimaryPowerType, req.casterLevel,
+            req.casterBasePower1 > 0u ? req.casterBasePower1 : req.casterMaxPower1);
+    return tables->ResolveSpellPowerCost(def.spellPowerId, powerType, req.casterLevel,
+                                                                          def.requiredLevel > 0 ? def.requiredLevel : 1u,
+                                                                          poolForPercent);
+  }
 
 /// After self-target handling: infer helpful vs harmful spell for `SpellRange.dbc` band selection.
 static bool SpellTreatAsBeneficialForFriendlySpellRange(SpellDefinition const &def) {
@@ -28,8 +42,8 @@ static bool SpellTreatAsBeneficialForFriendlySpellRange(SpellDefinition const &d
     return false;
   if (def.spellEffectHasHarmKind)
     return false;
-  return true;
-}
+    return true;
+  }
 
 /// Picks `SpellRange.dbc` hostile vs friendly bands (index 0 vs 1). Self-casts always use friendly.
 bool SpellUsesFriendlySpellRangeColumns(SpellDefinition const *def,
@@ -46,8 +60,8 @@ bool SpellUsesFriendlySpellRangeColumns(SpellDefinition const *def,
     return false;
   if (req.hasTargetFactionReactionHint)
     return req.targetIsFriendlyTeamForSpellRange;
-  return true;
-}
+    return true;
+  }
 
 } // namespace
 
@@ -61,7 +75,7 @@ bool SpellManager::IsSpellKnown(uint32 spellId,
   if (!knownSpells || spellId == 0u)
     return false;
   return knownSpells->find(spellId) != knownSpells->end();
-}
+  }
 
 void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
                                       SpellCastOutcome *out) const {
@@ -138,7 +152,7 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   if (req.now < req.gcdReady) {
     SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
                                      req.client.castId, req.client.spellId,
-                                     SpellCastWire::SPELL_FAILED_NOT_READY);
+                                       SpellCastWire::SPELL_FAILED_NOT_READY);
     out->kind = SpellCastOutcome::Kind::SpellFailure;
     return;
   }
@@ -154,12 +168,12 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   if (def && req.spellCooldownUntilBySpellId != nullptr) {
     auto const it = req.spellCooldownUntilBySpellId->find(spellId);
     if (it != req.spellCooldownUntilBySpellId->end() && req.now < it->second) {
-      SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
-                                       req.client.castId, req.client.spellId,
+    SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
+                                     req.client.castId, req.client.spellId,
                                        SpellCastWire::SPELL_FAILED_NOT_READY);
-      out->kind = SpellCastOutcome::Kind::SpellFailure;
-      return;
-    }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
   }
 
   uint32 categoryGroup = 0;
@@ -172,23 +186,26 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
         req.spellCategoryCooldownUntilByGroup->find(categoryGroup);
     if (cit != req.spellCategoryCooldownUntilByGroup->end() &&
         req.now < cit->second) {
-      SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
-                                       req.client.castId, req.client.spellId,
+    SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
+                                     req.client.castId, req.client.spellId,
                                        SpellCastWire::SPELL_FAILED_NOT_READY);
-      out->kind = SpellCastOutcome::Kind::SpellFailure;
-      return;
-    }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
   }
 
-  if (def && def->manaCost > 0u && req.hasCasterPowerSnapshot) {
-    if (!SpellUsesCasterPrimaryPower(def->powerType, req.casterPrimaryPowerType) ||
-        req.casterPower1 < def->manaCost) {
-      SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
-                                       req.client.castId, req.client.spellId,
+    uint32 castPowerCost = 0;
+  if (def && m_spellCastTables)
+        castPowerCost = ResolveCastPowerCost(*def, req, m_spellCastTables.get());
+
+    if (def && castPowerCost > 0u && req.hasCasterPowerSnapshot) {
+        if (req.casterPower1 < castPowerCost) {
+    SpellCastWire::BuildSpellFailure(out->failurePacket, req.casterGuid,
+                                     req.client.castId, req.client.spellId,
                                        SpellCastWire::SPELL_FAILED_NO_POWER);
-      out->kind = SpellCastOutcome::Kind::SpellFailure;
-      return;
-    }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
   }
 
   if (def && m_spellCastTables) {
@@ -207,20 +224,20 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
       constexpr float kMaxRangeToleranceYards = 3.0f;
       constexpr float kMinRangeToleranceYards = 1.5f;
       if (maxYards > 0.f && dist > maxYards + kMaxRangeToleranceYards) {
-        SpellCastWire::BuildSpellFailure(
-            out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+    SpellCastWire::BuildSpellFailure(
+        out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
             SpellCastWire::SPELL_FAILED_OUT_OF_RANGE);
-        out->kind = SpellCastOutcome::Kind::SpellFailure;
-        return;
-      }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
       if (minYards > 0.f && dist + kMinRangeToleranceYards < minYards) {
-        SpellCastWire::BuildSpellFailure(
-            out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+    SpellCastWire::BuildSpellFailure(
+        out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
             SpellCastWire::SPELL_FAILED_TOO_CLOSE);
-        out->kind = SpellCastOutcome::Kind::SpellFailure;
-        return;
-      }
-    }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
+  }
   }
 
   bool const ignoreLosFromSpell =
@@ -233,12 +250,12 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
     if (!req.collisionQueries->LineOfSight(
             req.mapId, req.casterX, req.casterY, req.casterZ, req.targetX,
             req.targetY, req.targetZ)) {
-      SpellCastWire::BuildSpellFailure(
-          out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
+    SpellCastWire::BuildSpellFailure(
+        out->failurePacket, req.casterGuid, req.client.castId, req.client.spellId,
           SpellCastWire::SPELL_FAILED_LINE_OF_SIGHT);
-      out->kind = SpellCastOutcome::Kind::SpellFailure;
-      return;
-    }
+    out->kind = SpellCastOutcome::Kind::SpellFailure;
+    return;
+  }
   }
 
   uint32 castTimeStart = 0;
@@ -275,10 +292,9 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   out->newGcdReady =
       req.now + std::chrono::milliseconds(static_cast<int64_t>(gcdDuration));
 
-  if (def && def->manaCost > 0u && req.hasCasterPowerSnapshot &&
-      SpellUsesCasterPrimaryPower(def->powerType, req.casterPrimaryPowerType) &&
-      req.casterPower1 >= def->manaCost)
-    out->power1Delta = -static_cast<int32>(def->manaCost);
+    if (def && castPowerCost > 0u && req.hasCasterPowerSnapshot &&
+            req.casterPower1 >= castPowerCost)
+        out->power1Delta = -static_cast<int32>(castPowerCost);
 
   uint32 const castFlagsStart = SpellCastWire::CAST_FLAG_HAS_TRAJECTORY;
 
@@ -320,6 +336,6 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
     out->spellImpactDelayMs =
         missile.sendOnWire ? missile.trajectory.travelTimeMs : 0u;
   }
-}
+  }
 
 } // namespace Firelands

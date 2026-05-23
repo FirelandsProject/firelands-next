@@ -17,12 +17,12 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
 
   // Cata 4.3.4 (15595) Bit Header:
   bw.WriteBits(0, 23); // FactionChangeRestrictions size
-  bw.WriteBit(true);   // Success
+  bw.WriteBit(true); // Success
   bw.WriteBits(count, 17);
 
   if (count == 0) {
     bw.Flush();
-    SendPacket(response);
+  SendPacket(response);
     return;
   }
 
@@ -39,7 +39,7 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
     for (int b = 0; b < 8; ++b) {
       gd_list[i].g[b] = (guid >> (b * 8)) & 0xFF;
       gd_list[i].gg[b] = (guildGuid >> (b * 8)) & 0xFF;
-    }
+  }
 
     auto &gd = gd_list[i];
     // Exact bit order for 15595 Character Enum
@@ -62,7 +62,7 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
     bw.WriteBit(gd.g[6]);
     bw.WriteBit(gd.gg[0]);
   }
-  bw.Flush();
+    bw.Flush();
 
   for (uint32 i = 0; i < count; ++i) {
     auto const &ch = characters[i];
@@ -73,13 +73,13 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
 
     const auto visualItems = EquipmentCache::Parse(ch->GetEquipmentCache());
     // Equipment (VisualItems) — 23 slots for 4.3.4.15595. Per-slot order is
-    // invType, displayId, enchantVisual (differs from Trinity 3.3.5 wire order).
+  // invType, displayId, enchantVisual (differs from legacy 3.3.5 wire order).
     for (int slot = 0; slot < 23; ++slot) {
       auto const &visualSlot = visualItems[slot];
       response.Append<uint8>(visualSlot.invType);
       response.Append<uint32>(visualSlot.displayId);
       response.Append<uint32>(visualSlot.displayEnchantId);
-    }
+  }
 
     response.Append<uint32>(0); // PetCreatureFamilyID
     response.WriteByteSeq(gd.gg[2]);
@@ -120,7 +120,7 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
   }
 
   SendPacket(response);
-}
+  }
 
 void WorldSession::HandleCharCreate(WorldPacket &packet) {
   std::string name = packet.ReadString();
@@ -152,7 +152,7 @@ void WorldSession::HandleCharCreate(WorldPacket &packet) {
   WorldPacket response(SMSG_CHAR_CREATE);
   response.Append<uint8>(success ? 0x2F : 0x30);
   SendPacket(response);
-}
+  }
 
 void WorldSession::HandleCharDelete(WorldPacket &packet) {
   uint64 guid = packet.Read<uint64>();
@@ -169,6 +169,6 @@ void WorldSession::HandleCharDelete(WorldPacket &packet) {
   WorldPacket response(SMSG_CHAR_DELETE);
   response.Append<uint8>(success ? 0x47 : 0x48);
   SendPacket(response);
-}
+  }
 
 } // namespace Firelands

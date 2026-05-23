@@ -37,6 +37,8 @@ add_executable(FirelandsUnitTests
     unit/shared/SpellPeriodicAuraLogWireTests.cpp
     unit/shared/SpellEffectMagnitudeTests.cpp
     unit/shared/ExperienceLogicTests.cpp
+    unit/shared/SpellPowerResolveTests.cpp
+    unit/shared/SpellPowerCostTests.cpp
     unit/shared/MovementStateQueriesTests.cpp
     unit/shared/CombatPacketsTest.cpp
     unit/shared/MeleeRangeTest.cpp
@@ -62,6 +64,7 @@ add_executable(FirelandsUnitTests
     unit/shared/WowGuidTests.cpp
     unit/infrastructure/ActionButtonPacketTests.cpp
     unit/infrastructure/ActionBarTogglesObjectUpdateTests.cpp
+    unit/infrastructure/Power1ObjectUpdateTests.cpp
     unit/infrastructure/GossipPacketTests.cpp
     unit/infrastructure/GmTicketGossipUiTests.cpp
     unit/domain/MapTests.cpp

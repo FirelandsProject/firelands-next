@@ -68,11 +68,11 @@ void AppendOneMailListEntry(WorldPacket &data, MailInboxRow const &row,
 
   data.Append<uint32>(static_cast<uint32>(row.mailId));
   data.Append<uint8>(kMailMessageTypeNormal);
-  // Trinity `HandleGetMailList`: MAIL_NORMAL uses raw 8-byte `ObjectGuid`, not packed.
+  // MAIL_NORMAL uses raw 8-byte `ObjectGuid`, not packed.
   data.Append<uint64>(MakePlayerObjectGuid(row.senderGuidLow));
   data.Append<uint64>(0u);       // COD
   data.Append<uint32>(0u);       // package
-  data.Append<uint32>(41u);     // stationery (matches common TC defaults)
+  data.Append<uint32>(41u);     // stationery (Cataclysm default)
   data.Append<uint64>(0u);       // money
   data.Append<uint32>(row.checked);
   float daysLeft = 30.0f;
@@ -122,7 +122,7 @@ namespace ws_obj = WorldSessionObjectUpdate;
 } // namespace
 
 void WorldSession::HandleQueryNextMailTime(WorldPacket & /*packet*/) {
-  // Trinity `MailHandler.cpp::HandleQueryNextMailTime`: float is negative (e.g. -DAY)
+  // Float is negative (e.g. -DAY)
   // when there is no pending notification; float 0 + non-zero count when unread mail
   // exists. A plain `0` float makes the client treat it as "new mail" while count 0
   // confuses the UI (minimap icon vs empty mailbox).
@@ -415,7 +415,7 @@ void WorldSession::HandleSwapItem(WorldPacket &packet) {
 void WorldSession::HandleTimeSyncResp(WorldPacket &packet) {
   WorldPackets::Client::TimeSyncResponse ts{};
   WorldPackets::Client::TimeSyncResponse::Read(packet, ts);
-  // Trinity (MovementHandler.cpp): RESP updates clock skew only; the following
+  // RESP updates clock skew only; the following
   // SMSG_TIME_SYNC_REQ is sent on a periodic timer — not here.
   LOG_TRACE("CMSG_TIME_SYNC_RESP counter={} clientTime={}", ts.counter,
             ts.clientTime);

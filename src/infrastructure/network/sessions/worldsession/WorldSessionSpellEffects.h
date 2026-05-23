@@ -20,7 +20,7 @@ void ApplySpellCastAuraOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
 
 /// Re-sends active auras for `unitGuid` (login / reconnect).
 void SendActiveAurasOnMap(std::shared_ptr<Map> const &map, uint64 unitGuid,
-                          std::chrono::steady_clock::time_point now);
+                             std::chrono::steady_clock::time_point now);
 
 /// Recomputes aura-derived stat/rating fields and broadcasts `SMSG_UPDATE_OBJECT`.
 void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -30,7 +30,7 @@ void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const 
 void ApplyPassiveAurasForKnownSpellsOnMap(
     uint32 mapId, std::shared_ptr<Map> const &map, uint64_t unitGuid,
     uint8_t casterLevel, std::vector<uint32_t> const &candidateSpellIds,
-    std::chrono::steady_clock::time_point now);
+                             std::chrono::steady_clock::time_point now);
 
 /// Set when a player caster reduces a creature to 0 HP (for kill XP).
 struct CreatureKillByPlayerHint {
@@ -38,7 +38,20 @@ struct CreatureKillByPlayerHint {
   uint32 hpBefore = 0;
 };
 
-/// Applies direct health/power from `SpellCastOutcome` on `map` and broadcasts wire.
+/// Applies POWER1 delta on the map player (no wire).
+bool ApplyPlayerPower1DeltaOnMap(std::shared_ptr<Map> const &map, uint64 casterGuid,
+                                                                  int32 power1Delta);
+
+/// `SMSG_POWER_UPDATE` + values update. Send to caster session first, then nearby (before spell GO).
+void BroadcastPlayerPower1OnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                uint64 playerGuid, uint8 primaryPowerType);
+
+                                                                /// Deducts spell power on the map. Notify with `BroadcastPlayerPower1OnMap` immediately before spell GO.
+                                                                bool ApplyPlayerSpellPowerCostOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                                                        uint64 casterGuid, int32 power1Delta);
+
+                                                                        /// Applies direct health from `SpellCastOutcome` on `map` and broadcasts wire.
+                                                                        /// Power is applied via `ApplyPlayerSpellPowerCostOnMap`; notify with `BroadcastPlayerPower1OnMap`.
 std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
     uint32 mapId, std::shared_ptr<Map> const &map, uint64 casterGuid, uint32 spellId,
     SpellCastOutcome const &outcome, std::chrono::steady_clock::time_point now);

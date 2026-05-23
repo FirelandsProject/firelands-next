@@ -17,11 +17,13 @@ public:
   float GetSpellRangeMinYards(uint32, bool) const override { return 0.f; }
   float GetSpellRangeMaxYards(uint32, bool) const override { return 0.f; }
   void GetCooldownTiming(uint32, uint32 *, uint32 *, uint32 *) const override {}
-  uint32 GetSpellPowerManaCost(uint32) const override { return 0u; }
+    uint32 ResolveSpellPowerCost(uint32, uint32, uint8, uint8, uint32) const override {
+        return 0u;
+}
   uint32 GetSpellCategoryGroupForCategoriesId(uint32) const override { return 0u; }
   uint32 GetDurationMs(uint32 durationIndex, uint8 /*casterLevel*/) const override {
     return durationIndex == m_index ? m_durationMs : 0u;
-  }
+}
 
   uint32 m_index = 5;
   uint32 m_durationMs;

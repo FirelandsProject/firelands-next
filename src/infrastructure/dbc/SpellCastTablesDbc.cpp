@@ -1,7 +1,7 @@
 #include <infrastructure/dbc/SpellCastTablesDbc.h>
 
-#include <cmath>
 #include <shared/dbc/DbcReader.h>
+#include <shared/game/SpellPowerResolve.h>
 #include <shared/Logger.h>
 
 #include <algorithm>
@@ -49,7 +49,7 @@ static bool LoadCastTimes(std::string const &path,
   }
   LOG_DEBUG("SpellCastTimes.dbc: {} rows from {}.", outById.size(), path);
   return true;
-}
+  }
 
 static bool LoadSpellRange(
     std::string const &path,
@@ -90,12 +90,12 @@ static bool LoadSpellRange(
   }
   LOG_DEBUG("SpellRange.dbc: {} rows from {}.", outById.size(), path);
   return true;
-}
+  }
 
-// SpellPowerEntryfmt[] = "diiiixxf";
+  // SpellPowerEntryfmt[] = "diiiixxf" — ID, Cost, CostPerLevel, CostPercentage, PerSecond, x, x, float.
 static bool LoadSpellPower(std::string const &path,
-                            std::unordered_map<uint32, uint32> &outManaById) {
-  outManaById.clear();
+                                                        std::unordered_map<uint32, SpellPowerDbcRow> &outById) {
+  outById.clear();
   if (path.empty())
     return false;
   DbcReader reader;
@@ -119,28 +119,28 @@ static bool LoadSpellPower(std::string const &path,
     return false;
   }
 
-  uint32_t const floatFieldIndex =
+    constexpr uint32_t kFieldCostPercentFloat =
       static_cast<uint32_t>(kFmt.size() - 1u);
 
   uint32_t const n = reader.GetRecordCount();
-  outManaById.reserve(static_cast<size_t>(n));
+  outById.reserve(static_cast<size_t>(n));
   for (uint32_t rec = 0; rec < n; ++rec) {
     uint32_t const id = reader.ReadUInt32(rec, 0, offsets);
     if (id == 0u)
       continue;
-    uint32_t cost = reader.ReadUInt32(rec, 1, offsets);
-    if (cost == 0u) {
-      float const floatCost = reader.ReadFloat(rec, floatFieldIndex, offsets);
-      if (floatCost > 0.f)
-        cost = static_cast<uint32_t>(std::floor(static_cast<double>(floatCost) + 0.5));
-    }
-    if (cost == 0u)
+        SpellPowerDbcRow row{};
+        row.flatCost = reader.ReadUInt32(rec, 1, offsets);
+        row.costPerLevel = reader.ReadUInt32(rec, 2, offsets);
+        row.costPercent = reader.ReadUInt32(rec, 3, offsets);
+        row.costPercentFloat = reader.ReadFloat(rec, kFieldCostPercentFloat, offsets);
+        if (row.flatCost == 0u && row.costPerLevel == 0u && row.costPercent == 0u &&
+                row.costPercentFloat <= 0.f)
       continue;
-    outManaById.emplace(id, cost);
+    outById.emplace(id, row);
   }
-  LOG_DEBUG("SpellPower.dbc: {} rows from {}.", outManaById.size(), path);
+    LOG_DEBUG("SpellPower.dbc: {} rows from {}.", outById.size(), path);
   return true;
-}
+  }
 
 // SpellCategoriesEntryfmt[] = "diiiiii";
 static bool LoadSpellCategories(
@@ -182,7 +182,7 @@ static bool LoadSpellCategories(
   LOG_DEBUG("SpellCategories.dbc: {} rows from {}.",
             outCategoriesRowIdToCategoryGroup.size(), path);
   return !outCategoriesRowIdToCategoryGroup.empty();
-}
+  }
 
 // Cataclysm 4.3.4: 4 fields, 16-byte records (ID, BaseDuration, PerLevel, MaxDuration).
 constexpr std::string_view kSpellDurationFmt = "niii";
@@ -228,7 +228,7 @@ static bool LoadSpellDuration(
   }
   LOG_DEBUG("SpellDuration.dbc: {} rows from {}.", outRows.size(), path);
   return !outRows.empty();
-}
+  }
 
 } // namespace
 
@@ -258,38 +258,38 @@ bool SpellCastTablesDbc::Load(std::string const &spellCastTimesPath,
           m_cooldowns.reserve(static_cast<size_t>(ncd));
           for (uint32_t rec = 0; rec < ncd; ++rec) {
             uint32_t const id = cdReader.ReadUInt32(rec, 0, cdOffsets);
-            if (id == 0u)
-              continue;
+    if (id == 0u)
+      continue;
             CooldownRow row{};
             row.categoryRecoveryMs = cdReader.ReadUInt32(rec, 1, cdOffsets);
             row.recoveryMs = cdReader.ReadUInt32(rec, 2, cdOffsets);
             row.startRecoveryMs = cdReader.ReadUInt32(rec, 3, cdOffsets);
             m_cooldowns.emplace(id, row);
-          }
+  }
           LOG_DEBUG("SpellCooldowns.dbc: {} rows from {}.", m_cooldowns.size(),
                     spellCooldownsPath);
           cd = !m_cooldowns.empty();
         } else {
           LOG_WARN("SpellCooldowns.dbc: record size {} expected {} (path={})",
                    cdReader.GetRecordSize(), expectedC, spellCooldownsPath);
-        }
-      } else {
-        LOG_WARN("SpellCooldowns.dbc: field count mismatch (path={})",
-                 spellCooldownsPath);
-      }
-    } else {
-      LOG_WARN("SpellCooldowns.dbc not found or unreadable: {}", spellCooldownsPath);
-    }
   }
-  m_spellPowerManaCost.clear();
-  bool const sp = LoadSpellPower(spellPowerPath, m_spellPowerManaCost);
+        } else {
+        LOG_WARN("SpellCooldowns.dbc: field count mismatch (path={})",
+                    spellCooldownsPath);
+  }
+        } else {
+      LOG_WARN("SpellCooldowns.dbc not found or unreadable: {}", spellCooldownsPath);
+  }
+  }
+    m_spellPowerById.clear();
+    bool const sp = LoadSpellPower(spellPowerPath, m_spellPowerById);
   m_spellCategoryGroupByCategoriesRowId.clear();
   bool const sc =
       LoadSpellCategories(spellCategoriesPath, m_spellCategoryGroupByCategoriesRowId);
   m_durationRows.clear();
   bool const dur = LoadSpellDuration(spellDurationPath, m_durationRows);
   return ct || rg || cd || sp || sc || dur;
-}
+  }
 
 uint32 SpellCastTablesDbc::GetCastTimeMs(uint32 castingTimeIndex) const {
   if (castingTimeIndex == 0u)
@@ -300,7 +300,7 @@ uint32 SpellCastTablesDbc::GetCastTimeMs(uint32 castingTimeIndex) const {
   if (it->second <= 0)
     return 0u;
   return static_cast<uint32>(it->second);
-}
+  }
 
 float SpellCastTablesDbc::GetSpellRangeMinYards(uint32 rangeIndex,
                                                 bool friendlyTarget) const {
@@ -311,7 +311,7 @@ float SpellCastTablesDbc::GetSpellRangeMinYards(uint32 rangeIndex,
     return 0.0f;
   SpellRangeRow const &r = it->second;
   return friendlyTarget ? r.friendlyMinYards : r.hostileMinYards;
-}
+  }
 
 float SpellCastTablesDbc::GetSpellRangeMaxYards(uint32 rangeIndex,
                                                 bool friendlyTarget) const {
@@ -322,7 +322,7 @@ float SpellCastTablesDbc::GetSpellRangeMaxYards(uint32 rangeIndex,
     return 0.0f;
   SpellRangeRow const &r = it->second;
   return friendlyTarget ? r.friendlyMaxYards : r.hostileMaxYards;
-}
+  }
 
 void SpellCastTablesDbc::GetCooldownTiming(uint32 cooldownsId, uint32 *categoryRecoveryMs,
                                            uint32 *recoveryMs, uint32 *startRecoveryMs) const {
@@ -343,16 +343,20 @@ void SpellCastTablesDbc::GetCooldownTiming(uint32 cooldownsId, uint32 *categoryR
     *recoveryMs = it->second.recoveryMs;
   if (startRecoveryMs)
     *startRecoveryMs = it->second.startRecoveryMs;
-}
+  }
 
-uint32 SpellCastTablesDbc::GetSpellPowerManaCost(uint32 spellPowerId) const {
+  uint32 SpellCastTablesDbc::ResolveSpellPowerCost(uint32 spellPowerId,
+                                                                                                uint32 spellPowerType, uint8 casterLevel,
+                                                                                                uint8 spellLevel,
+                                                                                                uint32 power1PoolForPercent) const {
   if (spellPowerId == 0u)
     return 0u;
-  auto it = m_spellPowerManaCost.find(spellPowerId);
-  if (it == m_spellPowerManaCost.end())
+    auto it = m_spellPowerById.find(spellPowerId);
+    if (it == m_spellPowerById.end())
     return 0u;
-  return it->second;
-}
+    return Firelands::ResolveSpellPowerCost(it->second, spellPowerType, casterLevel,
+                                                                                    spellLevel, power1PoolForPercent);
+  }
 
 uint32 SpellCastTablesDbc::GetSpellCategoryGroupForCategoriesId(
     uint32 categoriesId) const {
@@ -362,7 +366,7 @@ uint32 SpellCastTablesDbc::GetSpellCategoryGroupForCategoriesId(
   if (it == m_spellCategoryGroupByCategoriesRowId.end())
     return 0u;
   return it->second;
-}
+  }
 
 uint32 SpellCastTablesDbc::GetDurationMs(uint32 durationIndex,
                                          uint8 casterLevel) const {
@@ -378,6 +382,6 @@ uint32 SpellCastTablesDbc::GetDurationMs(uint32 durationIndex,
   if (row.maxMs > 0u && duration > row.maxMs)
     duration = row.maxMs;
   return static_cast<uint32>(duration);
-}
+  }
 
 } // namespace Firelands

@@ -23,7 +23,7 @@ void WorldSession::CancelPendingClientSpellCast() {
   _pendingCastId = 0;
   _pendingSpellId = 0;
   StopMeleeAutoAttack(true);
-}
+  }
 
 void WorldSession::ScheduleDeferredSpellCastCompletion(SpellCastOutcome const &out) {
   (void)_pendingSpellCastTimer.cancel();
@@ -75,7 +75,7 @@ void WorldSession::ScheduleDeferredSpellCastCompletion(SpellCastOutcome const &o
                         if (!ec)
                           CompleteDeferredSpellCast(finish);
                       });
-}
+  }
 
 void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finish) {
   if (_playerGuid != finish.casterGuid || finish.casterGuid == 0 || _mapId != finish.mapId)
@@ -99,11 +99,20 @@ void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finis
                               finish.targetFlags, finish.targetUnitGuid, missilePtr);
 
   if (auto map = WorldService::Instance().GetMap(finish.mapId)) {
+    if (finish.power1Delta != 0) {
+      if (ApplyPlayerSpellPowerCostOnMap(finish.mapId, map, finish.casterGuid, finish.power1Delta)) {
+        if (auto pl = map->TryGetPlayer(finish.casterGuid))
+          _loginPower1 = pl->GetLivePower1();
+      }
+      BroadcastPlayerPower1OnMap(finish.mapId, map, finish.casterGuid,
+                                 DefaultCasterPrimaryPowerType(_playerClass));
+    }
+
     SpellCastOutcome combat{};
     combat.hasDirectHealthEffect = finish.hasDirectHealthEffect;
     combat.directHealthTargetGuid = finish.directHealthTargetGuid;
     combat.directHealthDelta = finish.directHealthDelta;
-    combat.power1Delta = finish.power1Delta;
+        combat.power1Delta = 0;
     combat.hasAuraApply = finish.hasAuraApply;
     combat.auraTargetGuid = finish.auraTargetGuid;
     combat.auraCasterGuid = finish.auraCasterGuid;
@@ -130,13 +139,13 @@ void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finis
       _spellCategoryCooldownUntil[finish.spellCategoryCooldownGroup] =
           nowGo + std::chrono::milliseconds(static_cast<int64_t>(
               finish.spellCategoryCooldownDurationMs));
-    }
+  }
     CommitSpellRecoveryCooldownFromDeferred(finish.spellId, finish.spellCooldownDurationMs,
                                             nowGo);
-  } else {
+    } else {
     SendPacket(spellGo);
   }
-}
+  }
 
 void WorldSession::ScheduleSpellImpactVisual(std::shared_ptr<Map> map, uint64 casterGuid,
                                              uint32 spellId, uint64 hitTargetGuid,
@@ -165,9 +174,9 @@ void WorldSession::ScheduleSpellImpactVisual(std::shared_ptr<Map> map, uint64 ca
                             boost::asio::redirect_error(Asio::use_awaitable, ec));
                         if (ec)
                           co_return;
-                        sendImpact();
+    sendImpact();
                       });
-}
+  }
 
 void WorldSession::HandleCastSpell(WorldPacket &packet) {
   if (_playerGuid == 0)
@@ -216,11 +225,11 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       float ty = 0.f;
       float tz = 0.f;
       if (map->TryGetObjectWorldPosition(c.unitTargetGuid, tx, ty, tz)) {
-        req.hasTargetWorldPosition = true;
+      req.hasTargetWorldPosition = true;
         req.targetX = tx;
         req.targetY = ty;
         req.targetZ = tz;
-      }
+  }
       if (auto casterPl = map->TryGetPlayer(_playerGuid)) {
         if (auto targetPl = map->TryGetPlayer(c.unitTargetGuid)) {
           bool sameTeam = false;
@@ -228,10 +237,10 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
                                              &sameTeam)) {
             req.hasTargetFactionReactionHint = true;
             req.targetIsFriendlyTeamForSpellRange = sameTeam;
-          }
-        }
-      }
-    }
+  }
+  }
+  }
+  }
   }
 
   std::shared_ptr<IMapCollisionQueries> collisionHeld =
@@ -241,12 +250,19 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
 
   req.spellCooldownUntilBySpellId = &_spellCooldownUntil;
   req.spellCategoryCooldownUntilByGroup = &_spellCategoryCooldownUntil;
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
-    if (auto casterPl = map->TryGetPlayer(_playerGuid)) {
+    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+      if (auto casterPl = map->TryGetPlayer(_playerGuid)) {
       req.hasCasterPowerSnapshot = true;
       req.casterPower1 = casterPl->GetLivePower1();
       req.casterMaxPower1 = casterPl->GetLiveMaxPower1();
-    }
+            req.casterBasePower1 = casterPl->GetLiveBasePower1();
+  }
+  }
+    if (!req.hasCasterPowerSnapshot && _loginMaxPower1 > 0u) {
+      req.hasCasterPowerSnapshot = true;
+        req.casterPower1 = _loginPower1;
+        req.casterMaxPower1 = _loginMaxPower1;
+        req.casterBasePower1 = _loginMaxPower1;
   }
 
   SpellCastOutcome out;
@@ -259,10 +275,19 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   case SpellCastOutcome::Kind::SpellStartAndGo:
     if (auto map = WorldService::Instance().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
+      if (out.power1Delta != 0) {
+        if (ApplyPlayerSpellPowerCostOnMap(_mapId, map, _playerGuid, out.power1Delta)) {
+          if (auto pl = map->TryGetPlayer(_playerGuid))
+            _loginPower1 = pl->GetLivePower1();
+        }
+        BroadcastPlayerPower1OnMap(_mapId, map, _playerGuid, req.casterPrimaryPowerType);
+      }
       map->BroadcastPacketToNearby(_playerGuid, out.spellGo, true);
       ApplySpellCastAuraOnMap(_mapId, map, out, now);
+            SpellCastOutcome combatOnly = out;
+            combatOnly.power1Delta = 0;
       (void)ApplySpellCastOutcomeOnMap(_mapId, map, _playerGuid,
-                                      static_cast<uint32>(c.spellId), out, now);
+                                                                            static_cast<uint32>(c.spellId), combatOnly, now);
       TryAggroCreatureFromSpellDamage(out.directHealthTargetGuid, out.directHealthDelta);
       ScheduleSpellImpactVisual(map, _playerGuid, static_cast<uint32>(c.spellId),
                                 out.primaryHitTargetGuid, out.spellImpactDelayMs);
@@ -271,7 +296,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       SendPacket(out.spellStart);
       SendPacket(out.spellGo);
       CommitSpellCooldownsFromCast(static_cast<uint32>(c.spellId), out, now);
-    }
+  }
     _gcdReady = out.newGcdReady;
     if (out.newGcdReady > now)
       _gcdTriggerSpellId = static_cast<uint32>(c.spellId);
@@ -281,7 +306,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
     } else {
       SendPacket(out.spellStart);
-    }
+  }
     _gcdReady = out.newGcdReady;
     if (out.newGcdReady > now)
       _gcdTriggerSpellId = static_cast<uint32>(c.spellId);
@@ -293,7 +318,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   default:
     return;
   }
-}
+  }
 
 void WorldSession::HandleCancelAura(WorldPacket &packet) {
   if (_playerGuid == 0)
@@ -308,8 +333,8 @@ void WorldSession::HandleCancelAura(WorldPacket &packet) {
   if (_spellDefinitions) {
     if (auto def = _spellDefinitions->GetDefinition(spellId)) {
       if (!def->playerCanCancelAuraByClient())
-        return;
-    }
+    return;
+  }
   }
 
   auto map = WorldService::Instance().GetMap(_mapId);
@@ -318,7 +343,7 @@ void WorldSession::HandleCancelAura(WorldPacket &packet) {
 
   if (!RemovePlayerAuraOnMap(_mapId, map, _playerGuid, spellId, _playerLevel))
     (void)RemoveAuraOnMapBySpellId(_mapId, map, spellId, _playerGuid);
-}
+  }
 
 void WorldSession::HandleCancelCast(WorldPacket &packet) {
   if (_playerGuid == 0)
@@ -347,6 +372,6 @@ void WorldSession::HandleCancelCast(WorldPacket &packet) {
       static_cast<int32>(spellId != 0 ? spellId : pendingSpellId),
       SpellCastWire::SPELL_FAILED_INTERRUPTED);
   SendPacket(fail);
-}
+  }
 
 } // namespace Firelands

@@ -1186,7 +1186,7 @@ bool MySqlCharacterRepository::UpdateCharacterMoney(uint32_t accountId,
 bool MySqlCharacterRepository::UpdateCharacterLevel(uint32_t accountId,
                                                     uint32_t characterGuid,
                                                     uint8_t level) {
-  // Only used by GM set-level today: clears XP like Trinity `SetLevel` debug path.
+  // Only used by GM set-level today: clears XP like `SetLevel` debug path.
   try {
     std::shared_ptr<sql::PreparedStatement> st(_connection->prepareStatement(
         "UPDATE characters SET level = ?, xp = 0 WHERE guid = ? AND account = ?"));
