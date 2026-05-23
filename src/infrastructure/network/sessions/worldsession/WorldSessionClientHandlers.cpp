@@ -190,11 +190,8 @@ void WorldSession::HandleCalendarGetNumPending(WorldPacket & /*packet*/) {
 void WorldSession::HandleZoneUpdate(WorldPacket &packet) {
   WorldPackets::Client::ZoneUpdateRequest z{};
   WorldPackets::Client::ZoneUpdateRequest::Read(packet, z);
-  if (z.newZoneId != 0 && z.newZoneId != _zoneId) {
-    _zoneId = z.newZoneId;
-    if (_playerGuid != 0)
-      RefreshPlayerPhaseVisibilityFromAuras();
-  }
+  if (z.newAreaId != 0)
+    SetSessionAreaId(z.newAreaId);
 }
 
 void WorldSession::HandleGuildBankRemainingWithdrawMoneyQuery(WorldPacket & /*packet*/) {
@@ -473,7 +470,7 @@ bool WorldSession::GmNpcSearchPrintResults(std::string const &nameQuery) {
   }
 
   uint32_t idx = 0;
-  for (NpcTemplateSearchRow const &row : rows) {
+  for (NpcTemplate const &row : rows) {
     ++idx;
     std::string line = "|cff7EB87C";
     line += std::to_string(idx);
@@ -517,7 +514,7 @@ void WorldSession::HandleGossipHello(WorldPacket &packet) {
 
   _gossipMenuSent = false;
 
-  if (auto host = WorldService::Instance().GetScriptHost())
+  if (auto host = runtime().GetScriptHost())
     host->FireGossipHello(npcGuid);
 
   if (!_gossipMenuSent && TryOpenQuestGiverDialog(npcGuid))
@@ -567,7 +564,10 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
   if (TryHandleGmTicketGossipSelect(npcGuid, menuId, listId, code))
     return;
 
-  if (auto host = WorldService::Instance().GetScriptHost())
+  if (TryHandleGmNpcInfoGossipSelect(npcGuid, menuId, listId, code))
+    return;
+
+  if (auto host = runtime().GetScriptHost())
     host->FireGossipSelect(npcGuid, menuId, listId);
 
   if (_gossipRepo) {

@@ -22,7 +22,7 @@ std::string WorldSession::ResolveTextEmoteTargetName(uint64_t targetGuid) const 
 bool WorldSession::IsActivePlayerAlive() const {
   if (_playerGuid == 0)
     return false;
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     if (auto pl = map->TryGetPlayer(_playerGuid))
       return pl->GetLiveHealth() > 0;
 }
@@ -72,7 +72,7 @@ void WorldSession::ApplyUnitNpcEmoteState(uint32_t emoteAnim) {
   WorldPacket updatePkt;
   WorldSessionObjectUpdate::BuildUnitNpcEmoteStateValuesUpdate(
       static_cast<uint16>(_mapId), _playerGuid, emoteAnim, updatePkt);
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(_playerGuid, updatePkt, true);
   else
     SendPacket(updatePkt);
@@ -86,7 +86,7 @@ void WorldSession::BroadcastEmoteAnimation(uint32_t emoteAnim) {
   pkt.Append<uint32>(emoteAnim);
   pkt.Append<uint64>(_playerGuid);
 
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(_playerGuid, pkt, true);
   else
     SendPacket(pkt);
@@ -111,7 +111,7 @@ void WorldSession::BroadcastTextEmote(uint32_t textEmote, uint32_t emoteNum,
   else
     pkt.Append<uint8>(0);
 
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(_playerGuid, pkt, true);
   else
     SendPacket(pkt);

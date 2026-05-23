@@ -13,7 +13,7 @@ class MySqlCreatureSpawnRepository final : public ICreatureSpawnRepository {
 public:
   explicit MySqlCreatureSpawnRepository(std::shared_ptr<sql::Connection> connection);
 
-  std::vector<CreatureSpawnRow> LoadAllSpawns() const override;
+  std::vector<CreatureSpawn> LoadAllSpawns() const override;
 
 private:
   std::shared_ptr<sql::Connection> m_connection;

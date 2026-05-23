@@ -725,7 +725,9 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 maxHealth,
                                                          uint8 level,
                                                          uint32 npcFlags,
-                                                         uint32 factionTemplate) {
+                                                         uint32 factionTemplate,
+                                                         uint32 unitFieldFlags,
+                                                         uint32 unitFieldFlags2) {
   auto const packF = [](float v) {
     uint32 b = 0;
     std::memcpy(&b, &v, sizeof(b));
@@ -763,8 +765,8 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 1)] = 0;
   fields[static_cast<uint16>(UNIT_VIRTUAL_ITEM_SLOT_ID + 2)] = 0;
 
-  fields[UNIT_FIELD_FLAGS] = 0;
-  fields[UNIT_FIELD_FLAGS_2] = 0;
+  fields[UNIT_FIELD_FLAGS] = unitFieldFlags;
+  fields[UNIT_FIELD_FLAGS_2] = unitFieldFlags2;
   fields[UNIT_FIELD_AURASTATE] = 0;
   fields[UNIT_FIELD_BASEATTACKTIME] = 2000;
   fields[static_cast<uint16>(UNIT_FIELD_BASEATTACKTIME + 1)] = 2000;

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Firelands::gm_ticket_ui {
 
@@ -77,5 +78,14 @@ inline std::string TruncateForGossipOption(std::string const &text,
     return text.substr(0, maxLen);
   return text.substr(0, maxLen - 3) + "...";
 }
+
+/// Per-session state for the GM ticket gossip desk (kept out of `WorldSession.h`).
+struct GmTicketUiSession {
+  uint64_t gossipNpcGuid = 0;
+  uint64_t selectedTicketId = 0;
+  uint32_t listPage = 0;
+  enum class ListMode { Queue, Mine } listMode = ListMode::Queue;
+  std::vector<uint64_t> pageTicketIds;
+};
 
 } // namespace Firelands::gm_ticket_ui

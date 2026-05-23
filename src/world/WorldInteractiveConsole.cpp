@@ -47,6 +47,8 @@ public:
 
   bool GmLearnSpell(uint32 /*spellId*/) override { return false; }
 
+  bool GmUnlearnSpell(uint32 /*spellId*/) override { return false; }
+
   bool GmModifyMoneyCopper(int64 /*delta*/) override { return false; }
 
   bool GmAddItem(uint32 /*itemEntry*/, uint32 /*count*/) override { return false; }

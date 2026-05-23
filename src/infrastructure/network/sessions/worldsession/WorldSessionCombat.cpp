@@ -299,7 +299,7 @@ void WorldSession::BeginCreatureReturnToHome(uint64_t creatureGuid,
   if (_creatureReturningHome.find(creatureGuid) != _creatureReturningHome.end())
     return;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -340,7 +340,7 @@ void WorldSession::StopCreatureAggro(uint64_t creatureGuid, bool sendAttackStopP
 
   uint64_t const player = _playerGuid;
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     if (auto creature = map->TryGetCreature(creatureGuid)) {
       int32_t const stopId = static_cast<int32_t>(moveCounter + 1u);
       BroadcastCreatureMonsterStop(map, creature, stopId);
@@ -381,7 +381,7 @@ void WorldSession::StartCreatureAggro(uint64_t creatureGuid) {
 
   _creatureReturningHome.erase(creatureGuid);
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -450,7 +450,7 @@ void WorldSession::StopMeleeAutoAttack(bool sendStopPackets) {
   if (!sendStopPackets || player == 0 || victim == 0)
     return;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -571,7 +571,7 @@ bool WorldSession::TryCastCreatureCombatSpell(std::shared_ptr<Map> const &map,
   req.spellCooldownUntilBySpellId = &runtime.spellCooldownUntil;
 
   if (std::shared_ptr<IMapCollisionQueries> collisionHeld =
-          WorldService::Instance().GetCollisionQueries())
+          this->runtime().GetCollisionQueries())
     req.collisionQueries = collisionHeld.get();
 
   SpellCastOutcome out{};
@@ -603,7 +603,7 @@ void WorldSession::ProcessCreatureCombatMovementTick() {
   if (_playerGuid == 0)
     return;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map) {
     StopAllCreatureCombat(false);
     StopMeleeAutoAttack(false);
@@ -684,7 +684,7 @@ void WorldSession::ProcessMeleeAutoAttackTick() {
   if (_playerGuid == 0 || _meleeVictimGuid == 0 || !_combatService)
     return;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map) {
     StopMeleeAutoAttack(false);
     return;
@@ -810,7 +810,7 @@ void WorldSession::HandleAttackSwing(WorldPacket &packet) {
   if (victimGuid == 0 || victimGuid == _playerGuid)
     return;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 

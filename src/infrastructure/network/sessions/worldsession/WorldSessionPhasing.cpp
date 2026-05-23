@@ -1,7 +1,7 @@
-#include <application/services/WorldService.h>
 #include <application/world/PhaseAreaCatalog.h>
 #include <application/world/PhaseGroupCatalog.h>
 #include <application/world/PlayerPhaseShift.h>
+#include <shared/dbc/AreaTableDbc.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
 #include <domain/world/Player.h>
@@ -25,26 +25,34 @@ bool WorldSession::IsCreatureVisibleToPlayer(Creature const &creature) const {
 }
 
 void WorldSession::RebuildPlayerPhaseShiftFromActiveAuras() {
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map || _playerGuid == 0)
     return;
   auto player = map->TryGetPlayer(_playerGuid);
   if (!player)
     return;
 
-  auto const resolveGroup = [](uint32 groupId) -> std::vector<uint16> {
-    if (auto catalog = WorldService::Instance().GetPhaseGroupCatalog())
-      return catalog->Resolve(groupId);
-    return {};
-  };
+  std::function<std::vector<uint16>(uint32)> const resolveGroup =
+      [this](uint32 groupId) -> std::vector<uint16> {
+        if (auto catalog = runtime().GetPhaseGroupCatalog())
+          return catalog->Resolve(groupId);
+        return {};
+      };
 
   std::vector<uint16> areaPhases;
-  if (auto areaCatalog = WorldService::Instance().GetPhaseAreaCatalog())
-    areaPhases = areaCatalog->ResolveForArea(_zoneId);
+  if (auto areaCatalog = runtime().GetPhaseAreaCatalog()) {
+    std::function<uint32(uint32)> parentOf;
+    if (auto table = runtime().GetAreaTableDbc()) {
+      if (table->IsLoaded()) {
+        parentOf = [table](uint32 area) { return table->GetParentAreaId(area); };
+      }
+    }
+    areaPhases = areaCatalog->ResolveForArea(_areaId, parentOf);
+  }
 
   _playerPhaseShift = BuildPlayerPhaseShift(
       areaPhases, player->GetActiveAuras(),
-      WorldService::Instance().GetSpellDefinitions().get(), resolveGroup);
+      runtime().GetSpellDefinitions().get(), resolveGroup);
   player->SetPhaseShift(_playerPhaseShift);
 }
 
@@ -56,7 +64,7 @@ void WorldSession::SendPlayerPhaseShiftToClient() {
 }
 
 void WorldSession::RefreshNearbyCreaturePhaseVisibility(float x, float y) {
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -101,7 +109,8 @@ void WorldSession::RefreshNearbyCreaturePhaseVisibility(float x, float y) {
       uint32 const npcFlags = ResolveEffectiveNpcFlagsForCreature(*cr);
       auto fields = ws_obj::BuildMinimalNpcUnitCreateFields(
           cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
-          cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlags, cr->GetFactionTemplate());
+          cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlags, cr->GetFactionTemplate(),
+          cr->GetUnitFieldFlags(), cr->GetUnitFieldFlags2());
       batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(), fields);
       ++inBatch;
       if (inBatch >= kMaxPerPacket)

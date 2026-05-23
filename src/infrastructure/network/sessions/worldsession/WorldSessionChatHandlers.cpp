@@ -1,4 +1,4 @@
-#include <application/ports/IMapNotifier.h>
+#include <domain/ports/IMapNotifier.h>
 #include <application/services/WorldService.h>
 #include <domain/models/Chat.h>
 #include <application/ports/ICommandSession.h>
@@ -292,7 +292,7 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
   SendPacket(response);
 
   if (type == CHAT_MSG_SAY || type == CHAT_MSG_YELL || type == CHAT_MSG_EMOTE) {
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, response,
                                    type == CHAT_MSG_EMOTE);
     }

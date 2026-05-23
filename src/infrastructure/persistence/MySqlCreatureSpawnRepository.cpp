@@ -8,8 +8,8 @@ MySqlCreatureSpawnRepository::MySqlCreatureSpawnRepository(
     std::shared_ptr<sql::Connection> connection)
     : m_connection(std::move(connection)) {}
 
-std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() const {
-  std::vector<CreatureSpawnRow> out;
+std::vector<CreatureSpawn> MySqlCreatureSpawnRepository::LoadAllSpawns() const {
+  std::vector<CreatureSpawn> out;
   if (!m_connection)
     return out;
 
@@ -21,11 +21,12 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
         "c.`phaseUseFlags`, c.`PhaseId`, c.`PhaseGroup`, "
         "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4`, "
         "ct.`unit_class`, ct.`minlevel`, ct.`maxlevel`, ct.`faction`, ct.`npcflag`, "
+        "ct.`unit_flags`, ct.`unit_flags2`, ct.`flags_extra`, "
         "ct.`ExperienceModifier` "
         "FROM `creature` c "
         "INNER JOIN `creature_template` ct ON ct.`entry` = c.`id`"));
     while (res->next()) {
-      CreatureSpawnRow row;
+      CreatureSpawn row;
       row.guid = res->getUInt64("guid");
       row.entry = res->getUInt("id");
       row.mapId = res->getUInt("map");
@@ -51,6 +52,12 @@ std::vector<CreatureSpawnRow> MySqlCreatureSpawnRepository::LoadAllSpawns() cons
         row.factionTemplate = res->getUInt("faction");
       if (!res->isNull("npcflag"))
         row.npcFlags = static_cast<uint32>(res->getUInt64("npcflag"));
+      if (!res->isNull("unit_flags"))
+        row.unitFieldFlags = res->getUInt("unit_flags");
+      if (!res->isNull("unit_flags2"))
+        row.unitFieldFlags2 = res->getUInt("unit_flags2");
+      if (!res->isNull("flags_extra"))
+        row.extraFlags = res->getUInt("flags_extra");
       if (!res->isNull("ExperienceModifier"))
         row.experienceModifier = static_cast<float>(res->getDouble("ExperienceModifier"));
       if (row.experienceModifier <= 0.0f)

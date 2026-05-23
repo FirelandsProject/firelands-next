@@ -98,7 +98,7 @@ void WorldSession::CompleteDeferredSpellCast(PendingSpellCastFinish const &finis
                               castFlagsGo, 0, castTimeGo, hitTargets, 1,
                               finish.targetFlags, finish.targetUnitGuid, missilePtr);
 
-  if (auto map = WorldService::Instance().GetMap(finish.mapId)) {
+  if (auto map = runtime().GetMap(finish.mapId)) {
     if (finish.power1Delta != 0) {
       if (ApplyPlayerSpellPowerCostOnMap(finish.mapId, map, finish.casterGuid, finish.power1Delta)) {
         if (auto pl = map->TryGetPlayer(finish.casterGuid))
@@ -220,7 +220,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       req.targetX = pos.x;
       req.targetY = pos.y;
       req.targetZ = pos.z;
-    } else if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    } else if (auto map = runtime().GetMap(_mapId)) {
       float tx = 0.f;
       float ty = 0.f;
       float tz = 0.f;
@@ -244,13 +244,13 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
   }
 
   std::shared_ptr<IMapCollisionQueries> collisionHeld =
-      WorldService::Instance().GetCollisionQueries();
+      runtime().GetCollisionQueries();
   if (collisionHeld)
     req.collisionQueries = collisionHeld.get();
 
   req.spellCooldownUntilBySpellId = &_spellCooldownUntil;
   req.spellCategoryCooldownUntilByGroup = &_spellCategoryCooldownUntil;
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       if (auto casterPl = map->TryGetPlayer(_playerGuid)) {
       req.hasCasterPowerSnapshot = true;
       req.casterPower1 = casterPl->GetLivePower1();
@@ -273,7 +273,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
     SendPacket(out.failurePacket);
     return;
   case SpellCastOutcome::Kind::SpellStartAndGo:
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
       if (out.power1Delta != 0) {
         if (ApplyPlayerSpellPowerCostOnMap(_mapId, map, _playerGuid, out.power1Delta)) {
@@ -302,7 +302,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       _gcdTriggerSpellId = static_cast<uint32>(c.spellId);
     return;
   case SpellCastOutcome::Kind::SpellStartDeferred:
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       map->BroadcastPacketToNearby(_playerGuid, out.spellStart, true);
     } else {
       SendPacket(out.spellStart);
@@ -337,7 +337,7 @@ void WorldSession::HandleCancelAura(WorldPacket &packet) {
   }
   }
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 

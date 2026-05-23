@@ -56,7 +56,7 @@ void WorldSession::FinalizeWorldExit() {
 
   std::optional<uint32_t> liveHealth;
   std::optional<uint32_t> livePower1;
-  if (auto map = WorldService::Instance().GetMap(mapId)) {
+  if (auto map = runtime().GetMap(mapId)) {
     if (auto pl = map->TryGetPlayer(guid)) {
       liveHealth = pl->GetLiveHealth();
       livePower1 = pl->GetLivePower1();
@@ -89,11 +89,11 @@ void WorldSession::FinalizeWorldExit() {
     }
   }
 
-  if (auto host = WorldService::Instance().GetScriptHost()) {
+  if (auto host = runtime().GetScriptHost()) {
     host->FireEvent("player_logout", guid);
   }
 
-  WorldService::Instance().RemovePlayerFromMap(mapId, guid);
+  runtime().RemovePlayerFromMap(mapId, guid);
 
   UnregisterFromOnlineCharacterRegistryIfNeeded();
 
@@ -121,6 +121,7 @@ void WorldSession::FinalizeWorldExit() {
   ResetGmStateForLogout();
   _mapId = 0;
   _zoneId = 0;
+  _areaId = 0;
   _timeSyncNextCounter = 0;
   _position = MovementInfo{};
 }

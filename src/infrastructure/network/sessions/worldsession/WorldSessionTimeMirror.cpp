@@ -110,7 +110,7 @@ void WorldSession::UpdateBreathFromSwimmingState(bool swimming) {
     return;
   }
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     if (auto pl = map->TryGetPlayer(_playerGuid)) {
       if (pl->GetLiveHealth() == 0)
         return;
@@ -143,7 +143,7 @@ void WorldSession::UpdateBreathFromSwimmingState(bool swimming) {
 
   while (_breathMirrorActive && _breathRemainingMs <= 0) {
     _breathRemainingMs += 1000;
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       if (auto pl = map->TryGetPlayer(_playerGuid)) {
         uint8_t level = 1;
         if (auto ch = _charService->GetCharacterByGuid(_playerGuid))

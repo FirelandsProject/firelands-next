@@ -8,9 +8,9 @@ MySqlNpcTemplateSearchRepository::MySqlNpcTemplateSearchRepository(
     std::shared_ptr<sql::Connection> connection)
     : m_connection(std::move(connection)) {}
 
-std::vector<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::SearchNameSubstring(
+std::vector<NpcTemplate> MySqlNpcTemplateSearchRepository::SearchNameSubstring(
     std::string const &sanitizedQuery, uint32_t limit, uint32_t offset) const {
-  std::vector<NpcTemplateSearchRow> out;
+  std::vector<NpcTemplate> out;
   if (!m_connection || sanitizedQuery.empty() || limit == 0)
     return out;
 
@@ -27,7 +27,7 @@ std::vector<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::SearchNameSu
 
     std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
     while (res->next()) {
-      NpcTemplateSearchRow row;
+      NpcTemplate row;
       row.entry = res->getUInt("entry");
       row.name = res->getString("name");
       row.subname = res->getString("subname");
@@ -39,14 +39,15 @@ std::vector<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::SearchNameSu
   return out;
 }
 
-std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEntry(
+std::optional<NpcTemplate> MySqlNpcTemplateSearchRepository::TryGetByEntry(
     uint32_t entry) const {
   if (!m_connection || entry == 0)
     return std::nullopt;
   try {
     std::unique_ptr<sql::PreparedStatement> pstmt(m_connection->prepareStatement(
         "SELECT ct.`entry`, ct.`name`, ct.`subname`, ct.`faction`, "
-        "ct.`gossip_menu_id`, ct.`npcflag`, "
+        "ct.`gossip_menu_id`, ct.`npcflag`, ct.`unit_flags`, ct.`unit_flags2`, "
+        "ct.`flags_extra`, "
         "(SELECT MIN(NULLIF(c.`modelid`, 0)) FROM `creature` c WHERE c.`id` = "
         "ct.`entry`) AS `spawn_modelid`, "
         "ct.`modelid1`, ct.`modelid2`, ct.`modelid3`, ct.`modelid4`, "
@@ -57,7 +58,7 @@ std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEn
     std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
     if (!res->next())
       return std::nullopt;
-    NpcTemplateSearchRow row;
+    NpcTemplate row;
     row.entry = res->getUInt("entry");
     row.name = res->getString("name");
     row.subname = res->getString("subname");
@@ -67,6 +68,12 @@ std::optional<NpcTemplateSearchRow> MySqlNpcTemplateSearchRepository::TryGetByEn
       row.gossipMenuId = res->getUInt("gossip_menu_id");
     if (!res->isNull("npcflag"))
       row.npcFlags = res->getUInt64("npcflag");
+    if (!res->isNull("unit_flags"))
+      row.unitFieldFlags = res->getUInt("unit_flags");
+    if (!res->isNull("unit_flags2"))
+      row.unitFieldFlags2 = res->getUInt("unit_flags2");
+    if (!res->isNull("flags_extra"))
+      row.extraFlags = res->getUInt("flags_extra");
     uint32_t spawnModel = 0;
     if (!res->isNull("spawn_modelid"))
       spawnModel = res->getUInt("spawn_modelid");

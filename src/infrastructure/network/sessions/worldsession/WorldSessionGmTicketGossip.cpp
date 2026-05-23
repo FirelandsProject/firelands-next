@@ -5,6 +5,7 @@
 #include <domain/models/NpcText.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/GmTicketGossipUi.h>
+#include <shared/game/GmGossipDesignTokens.h>
 #include <shared/network/packets/server/GossipPackets.h>
 #include <shared/network/packets/server/NpcTextPackets.h>
 #include <shared/Logger.h>
@@ -17,7 +18,8 @@ namespace Firelands {
 namespace {
 
 using namespace gm_ticket_ui;
-
+using namespace gm_gossip;
+using namespace gm_gossip::color;
 
 std::string StatusLabel(GmTicketStatus status) {
   switch (status) {
@@ -61,7 +63,7 @@ void WorldSession::OpenGmTicketUi() {
     SendNotification("Ticket system is not configured.");
     return;
   }
-  _gmTicketUi = GmTicketUiSession{};
+  _gmTicketUi = std::make_unique<GmTicketUiSession>();
   _gmTicketUi->gossipNpcGuid = _playerGuid;
   SendGmTicketMainMenu();
 }
@@ -74,27 +76,33 @@ bool WorldSession::TryBuildGmTicketNpcText(uint32_t textId, NpcText &out) const 
   out.options[0].probability = 1.f;
 
   if (textId == kNpcTextMain) {
-    out.options[0].text0 =
-        "GM ticket desk. Choose a queue or your assigned tickets.";
+    std::ostringstream body;
+    AppendPageTitle(body, "GM ticket desk");
+    AppendRule(body);
+    body << kMuted << "Choose a queue or your assigned tickets below." << kReset;
+    out.options[0].text0 = body.str();
     out.options[0].text1 = out.options[0].text0;
     return true;
   }
 
   if (textId == kNpcTextList) {
     std::ostringstream body;
+    AppendPageTitle(body, "Ticket list");
+    AppendRule(body);
     if (_gmTicketUi->pageTicketIds.empty()) {
-      body << "No tickets on this page.";
+      body << kMuted << "No tickets on this page." << kReset;
     } else {
-      body << "Select a ticket below.\n";
+      body << kMuted << "Select a ticket below." << kReset << kLine;
       for (uint64_t id : _gmTicketUi->pageTicketIds) {
         if (auto t = _gmTicketService->GetById(id)) {
-          body << "#" << t->id << " — "
-               << CharacterDisplayName(*_charService, t->characterGuid) << " ("
-               << StatusLabel(t->status) << ")\n";
+          body << kAccent << "#" << t->id << kReset << " " << kChevron << " " << kReset
+               << kValue << CharacterDisplayName(*_charService, t->characterGuid) << kReset
+               << " " << kSubname << "(" << StatusLabel(t->status) << ")" << kReset
+               << kLine;
         }
       }
     }
-    out.options[0].text0 = body.str();
+    out.options[0].text0 = TruncateBody(body.str());
     out.options[0].text1 = out.options[0].text0;
     return true;
   }
@@ -105,22 +113,28 @@ bool WorldSession::TryBuildGmTicketNpcText(uint32_t textId, NpcText &out) const 
       ticketId = *fromText;
     auto const t = _gmTicketService->GetById(ticketId);
     if (!t) {
-      out.options[0].text0 = "Ticket no longer available.";
+      std::ostringstream body;
+      body << kWarning << "Ticket no longer available." << kReset;
+      out.options[0].text0 = body.str();
       out.options[0].text1 = out.options[0].text0;
       return true;
     }
     std::ostringstream body;
-    body << "Ticket #" << t->id << "\n";
-    body << "Character: "
-         << CharacterDisplayName(*_charService, t->characterGuid) << "\n";
-    body << "Status: " << StatusLabel(t->status) << "\n";
-    body << "Map: " << t->mapId << " (" << t->posX << ", " << t->posY << ", "
-         << t->posZ << ")\n\n";
-    body << "Message:\n"
-         << TruncateForGossipOption(t->message, 512) << "\n";
-    if (!t->gmResponse.empty())
-      body << "\nYour reply:\n" << TruncateForGossipOption(t->gmResponse, 256);
-    out.options[0].text0 = TruncateForGossipOption(body.str(), 900);
+    AppendPageTitle(body, "Ticket #" + std::to_string(t->id));
+    AppendRule(body);
+    AppendLabelValue(body, "Character",
+                     CharacterDisplayName(*_charService, t->characterGuid));
+    AppendLabelValue(body, "Status", StatusLabel(t->status));
+    AppendLabelValue(body, "Map",
+                     std::to_string(t->mapId) + " (" + std::to_string(t->posX) + ", " +
+                         std::to_string(t->posY) + ", " + std::to_string(t->posZ) + ")");
+    AppendSectionHeader(body, "Player message");
+    body << kValue << TruncateForGossipOption(t->message, 512) << kReset;
+    if (!t->gmResponse.empty()) {
+      AppendSectionHeader(body, "Your reply");
+      body << kValue << TruncateForGossipOption(t->gmResponse, 256) << kReset;
+    }
+    out.options[0].text0 = TruncateBody(body.str());
     out.options[0].text1 = out.options[0].text0;
     return true;
   }
@@ -246,7 +260,7 @@ bool WorldSession::TryHandleGmTicketGossipSelect(uint64_t npcGuid, uint32_t menu
       SendGmTicketListMenu();
       return true;
     case MainClose:
-      _gmTicketUi = std::nullopt;
+      _gmTicketUi.reset();
       SendGossipComplete();
       return true;
     default:

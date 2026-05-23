@@ -309,16 +309,22 @@ private:
           // SQL string escapes: '' and "" inside quoted literals must not end the
           // string (otherwise migrations like DEFAULT ''0'' split incorrectly).
           if (c == '\'' && i + 1 < sql.length() && sql[i + 1] == '\'') {
-            ++i;
+            current += c;
+            current += sql[i + 1];
+            i += 2;
             continue;
           }
           if (c == '"' && i + 1 < sql.length() && sql[i + 1] == '"') {
-            ++i;
+            current += c;
+            current += sql[i + 1];
+            i += 2;
             continue;
           }
           // Backtick-delimited identifiers: `` → one `
           if (c == '`' && i + 1 < sql.length() && sql[i + 1] == '`') {
-            ++i;
+            current += c;
+            current += sql[i + 1];
+            i += 2;
             continue;
           }
           inString = false;

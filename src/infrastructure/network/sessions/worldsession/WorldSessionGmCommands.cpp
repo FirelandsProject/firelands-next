@@ -1,7 +1,8 @@
 #include <application/logic/CreatureSpawnLogic.h>
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/PlayerCreateInfoService.h>
-#include <application/services/WorldService.h>
+#include <application/gm/GmPlayerRevive.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
@@ -47,10 +48,12 @@ void SendGmCreatureCreateVisibility(WorldSession &session, uint32 mapId,
                                     uint32 entry, uint32 displayId, uint32 hp,
                                     uint32 maxHp, uint8 level, uint32 npcFlags = 0,
                                     uint32 factionTemplate =
-                                        Creature::kDefaultFactionTemplate) {
+                                        Creature::kDefaultFactionTemplate,
+                                    uint32 unitFieldFlags = 0,
+                                    uint32 unitFieldFlags2 = 0) {
   auto fields = WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
       creatureGuid, entry, displayId, hp, maxHp, level, npcFlags,
-      factionTemplate);
+      factionTemplate, unitFieldFlags, unitFieldFlags2);
   UpdateData update(static_cast<uint16>(mapId));
   update.AddCreateObject(creatureGuid, TYPEID_UNIT, move, fields);
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
@@ -58,7 +61,7 @@ void SendGmCreatureCreateVisibility(WorldSession &session, uint32 mapId,
   // Always notify the spawner (login uses the same pattern; creature-centered
   // BroadcastPacketToNearby can miss the initiating session).
   session.SendPacket(pkt);
-  if (auto map = WorldService::Instance().GetMap(mapId))
+  if (auto map = session.runtime().GetMap(mapId))
     map->BroadcastPacketToNearby(session.GetGuid(), pkt, false);
 }
 
@@ -69,7 +72,7 @@ void SendGmCreatureDespawnVisibility(WorldSession &session, uint32 mapId,
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   session.SendPacket(pkt);
-  if (auto map = WorldService::Instance().GetMap(mapId))
+  if (auto map = session.runtime().GetMap(mapId))
     map->BroadcastPacketToNearby(session.GetGuid(), pkt, false);
 }
 
@@ -122,6 +125,31 @@ bool WorldSession::GmLearnSpell(uint32 spellId) {
   return true;
 }
 
+bool WorldSession::GmUnlearnSpell(uint32 spellId) {
+  if (_playerGuid == 0 || spellId == 0)
+    return false;
+  if (_knownSpellIds.count(spellId) == 0u) {
+    SendNotification("You do not know spell " + std::to_string(spellId) + ".");
+    return false;
+  }
+  if (IsLanguagePassiveSpell(spellId)) {
+    SendNotification("Cannot unlearn a language passive spell.");
+    return false;
+  }
+  uint32 const lowGuid = static_cast<uint32>(_playerGuid);
+  if (!_charService->RemoveCharacterSpell(lowGuid, spellId)) {
+    SendNotification("Failed to persist spell removal.");
+    return false;
+  }
+  _knownSpellIds.erase(spellId);
+  _knownSpells.erase(
+      std::remove(_knownSpells.begin(), _knownSpells.end(), spellId),
+      _knownSpells.end());
+  SendUnlearnSpells({spellId});
+  SendNotification("Unlearned spell " + std::to_string(spellId) + ".");
+  return true;
+}
+
 bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
                               uint32 factionTemplateOrZeroDefault) {
   if (_playerGuid == 0 || creatureEntry == 0 || displayId == 0)
@@ -130,6 +158,9 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
   uint32 resolvedDisplay = displayId;
   uint32 factionForCreature = factionTemplateOrZeroDefault;
   uint32 npcFlagsForSpawn = 0;
+  uint32 unitFieldFlagsForSpawn = 0;
+  uint32 unitFieldFlags2ForSpawn = 0;
+  uint32 extraFlagsForSpawn = 0;
   if (_npcTemplateSearch) {
     if (auto const tpl = _npcTemplateSearch->TryGetByEntry(creatureEntry)) {
       if (displayId == kGmNpcPlaceholderDisplayId) {
@@ -140,6 +171,9 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
       if (factionForCreature == 0 && tpl->factionTemplate != 0)
         factionForCreature = tpl->factionTemplate;
       npcFlagsForSpawn = static_cast<uint32_t>(tpl->npcFlags);
+      unitFieldFlagsForSpawn = tpl->unitFieldFlags;
+      unitFieldFlags2ForSpawn = tpl->unitFieldFlags2;
+      extraFlagsForSpawn = tpl->extraFlags;
     }
   }
   if (factionForCreature != 0 && _factionTemplateDbc &&
@@ -152,21 +186,23 @@ bool WorldSession::GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
 
   uint64 const guid = AllocateGmSpawnCreatureGuid(creatureEntry);
   constexpr uint32_t kSeedHp = 100u;
-  auto spawned = std::make_shared<Creature>(guid, creatureEntry, resolvedDisplay, kSeedHp,
-                                            1u, factionForCreature, npcFlagsForSpawn);
+  auto spawned = std::make_shared<Creature>(
+      guid, creatureEntry, resolvedDisplay, kSeedHp, 1u, factionForCreature,
+      npcFlagsForSpawn, unitFieldFlagsForSpawn, unitFieldFlags2ForSpawn,
+      extraFlagsForSpawn);
   spawned->SetPosition(_position);
   spawned->SetCombatStats(BuildCreatureCombatStats(1u, 1u));
-  WorldService::Instance().AddCreatureToMap(_mapId, std::move(spawned));
+  runtime().AddCreatureToMap(_mapId, std::move(spawned));
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   auto cr = map->TryGetCreature(guid);
   if (!cr)
     return false;
 
-  SendGmCreatureCreateVisibility(*this, _mapId, guid, cr->GetPosition(), creatureEntry,
-                                 resolvedDisplay, cr->GetLiveHealth(),
-                                 cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlagsForSpawn,
-                                 cr->GetFactionTemplate());
+  SendGmCreatureCreateVisibility(
+      *this, _mapId, guid, cr->GetPosition(), creatureEntry, resolvedDisplay,
+      cr->GetLiveHealth(), cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlagsForSpawn,
+      cr->GetFactionTemplate(), cr->GetUnitFieldFlags(), cr->GetUnitFieldFlags2());
   SendNotification("Spawned NPC entry=" + std::to_string(creatureEntry) +
                    " display=" + std::to_string(resolvedDisplay) + " guid=" +
                    std::to_string(guid) +
@@ -181,7 +217,7 @@ void WorldSession::PublishUnitFactionTemplateUpdate(uint64 unitGuid,
   WorldPacket pkt;
   WorldSessionObjectUpdate::BuildUnitFactionTemplateValuesUpdate(
       static_cast<uint16>(_mapId), unitGuid, factionTemplate, pkt);
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(unitGuid, pkt, true);
 }
 
@@ -230,7 +266,7 @@ bool WorldSession::GmSetOwnFactionTemplate(uint32 factionTemplate) {
     SendNotification("factionTemplate id not found in FactionTemplate.dbc.");
     return false;
   }
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return false;
   auto pl = map->TryGetPlayer(_playerGuid);
@@ -257,7 +293,7 @@ bool WorldSession::GmSetSelectedCreatureFactionTemplate(uint32 factionTemplate) 
     SendNotification("factionTemplate id not found in FactionTemplate.dbc.");
     return false;
   }
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return false;
   auto cr = map->TryGetCreature(_clientSelectionGuid);
@@ -278,7 +314,7 @@ bool WorldSession::GmDeleteNpcByObjectGuid(uint64 objectGuid) {
     return false;
   }
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map->TryGetCreature(objectGuid)) {
     SendNotification(
         "That target is not a creature on your current map (guid mismatch?).");
@@ -381,47 +417,56 @@ bool WorldSession::GmRemoveItem(uint32 itemEntry, uint32 count) {
   return true;
 }
 
-bool WorldSession::GmReviveSelf() {
-  if (_playerGuid == 0)
+bool WorldSession::GmRevivePlayer(uint64 playerGuid) {
+  if (_playerGuid == 0 || playerGuid == 0)
     return false;
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return false;
 
-  auto pl = map->TryGetPlayer(_playerGuid);
+  auto pl = map->TryGetPlayer(playerGuid);
   if (!pl)
     return false;
 
-  uint32 const maxHp = pl->GetLiveMaxHealth();
-  uint32 const maxPow = pl->GetLiveMaxPower1();
-  uint32 const hpBefore = pl->GetLiveHealth();
-  uint32 const powBefore = pl->GetLivePower1();
-
-  if (hpBefore < maxHp) {
-    pl->ApplyHealthDelta(static_cast<int32>(maxHp - hpBefore));
-    BroadcastUnitHealthOnMap(_mapId, map, _playerGuid, pl->GetLiveHealth(),
+  GmReviveOutcome const outcome = ApplyGmReviveToPlayer(*pl);
+  if (outcome.healthChanged) {
+    BroadcastUnitHealthOnMap(_mapId, map, playerGuid, pl->GetLiveHealth(),
                              pl->GetLiveMaxHealth());
   }
-
-  if (powBefore < maxPow) {
-    pl->ApplyPower1Delta(static_cast<int32>(maxPow - powBefore));
+  if (outcome.powerChanged) {
     WorldPacket pwUpdate;
-    ws_obj::BuildPlayerPower1ValuesUpdate(static_cast<uint16>(_mapId), _playerGuid,
+    ws_obj::BuildPlayerPower1ValuesUpdate(static_cast<uint16>(_mapId), playerGuid,
                                           pl->GetLivePower1(), pl->GetLiveMaxPower1(),
                                           pwUpdate);
-    map->BroadcastPacketToNearby(_playerGuid, pwUpdate, true);
+    map->BroadcastPacketToNearby(playerGuid, pwUpdate, true);
   }
 
-  if (hpBefore == 0) {
-    SendNotification("Revived.");
-  } else if (hpBefore < maxHp || powBefore < maxPow) {
-    SendNotification("Health and power restored.");
-  } else {
-    SendNotification("Already at full health and power.");
+  switch (outcome.result) {
+  case GmReviveResult::AlreadyFull:
+    if (playerGuid == _playerGuid)
+      SendNotification("Already at full health and power.");
+    else
+      SendNotification("Target player is already at full health and power.");
+    return true;
+  case GmReviveResult::RevivedFromDeath:
+    if (playerGuid == _playerGuid)
+      SendNotification("Revived.");
+    else
+      SendNotification("Revived player guid=" + std::to_string(playerGuid) + ".");
+    return true;
+  case GmReviveResult::Restored:
+    if (playerGuid == _playerGuid)
+      SendNotification("Health and power restored.");
+    else
+      SendNotification("Restored health and power for player guid=" +
+                       std::to_string(playerGuid) + ".");
+    return true;
   }
-  return true;
+  return false;
 }
+
+bool WorldSession::GmReviveSelf() { return GmRevivePlayer(_playerGuid); }
 
 bool WorldSession::GmDamageUnit(uint64 targetGuid, uint32 amount) {
   if (_playerGuid == 0 || targetGuid == 0 || amount == 0)
@@ -432,7 +477,7 @@ bool WorldSession::GmDamageUnit(uint64 targetGuid, uint32 amount) {
     capped = static_cast<uint32>(std::numeric_limits<int32_t>::max());
   int32 const delta = -static_cast<int32>(capped);
 
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return false;
 

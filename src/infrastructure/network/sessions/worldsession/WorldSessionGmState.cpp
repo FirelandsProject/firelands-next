@@ -89,7 +89,7 @@ void WorldSession::PublishGmVisualPatchIfInWorld() {
   update.AddValuesUpdate(_playerGuid, patch);
   WorldPacket pkt;
   update.Build(pkt);
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(_playerGuid, pkt, true);
   else
     SendPacket(pkt);
@@ -107,7 +107,7 @@ void WorldSession::PublishGmMovementPacketsIfInWorld() {
       _gmFlyEnabled ? BuildSmsgMoveSetCanFly(_playerGuid, ++_moveCounterForGmPackets)
                    : BuildSmsgMoveUnsetCanFly(_playerGuid, ++_moveCounterForGmPackets);
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     map->BroadcastPacketToNearby(_playerGuid, run, true);
     map->BroadcastPacketToNearby(_playerGuid, flight, true);
     map->BroadcastPacketToNearby(_playerGuid, fly, true);

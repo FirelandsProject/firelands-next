@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <application/spell/SpellHitEffects.h>
 #include <application/spell/SpellImpactEffects.h>
-#include <application/services/WorldService.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <shared/game/SpellEffectMagnitude.h>
 #include <domain/models/SpellDefinition.h>
 #include <domain/world/Aura.h>
@@ -138,12 +138,12 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
 
   SpellDefinition const *defPtr = nullptr;
   std::optional<SpellDefinition> def;
-  if (auto defs = WorldService::Instance().GetSpellDefinitions()) {
+  if (auto defs = WorldRuntime().GetSpellDefinitions()) {
     def = defs->GetDefinition(outcome.auraSpellId);
     if (def)
       defPtr = &*def;
 }
-  auto const tables = WorldService::Instance().GetSpellCastTables();
+  auto const tables = WorldRuntime().GetSpellCastTables();
   uint32 const durationMs = SpellHitEffects::ResolveAuraDurationMs(
       outcome.auraSpellId, outcome.auraCasterLevel, outcome.auraDurationMs, defPtr,
       tables.get());
@@ -263,7 +263,7 @@ void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const 
                                      uint64 unitGuid, uint8 casterLevel) {
   if (!map || unitGuid == 0)
     return;
-  auto const defs = WorldService::Instance().GetSpellDefinitions();
+  auto const defs = WorldRuntime().GetSpellDefinitions();
   if (!defs)
     return;
   auto target = map->TryGetPlayer(unitGuid);
@@ -336,8 +336,8 @@ void ApplyPassiveAurasForKnownSpellsOnMap(
   if (!map || unitGuid == 0u)
     return;
 
-  auto const defs = WorldService::Instance().GetSpellDefinitions();
-  auto const tables = WorldService::Instance().GetSpellCastTables();
+  auto const defs = WorldRuntime().GetSpellDefinitions();
+  auto const tables = WorldRuntime().GetSpellCastTables();
   if (!defs)
     return;
 
@@ -375,7 +375,7 @@ void SendAuraRemovalOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
     uint8 const level =
         removal.wire.casterLevel > 0 ? removal.wire.casterLevel : 1u;
     BroadcastPlayerAuraStatBonusOnMap(mapId, map, unitGuid, level);
-    if (auto defs = WorldService::Instance().GetSpellDefinitions()) {
+    if (auto defs = WorldRuntime().GetSpellDefinitions()) {
       std::optional<SpellDefinition> def = defs->GetDefinition(removal.spellId);
       if (def)
         MaybeRefreshPlayerPhaseAfterAuraChange(player, &*def);
@@ -482,8 +482,8 @@ void BroadcastSpellImpactVisualOnMap(std::shared_ptr<Map> const &map,
   if (!map || hitTargetGuid == 0 || spellId == 0)
     return;
 
-  auto const defs = WorldService::Instance().GetSpellDefinitions();
-  auto const visualDbc = WorldService::Instance().GetSpellVisualDbc();
+  auto const defs = WorldRuntime().GetSpellDefinitions();
+  auto const visualDbc = WorldRuntime().GetSpellVisualDbc();
   if (!defs || !visualDbc || !visualDbc->IsLoaded())
     return;
 

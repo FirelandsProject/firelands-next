@@ -1,7 +1,7 @@
 #include <infrastructure/world/MapAuraTicker.h>
 
 #include <application/combat/MapCombatDamage.h>
-#include <application/services/WorldService.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
@@ -13,7 +13,7 @@ namespace Firelands {
 namespace {
 
 uint32 SchoolMaskForSpell(uint32 spellId) {
-  auto const defs = WorldService::Instance().GetSpellDefinitions();
+  auto const defs = WorldRuntime().GetSpellDefinitions();
   if (!defs)
     return 0u;
   std::optional<SpellDefinition> def = defs->GetDefinition(spellId);
@@ -59,7 +59,7 @@ void TickMap(uint32 mapId, std::shared_ptr<Map> const &map,
 } // namespace
 
 void TickMapAuras(std::chrono::steady_clock::time_point now) {
-  WorldService::Instance().ForEachMap(
+  WorldRuntime().ForEachMap(
       [&](uint32 mapId, std::shared_ptr<Map> const &map) {
         TickMap(mapId, map, now);
       });

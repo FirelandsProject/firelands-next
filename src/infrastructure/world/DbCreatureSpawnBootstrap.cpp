@@ -2,7 +2,7 @@
 #include <application/world/PhaseGroupCatalog.h>
 #include <shared/game/PhaseShift.h>
 #include <application/logic/CreatureSpawnLogic.h>
-#include <application/services/WorldService.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <domain/repositories/ICreatureClassLevelStatsRepository.h>
 #include <domain/repositories/ICreatureSpawnRepository.h>
 #include <domain/world/Creature.h>
@@ -23,7 +23,7 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
   auto const resolveGroup = [&phaseGroups](uint32 groupId) {
     return phaseGroups.Resolve(groupId);
   };
-  std::vector<CreatureSpawnRow> const rows = spawnRepo.LoadAllSpawns();
+  std::vector<CreatureSpawn> const rows = spawnRepo.LoadAllSpawns();
   if (rows.empty()) {
     LOG_INFO("Database creature spawns: none (or missing creature/creature_template)");
     return 0;
@@ -32,7 +32,7 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
   std::mt19937 rng(std::random_device{}());
   std::size_t count = 0;
   std::size_t zeroDbFactionSpawns = 0;
-  for (CreatureSpawnRow const &row : rows) {
+  for (CreatureSpawn const &row : rows) {
     uint8 const unitClass = NormalizeCreatureUnitClass(row.unitClass);
     uint8 const level =
         PickCreatureLevelInclusive(row.minLevel, row.maxLevel, rng);
@@ -63,6 +63,7 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
     }
     auto spawned = std::make_shared<Creature>(
         objectGuid, row.entry, display, maxHp, level, faction, row.npcFlags,
+        row.unitFieldFlags, row.unitFieldFlags2, row.extraFlags,
         row.experienceModifier);
     spawned->SetPosition(mi);
     spawned->SetCombatStats(BuildCreatureCombatStats(level, unitClass));
@@ -70,7 +71,7 @@ std::size_t LoadDatabaseCreatureSpawns(ICreatureSpawnRepository const &spawnRepo
     InitDbCreaturePhaseShift(spawnPhase, row.phaseUseFlags, row.phaseId, row.phaseGroup,
                              resolveGroup);
     spawned->SetPhaseShift(std::move(spawnPhase));
-    WorldService::Instance().AddCreatureToMap(row.mapId, std::move(spawned));
+    WorldRuntime().AddCreatureToMap(row.mapId, std::move(spawned));
     ++count;
   }
 

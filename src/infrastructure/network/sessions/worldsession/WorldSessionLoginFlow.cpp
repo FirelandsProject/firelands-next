@@ -1,11 +1,12 @@
 #include <application/combat/PlayerCombatStats.h>
-#include <application/ports/IMapNotifier.h>
+#include <domain/ports/IMapNotifier.h>
 #include <shared/game/PlayerPowerType.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
 #include <application/spell/PassiveSpellAuras.h>
 #include <shared/game/StatFormulas.h>
 #include <application/services/PlayerSpellbook.h>
-#include <application/services/WorldService.h>
+#include <application/ports/IGameScriptHost.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <domain/models/Character.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
@@ -46,7 +47,7 @@ std::optional<std::pair<uint32, uint32>> TryLivePlayerHealth(uint32 mapId,
                                                              uint64 guid) {
   if (guid == 0ull)
     return std::nullopt;
-  auto map = WorldService::Instance().GetMap(mapId);
+  auto map = WorldRuntime().GetMap(mapId);
   if (!map)
     return std::nullopt;
   auto pl = map->TryGetPlayer(guid);
@@ -59,7 +60,7 @@ std::optional<std::pair<uint32, uint32>> TryLivePlayerPower1(uint32 mapId,
                                                              uint64 guid) {
   if (guid == 0ull)
     return std::nullopt;
-  auto map = WorldService::Instance().GetMap(mapId);
+  auto map = WorldRuntime().GetMap(mapId);
   if (!map)
     return std::nullopt;
   auto pl = map->TryGetPlayer(guid);
@@ -280,6 +281,7 @@ void WorldSession::LoginResolveMapPosition(uint64 guid, Character const &charact
   // Create in-memory player and add to map BEFORE sending verify-world + worldstates
   _mapId = character.GetMapId();
   _zoneId = character.GetZoneId();
+  _areaId = ResolveSessionAreaId(_zoneId);
   static auto startTime = std::chrono::steady_clock::now();
   auto now = std::chrono::steady_clock::now();
   outMove.time = static_cast<uint32>(
@@ -295,6 +297,7 @@ void WorldSession::LoginResolveMapPosition(uint64 guid, Character const &charact
     if (auto fallback = FallbackStartPosition(character.GetRace())) {
       _mapId = fallback->mapId;
       _zoneId = static_cast<uint16>(std::min<uint32_t>(fallback->zoneId, 0xFFFFu));
+      _areaId = ResolveSessionAreaId(_zoneId);
       outMove.x = fallback->x;
       outMove.y = fallback->y;
       outMove.z = fallback->z;
@@ -344,9 +347,9 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
   player->InitRegenContext(
       static_cast<uint8>(GetDefaultPlayerPowerType(character.GetClass())),
       character.GetPrimaryStat(4), character.GetLevel());
-  WorldService::Instance().AddPlayerToMap(_mapId, player);
+  runtime().AddPlayerToMap(_mapId, player);
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     auto const now = std::chrono::steady_clock::now();
     if (_spellDefinitions) {
       std::vector<uint32_t> const passiveCandidates =
@@ -375,7 +378,7 @@ void WorldSession::TrySendFirstLoginOpeningCinematic(Character const &character)
 }
 
 void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -406,7 +409,8 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
     const uint32_t npcFlags = ResolveEffectiveNpcFlagsForCreature(*cr);
     auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
         cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
-        cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlags, cr->GetFactionTemplate());
+        cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlags, cr->GetFactionTemplate(),
+        cr->GetUnitFieldFlags(), cr->GetUnitFieldFlags2());
     batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
                           npcFields);
     ++inBatch;
@@ -469,7 +473,7 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
   SendQuestGiverStatusMultipleNearby();
 
   // Other logged-in players see this client; this client sees them (same map).
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     map->ForEachPlayer([this, guid, &character, &move, statGt, selfNextXp](
                            std::shared_ptr<Player> const &other) {
       if (!other || other->GetGuid() == guid)
@@ -515,7 +519,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
 
   LOG_DEBUG("Player {} finished world entry (map {})", guid, _mapId);
 
-  if (auto host = WorldService::Instance().GetScriptHost()) {
+  if (auto host = runtime().GetScriptHost()) {
     host->FireEvent("player_login", guid);
 }
 
@@ -547,7 +551,7 @@ void WorldSession::LoginFinalizeWorldEntry(uint64 guid) {
   SendActionBarTogglesUpdate();
 
   // Login create update zeros aura-derived stat/AP fields; re-sync from active auras.
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     if (_playerLevel > 0)
       BroadcastPlayerAuraStatBonusOnMap(_mapId, map, guid, _playerLevel);
 }

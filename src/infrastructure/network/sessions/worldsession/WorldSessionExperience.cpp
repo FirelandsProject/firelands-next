@@ -30,7 +30,7 @@ void WorldSession::MaybeGrantKillExperience(Creature &creature, uint32 hpBefore)
   if (!creature.TryMarkKillExperienceAwarded())
     return;
 
-  ExperienceRates const rates = WorldService::Instance().GetExperienceRates();
+  ExperienceRates const rates = runtime().GetExperienceRates();
   uint32_t const award = ExperienceLogic::CalculateKillExperience(
       _playerLevel, creature.GetLevel(), creature.GetExperienceModifier(), rates);
   if (award == 0)
@@ -120,7 +120,7 @@ void WorldSession::PublishPlayerRestStateUpdate() {
 void WorldSession::OnCreatureKilledByPlayer(uint64 creatureGuid, uint32 hpBefore) {
   if (_playerGuid == 0 || creatureGuid == 0)
     return;
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
   if (auto cr = map->TryGetCreature(creatureGuid))

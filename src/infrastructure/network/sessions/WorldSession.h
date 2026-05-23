@@ -4,11 +4,8 @@
 #include <application/ports/IAuthSession.h>
 #include <application/ports/ICommandService.h>
 #include <application/ports/ICommandSession.h>
-#include <application/ports/IMapNotifier.h>
-#include <application/services/AuthService.h>
-#include <application/services/CharacterService.h>
-#include <application/combat/CombatService.h>
-#include <application/spell/SpellManager.h>
+#include <application/ports/IWorldRuntime.h>
+#include <domain/ports/IMapNotifier.h>
 #include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
@@ -31,10 +28,16 @@
 #include <shared/game/AccessLevel.h>
 #include <shared/game/PhaseShift.h>
 #include <shared/game/PlayerGmAppearance.h>
+#include <domain/models/Character.h>
 #include <domain/models/GossipMenu.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/models/NpcText.h>
 #include <domain/models/GmTicket.h>
+#include <application/combat/CombatService.h>
+#include <application/services/AuthService.h>
+#include <application/services/CharacterService.h>
+#include <application/spell/SpellManager.h>
+#include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
 #include <array>
@@ -48,6 +51,15 @@
 #include <vector>
 
 namespace Firelands {
+
+namespace gm_npc_info_ui {
+struct GmNpcInfoUiSession;
+}
+namespace gm_ticket_ui {
+struct GmTicketUiSession;
+}
+
+class SpellManager;
 
 class UpdateData;
 
@@ -89,15 +101,18 @@ public:
       std::shared_ptr<GmTicketService> gmTicketService,
       std::shared_ptr<ItemDbHotfixStore const> itemDbHotfix,
       std::shared_ptr<SpellManager> spellManager,
-      std::shared_ptr<::application::CombatService> combatService,
+      std::shared_ptr<application::CombatService> combatService,
       std::shared_ptr<INpcTemplateSearchRepository const> npcTemplateSearch,
       std::shared_ptr<FactionTemplateDbc const> factionTemplateDbc,
       std::shared_ptr<IGossipRepository> gossipRepo,
       std::shared_ptr<INpcTextRepository> npcTextRepo,
       std::shared_ptr<IQuestGossipRepository> questGossipRepo,
-      std::shared_ptr<EmotesTextDbc const> emotesTextDbc);
+      std::shared_ptr<EmotesTextDbc const> emotesTextDbc,
+      std::shared_ptr<IWorldRuntime> worldRuntime = {});
 
   ~WorldSession();
+
+  IWorldRuntime &runtime() const { return *_worldRuntime; }
 
   void Start();
 
@@ -132,12 +147,14 @@ public:
   void SetGmRunSpeed(float speed) override;
 
   bool GmLearnSpell(uint32 spellId) override;
+  bool GmUnlearnSpell(uint32 spellId) override;
   bool GmModifyMoneyCopper(int64 deltaCopper) override;
   bool GmAddItem(uint32 itemEntry, uint32 count) override;
   bool GmRemoveItem(uint32 itemEntry, uint32 count) override;
   bool GmSetLevel(uint8 level) override;
   bool GmResetAllCooldowns() override;
   bool GmDamageUnit(uint64 targetGuid, uint32 amount) override;
+  bool GmRevivePlayer(uint64 playerGuid) override;
   bool GmReviveSelf() override;
 
   bool GmSpawnNpc(uint32 creatureEntry, uint32 displayId,
@@ -163,6 +180,7 @@ public:
   void OpenGmTicketUi() override;
 
   bool GmNpcSearchPrintResults(std::string const &nameQuery) override;
+  bool GmNpcPrintTargetInfo() override;
 
   PlayerGmAppearanceForUpdates GetGmAppearanceForPlayerUpdates() const {
     return _gmAppearance;
@@ -185,6 +203,8 @@ public:
 
   /// After phase-related auras apply or expire (spell effects, scripts).
   void RefreshPlayerPhaseVisibilityFromAuras();
+  uint32_t ResolveSessionAreaId(uint32_t clientAreaHint) const;
+  void SetSessionAreaId(uint32_t clientAreaHint);
 
  private:
   void ResetGmStateForLogout();
@@ -396,13 +416,6 @@ public:
   void SendQuestGiverStatusForGuid(uint64_t npcGuid, uint32_t creatureEntry);
   void SendQuestGiverStatusMultipleNearby();
 
-  struct GmTicketUiSession {
-    uint64_t gossipNpcGuid = 0;
-    uint64_t selectedTicketId = 0;
-    uint32_t listPage = 0;
-    enum class ListMode { Queue, Mine } listMode = ListMode::Queue;
-    std::vector<uint64_t> pageTicketIds;
-  };
   void SendGmTicketMainMenu();
   void SendGmTicketListMenu();
   void SendGmTicketDetailMenu();
@@ -410,7 +423,15 @@ public:
   bool TryBuildGmTicketNpcText(uint32_t textId, NpcText &out) const;
   bool TryHandleGmTicketGossipSelect(uint64_t npcGuid, uint32_t menuId,
                                      uint32_t listId, std::string const &code);
-  std::optional<GmTicketUiSession> _gmTicketUi;
+  std::unique_ptr<gm_ticket_ui::GmTicketUiSession> _gmTicketUi;
+
+  bool OpenGmNpcInfoGossip();
+  void SendGmNpcInfoMainMenu();
+  void SendGmNpcInfoSubMenu(uint32_t menuId, uint32_t textId);
+  bool TryBuildGmNpcInfoNpcText(uint32_t textId, NpcText &out) const;
+  bool TryHandleGmNpcInfoGossipSelect(uint64_t npcGuid, uint32_t menuId,
+                                      uint32_t listId, std::string const &code);
+  std::unique_ptr<gm_npc_info_ui::GmNpcInfoUiSession> _gmNpcInfoUi;
 
   // Helpers
     /// schedules the next time-sync ~5s after SendTimeSync; never chains on
@@ -508,13 +529,14 @@ public:
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::shared_ptr<ItemDbHotfixStore const> _itemDbHotfix;
   std::shared_ptr<SpellManager> _spellManager;
-  std::shared_ptr<::application::CombatService> _combatService;
+  std::shared_ptr<application::CombatService> _combatService;
   std::shared_ptr<INpcTemplateSearchRepository const> _npcTemplateSearch;
   std::shared_ptr<FactionTemplateDbc const> _factionTemplateDbc;
   std::shared_ptr<IGossipRepository> _gossipRepo;
   std::shared_ptr<INpcTextRepository> _npcTextRepo;
   std::shared_ptr<IQuestGossipRepository> _questGossipRepo;
   std::shared_ptr<EmotesTextDbc const> _emotesTextDbc;
+  std::shared_ptr<IWorldRuntime> _worldRuntime;
 
   bool IsActivePlayerAlive() const;
   void ApplyUnitNpcEmoteState(uint32_t emoteAnim);
@@ -556,6 +578,8 @@ public:
   std::array<uint32_t, Character::kTutorialMaskInts> _tutorialInts{};
   uint32 _mapId = 0;
   uint32 _zoneId = 0;
+  /// `AreaTable.dbc` id for `phase_area` (`CMSG_ZONEUPDATE` area field / spawn).
+  uint32 _areaId = 0;
   MovementInfo _position;
   uint8 _readBuffer[2048];
   ByteBuffer _inBuffer;

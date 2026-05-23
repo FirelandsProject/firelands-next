@@ -27,7 +27,7 @@ std::optional<uint32_t> WorldSession::TryResolveCreatureTemplateEntry(
     return std::nullopt;
 
   if (_mapId != 0) {
-    if (auto map = WorldService::Instance().GetMap(_mapId)) {
+    if (auto map = runtime().GetMap(_mapId)) {
       if (auto creature = map->TryGetCreature(npcGuid))
         return creature->GetEntry();
     }
@@ -83,9 +83,11 @@ bool WorldSession::TrySendDatabaseGossipMenu(uint64_t npcGuid,
 void WorldSession::SendNpcTextForGossipWindow(uint32_t textId) {
   NpcText payload = NpcText::MakeFallback(textId);
   if (!TryBuildGmTicketNpcText(textId, payload)) {
-    if (_npcTextRepo) {
-      if (auto const loaded = _npcTextRepo->TryGetById(textId))
-        payload = *loaded;
+    if (!TryBuildGmNpcInfoNpcText(textId, payload)) {
+      if (_npcTextRepo) {
+        if (auto const loaded = _npcTextRepo->TryGetById(textId))
+          payload = *loaded;
+      }
     }
   }
   EnsureNpcTextGreeting(payload);
@@ -154,7 +156,7 @@ void WorldSession::SendQuestGiverStatusForGuid(uint64_t npcGuid,
 void WorldSession::SendQuestGiverStatusMultipleNearby() {
   if (!_questGossipRepo)
     return;
-  auto map = WorldService::Instance().GetMap(_mapId);
+  auto map = runtime().GetMap(_mapId);
   if (!map)
     return;
 
@@ -184,7 +186,7 @@ void WorldSession::HandleQuestGiverHello(WorldPacket &packet) {
     return;
 
   _gossipMenuSent = false;
-  if (auto host = WorldService::Instance().GetScriptHost())
+  if (auto host = runtime().GetScriptHost())
     host->FireGossipHello(npcGuid);
 
   if (!_gossipMenuSent && TryOpenQuestGiverDialog(npcGuid))

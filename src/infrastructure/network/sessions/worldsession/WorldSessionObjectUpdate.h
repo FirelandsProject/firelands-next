@@ -1,7 +1,7 @@
 #ifndef FIRELANDS_INFRASTRUCTURE_NETWORK_SESSIONS_WORLDSESSION_OBJECT_UPDATE_H
 #define FIRELANDS_INFRASTRUCTURE_NETWORK_SESSIONS_WORLDSESSION_OBJECT_UPDATE_H
 
-#include <application/ports/IMapNotifier.h>
+#include <domain/ports/IMapNotifier.h>
 #include <domain/models/Character.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/world/Creature.h>
@@ -112,8 +112,10 @@ void SendPlayerCreateToNotifier(
 
 /// Minimal `TYPEID_UNIT` field map for NPC creates; `factionTemplate` should match
 /// `creature_template.faction` when that row exists.
-/// \param npcFlags `UNIT_NPC_FLAGS` mask (e.g. gossip bit `0x1`).
+/// \param npcFlags `UNIT_NPC_FLAGS` (`creature_template.npcflag`).
 /// \param factionTemplate `FactionTemplate.dbc` id (`UNIT_FIELD_FACTIONTEMPLATE`).
+/// \param unitFieldFlags `UNIT_FIELD_FLAGS` (`creature_template.unit_flags`).
+/// \param unitFieldFlags2 `UNIT_FIELD_FLAGS_2` (`creature_template.unit_flags2`).
 std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 creatureEntry,
                                                          uint32 displayId,
@@ -122,7 +124,9 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint8 level,
                                                          uint32 npcFlags = 0,
                                                          uint32 factionTemplate =
-                                                             Creature::kDefaultFactionTemplate);
+                                                             Creature::kDefaultFactionTemplate,
+                                                         uint32 unitFieldFlags = 0,
+                                                         uint32 unitFieldFlags2 = 0);
 
                                                              /// `SMSG_CREATURE_QUERY_RESPONSE` (`QueryCreatureResponse::Write`, 4.3.4).
 /// If `nameTitle` is empty, sends entry with high bit set (client shows no template).

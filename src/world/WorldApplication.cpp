@@ -32,10 +32,11 @@
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
-#include <infrastructure/persistence/MySqlPhaseAreaCatalog.h>
-#include <infrastructure/persistence/MySqlPhaseGroupCatalog.h>
+#include <infrastructure/persistence/MySqlPhaseAreaCatalogRepository.h>
+#include <infrastructure/persistence/MySqlPhaseGroupCatalogRepository.h>
 #include <application/world/PhaseAreaCatalog.h>
 #include <application/world/PhaseGroupCatalog.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
 #include <infrastructure/persistence/MySqlGossipRepository.h>
 #include <infrastructure/persistence/MySqlNpcTextRepository.h>
@@ -52,6 +53,7 @@
 #include <shared/Config.h>
 #include <shared/Logger.h>
 #include <shared/system/SystemBeep.h>
+#include <shared/dbc/AreaTableDbc.h>
 #include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/game/SkillLineCategories.h>
 #include <shared/dbc/ItemDbHotfixStore.h>
@@ -272,6 +274,14 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
       script->AttachFactionTemplateDbc(factionTemplateDbc);
     WorldService::Instance().SetFactionTemplateDbc(factionTemplateDbc);
 
+    auto areaTableDbcOwned = std::make_shared<AreaTableDbc>();
+    if (!areaTableDbcOwned->Load(dbcBasePath + "/AreaTable.dbc")) {
+      LOG_WARN("AreaTable.dbc not loaded from {}; phase_area parent walk disabled.",
+               dbcBasePath + "/AreaTable.dbc");
+      areaTableDbcOwned.reset();
+    }
+    WorldService::Instance().SetAreaTableDbc(areaTableDbcOwned);
+
     auto npcTemplateSearchRepo =
         std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
     auto gossipRepo =
@@ -284,11 +294,13 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         std::make_shared<MySqlCreatureClassLevelStatsRepository>(worldConn);
     auto creatureSpawnRepo =
         std::make_shared<MySqlCreatureSpawnRepository>(worldConn);
+    auto phaseGroupRepo = std::make_shared<MySqlPhaseGroupCatalogRepository>(worldConn);
+    auto phaseAreaRepo = std::make_shared<MySqlPhaseAreaCatalogRepository>(worldConn);
     auto phaseGroupCatalogOwned = std::make_shared<PhaseGroupCatalog>();
-    LoadPhaseGroupCatalogFromConnection(*worldConn, *phaseGroupCatalogOwned);
+    phaseGroupCatalogOwned->Load(phaseGroupRepo->LoadPhaseGroups());
     WorldService::Instance().SetPhaseGroupCatalog(phaseGroupCatalogOwned);
     auto phaseAreaCatalogOwned = std::make_shared<PhaseAreaCatalog>();
-    LoadPhaseAreaCatalogFromConnection(*worldConn, *phaseAreaCatalogOwned);
+    phaseAreaCatalogOwned->Load(phaseAreaRepo->LoadAreaPhases());
     WorldService::Instance().SetPhaseAreaCatalog(phaseAreaCatalogOwned);
     LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo,
                                *phaseGroupCatalogOwned, factionTemplateDbc.get());
@@ -307,9 +319,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
           std::make_shared<WorldSession>(
               std::move(socket), authService, charService, commandService,
               accountDataRepo, languagesDbc, spellDefinitions, realmRepo,
-         onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
-         combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo, npcTextRepo,
-              questGossipRepo, emotesTextDbc)
+              onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
+              combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo,
+              npcTextRepo, questGossipRepo, emotesTextDbc, WorldRuntimePtr())
               ->Start();
         };
 

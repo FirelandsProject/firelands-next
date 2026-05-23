@@ -30,7 +30,7 @@ void WorldSession::SyncPlayerMovementHintsIfNeeded(bool inLiquidForBreath) {
       static_cast<uint16>(_mapId), _playerGuid, _position,
       GetGmAppearanceForPlayerUpdates(), pkt);
   SendPacket(pkt);
-  if (auto map = WorldService::Instance().GetMap(_mapId))
+  if (auto map = runtime().GetMap(_mapId))
     map->BroadcastPacketToNearby(_playerGuid, pkt, true);
 }
 
@@ -136,7 +136,7 @@ void WorldSession::HandleMoveTeleportAck(WorldPacket &packet) {
   _position.time = 0;
   _position.fallTime = 0;
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     map->UpdateObjectPosition(_playerGuid, _position);
     WorldPacket nearbyUpdate = BuildSmsgMoveUpdateTeleport(
         _playerGuid, _position.x, _position.y, _position.z, _position.orientation,
@@ -199,7 +199,7 @@ void WorldSession::HandleMovement(WorldPacket &packet) {
     }
     TryClearEmotesOnMovement(op, positionChanged);
 
-    auto map = WorldService::Instance().GetMap(_mapId);
+    auto map = runtime().GetMap(_mapId);
     if (map) {
       if (trustFullPosition)
         map->UpdateObjectPosition(_playerGuid, move);
@@ -235,7 +235,7 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket &packet) {
     return;
   }
 
-  if (auto map = WorldService::Instance().GetMap(_mapId)) {
+  if (auto map = runtime().GetMap(_mapId)) {
     if (move.x != 0.f || move.y != 0.f || move.z != 0.f)
       map->UpdateObjectPosition(_playerGuid, move);
   }

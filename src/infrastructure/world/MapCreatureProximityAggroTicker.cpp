@@ -1,7 +1,7 @@
 #include <infrastructure/world/MapCreatureProximityAggroTicker.h>
 
 #include <application/combat/CreatureProximityAggro.h>
-#include <application/services/WorldService.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
 #include <domain/world/Player.h>
@@ -25,11 +25,11 @@ void TickMapCreatureProximityAggro(std::chrono::steady_clock::time_point now) {
   lastTick = now;
 
   std::shared_ptr<FactionTemplateDbc const> factionTemplates =
-      WorldService::Instance().GetFactionTemplateDbc();
+      WorldRuntime().GetFactionTemplateDbc();
   if (!factionTemplates || !factionTemplates->IsLoaded())
     return;
 
-  WorldService::Instance().ForEachMap(
+  WorldRuntime().ForEachMap(
       [&](uint32 /*mapId*/, std::shared_ptr<Map> const &map) {
         std::vector<application::ProximityAggroPlayer> players;
         map->ForEachPlayer([&](std::shared_ptr<Player> const &player) {

@@ -1,6 +1,6 @@
 #include <infrastructure/world/MapPlayerRegenTicker.h>
 
-#include <application/services/WorldService.h>
+#include <application/world/WorldRuntimeAccess.h>
 #include <domain/world/Map.h>
 #include <domain/world/Player.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
@@ -43,7 +43,7 @@ void TickMapPlayerResourceRegen(std::chrono::steady_clock::time_point now) {
           : std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTick);
   lastTick = now;
 
-  WorldService::Instance().ForEachMap(
+  WorldRuntime().ForEachMap(
       [&](uint32 mapId, std::shared_ptr<Map> const &map) {
         map->ForEachPlayer([&](std::shared_ptr<Player> const &player) {
           if (!player || player->GetLiveHealth() == 0)
