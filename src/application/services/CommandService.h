@@ -97,6 +97,8 @@ private:
                     const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleLearn(std::shared_ptr<ICommandSession> session,
                    const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleUnlearn(std::shared_ptr<ICommandSession> session,
+                     const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleMoney(std::shared_ptr<ICommandSession> session,
                     const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleAdditem(std::shared_ptr<ICommandSession> session,

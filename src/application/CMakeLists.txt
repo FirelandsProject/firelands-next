@@ -23,6 +23,8 @@ add_library(FirelandsApplication STATIC
     world/PlayerPhaseShift.cpp
     world/PhaseGroupCatalog.cpp
     world/PhaseAreaCatalog.cpp
+    world/WorldRuntimeAccess.cpp
+    gm/GmPlayerRevive.cpp
 )
 
 target_include_directories(FirelandsApplication PUBLIC

@@ -2,6 +2,7 @@
 
 #include <application/world/PhaseAreaCatalog.h>
 #include <application/world/PhaseGroupCatalog.h>
+#include <shared/dbc/AreaTableDbc.h>
 #include <shared/dbc/FactionTemplateDbc.h>
 #include <shared/dbc/SpellVisualDbc.h>
 
@@ -108,6 +109,16 @@ void WorldService::SetPhaseAreaCatalog(
 std::shared_ptr<PhaseAreaCatalog const> WorldService::GetPhaseAreaCatalog() {
   std::lock_guard<std::mutex> lock(m_auxMutex);
   return m_phaseAreaCatalog;
+}
+
+void WorldService::SetAreaTableDbc(std::shared_ptr<AreaTableDbc const> areaTableDbc) {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  m_areaTableDbc = std::move(areaTableDbc);
+}
+
+std::shared_ptr<AreaTableDbc const> WorldService::GetAreaTableDbc() {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  return m_areaTableDbc;
 }
 
 void WorldService::SetExperienceRates(ExperienceRates rates) {

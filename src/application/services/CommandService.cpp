@@ -84,6 +84,10 @@ public:
     return _subject->GmLearnSpell(spellId);
   }
 
+  bool GmUnlearnSpell(uint32 spellId) override {
+    return _subject->GmUnlearnSpell(spellId);
+  }
+
   bool GmModifyMoneyCopper(int64 deltaCopper) override {
     return _subject->GmModifyMoneyCopper(deltaCopper);
   }
@@ -137,6 +141,12 @@ public:
 
   bool GmNpcSearchPrintResults(std::string const &nameQuery) override {
     return _subject->GmNpcSearchPrintResults(nameQuery);
+  }
+
+  bool GmNpcPrintTargetInfo() override { return _subject->GmNpcPrintTargetInfo(); }
+
+  bool GmRevivePlayer(uint64 playerGuid) override {
+    return _subject->GmRevivePlayer(playerGuid);
   }
 
   uint64_t GetClientSelectionGuid() const override {
@@ -362,6 +372,10 @@ CommandService::CommandService(
       "learn", {[this](auto s, auto a, auto o) { return HandleLearn(s, a, o); },
                 ToMask(Permission::CommandGameplay), CommandAvailability::Both,
                 ConsoleArgLayout::TargetOnlineCharacterFirst});
+  RegisterCommand(
+      "unlearn", {[this](auto s, auto a, auto o) { return HandleUnlearn(s, a, o); },
+                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
+                  ConsoleArgLayout::TargetOnlineCharacterFirst});
   RegisterCommand(
       "money", {[this](auto s, auto a, auto o) { return HandleMoney(s, a, o); },
                ToMask(Permission::CommandGameplay), CommandAvailability::Both,
@@ -722,6 +736,8 @@ Online players
      "|cffFFD200· Gameplay (GM)|r\n"
      "|cffCCCCCC.learn|r |cff888888—|r Learn spell by id.  "
      "|cff666666Console:|r |cffffffff.learn CharName 475|r\n"
+     "|cffCCCCCC.unlearn|r |cff888888—|r Remove spell by id.  "
+     "|cff666666Console:|r |cffffffff.unlearn CharName 475|r\n"
      "|cffCCCCCC.money|r |cff888888—|r Add/remove copper (signed).  "
      "|cff666666Console:|r |cffffffff.money CharName 50000|r\n"
      "|cffCCCCCC.level|r |cff888888—|r Set level 1-85.  "
@@ -730,7 +746,8 @@ Online players
      "|cff666666Console:|r |cffffffff.cd CharName|r\n"
      "|cffCCCCCC.damage|r |cff888888—|r Damage selected unit "
      "|cff666666(in-game only)|r  |cff666666e.g.|r |cffffffff.damage 500|r\n"
-     "|cffCCCCCC.revive|r |cff888888—|r Full health and power "
+     "|cffCCCCCC.revive|r |cff888888—|r Full health/power; revives targeted "
+     "player or self "
      "|cff666666(in-game)|r  |cff666666e.g.|r |cffffffff.revive|r\n"
      "|cffAAAAAAItems:|r |cffCCCCCC.additem|r |cff888888/|r |cffCCCCCC.delitem|r  "
      "|cffAAAAAAsee next block.|r",
@@ -739,11 +756,12 @@ Gameplay  (GM)
 --------------------------------------------------------------------------------
 
   .learn <spellId>              (console: .learn <CharName> <spellId>)
+  .unlearn <spellId>            (console: .unlearn <CharName> <spellId>)
   .money <copper delta>         (console: .money <CharName> <copper>)
   .level <1-85>                 (console: .level <CharName> <level>)
   .cd                          (console: .cd <CharName>)
   .damage <amount>              (in-game only; target a unit first)
-  .revive                      (in-game only; restore self to full health/power)
+  .revive                      (in-game; target player or self to full health/power)
   .additem / .delitem           (see Items below)
 )H6"},
     {HelpChunkAudience::Both, ToMask(Permission::CommandGameplay),
@@ -805,6 +823,8 @@ NPC & server  (console)
 )H9"},
     {HelpChunkAudience::Game, ToMask(Permission::ServerControl),
      "|cffFFD200· NPC & faction|r |cff666666(in-game)|r\n"
+     "|cffCCCCCC.npc info|r |cff888888—|r Colored gossip inspector on target NPC "
+     "|cff666666e.g.|r |cffffffff.npc info|r\n"
      "|cffCCCCCC.npc add|r |cff888888—|r |cff666666e.g.|r |cffffffff.npc add 2575 "
      "[displayId] [factionTemplate]|r\n"
      "|cffCCCCCC.faction forced set|r |cff888888—|r "
@@ -815,6 +835,7 @@ NPC & server  (console)
 NPC & faction  (in-game)
 --------------------------------------------------------------------------------
 
+  .npc info                    (target NPC; opens GM gossip inspector)
   .npc add <entry> [displayId] [factionTemplate]
   .faction forced set <factionDbcId> <0-7> | forced clear <id> | forced clearall
   .faction template self|target <factionTemplate>
@@ -1358,6 +1379,28 @@ bool CommandService::HandleLearn(std::shared_ptr<ICommandSession> session,
   }
 }
 
+bool CommandService::HandleUnlearn(std::shared_ptr<ICommandSession> session,
+                                   const std::vector<std::string> &args,
+                                   PrivilegeOrigin origin) {
+  (void)origin;
+  if (args.empty()) {
+    session->SendNotification(
+        "Usage: .unlearn <spellId>  (world console: .unlearn <CharName> <spellId>)");
+    return false;
+  }
+  try {
+    uint32 const sid = static_cast<uint32>(std::stoul(args[0]));
+    if (!session->GmUnlearnSpell(sid)) {
+      session->SendNotification("Unlearn failed.");
+      return false;
+    }
+    return true;
+  } catch (const std::exception &) {
+    session->SendNotification("Invalid spell id.");
+    return false;
+  }
+}
+
 bool CommandService::HandleMoney(std::shared_ptr<ICommandSession> session,
                                  const std::vector<std::string> &args,
                                  PrivilegeOrigin origin) {
@@ -1499,6 +1542,14 @@ bool CommandService::HandleRevive(std::shared_ptr<ICommandSession> session,
                                   PrivilegeOrigin origin) {
   (void)args;
   (void)origin;
+  uint64_t const targetGuid = session->GetClientSelectionGuid();
+  if (targetGuid != 0) {
+    if (session->GmRevivePlayer(targetGuid))
+      return true;
+    session->SendNotification(
+        "Revive failed: select a player, or clear selection to revive yourself.");
+    return false;
+  }
   if (!session->GmReviveSelf()) {
     session->SendNotification(
         "Revive failed (you must be in world with an active character).");
@@ -1760,8 +1811,8 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
                                PrivilegeOrigin origin) {
   if (args.empty()) {
     session->SendNotification(
-        "Usage: .npc search [nameFragment]  |  .npc add <creatureEntry> [displayId] "
-        "[factionTemplate]  |  .npc del\n"
+        "Usage: .npc search [nameFragment]  |  .npc info  |  .npc add <creatureEntry> "
+        "[displayId] [factionTemplate]  |  .npc del\n"
         "Administrator (access 3) only. `.npc search <fragment>` prints colored matches "
         "to system chat (no gossip).\n"
         "Console: .npc <OnlineChar> search [fragment]  |  same add/del patterns.\n"
@@ -1770,6 +1821,15 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
         " when omitted. Optional factionTemplate: 0 reads `creature_template.faction` for "
         "that entry when the world DB exposes it.");
     return false;
+  }
+
+  if (AsciiEqualsLower(args[0], "info")) {
+    if (!session->GmNpcPrintTargetInfo()) {
+      session->SendNotification(
+          "NPC info failed (select a creature on your map; opens a gossip window).");
+      return false;
+    }
+    return true;
   }
 
   if (AsciiEqualsLower(args[0], "search")) {
@@ -1852,7 +1912,7 @@ bool CommandService::HandleNpc(std::shared_ptr<ICommandSession> session,
     return true;
   }
 
-  session->SendNotification("Unknown .npc subcommand (use search, add, or del).");
+  session->SendNotification("Unknown .npc subcommand (use search, info, add, or del).");
   return false;
 }
 
