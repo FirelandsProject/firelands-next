@@ -17,6 +17,14 @@ constexpr uint32 kSpellAuraModAttackPowerPct = 99u;
 constexpr uint32 kSpellAuraModAttackPower = 124u;
 constexpr uint32 kSpellAuraModRating = 189u;
 constexpr uint32 kSpellAuraModResistance = 22u;
+constexpr uint32 kSpellAuraModDamageDone = 13u;
+constexpr uint32 kSpellAuraModDodgePercent = 49u;
+constexpr uint32 kSpellAuraModDamagePercentDone = 79u;
+constexpr uint32 kSpellAuraModIncreaseHealthPercent = 133u;
+constexpr uint32 kSpellAuraModPowerRegen = 85u;
+constexpr uint32 kSpellAuraModHealthRegenPercent = 88u;
+constexpr uint32 kSpellAuraModPowerRegenPercent = 110u;
+constexpr uint32 kSpellAuraModRegenDuringCombat = 116u;
 constexpr uint32 kSpellAuraModShapeshift = 36u;
 constexpr uint32 kSpellAuraTransform = 56u;
 constexpr uint32 kSpellAuraModIncreaseMountedSpeed = 32u;
@@ -29,6 +37,10 @@ constexpr uint32 kSpellAuraModMountedFlightSpeedAlways = 209u;
 constexpr uint32 kSpellAuraControlVehicle = 236u;
 constexpr uint32 kSpellAuraSetVehicleId = 296u;
 constexpr uint32 kSpellAuraCosmeticMounted = 487u;
+/// `SpellAuraDefines.h` — Cataclysm phase visibility.
+constexpr uint32 kSpellAuraPhase = 261u;
+constexpr uint32 kSpellAuraPhaseGroup = 326u;
+constexpr uint32 kSpellAuraPhaseAlwaysVisible = 327u;
 
 /// `SpellEffect.dbc` effect types — grants a skill line (profession trainers).
 constexpr uint32 kSpellEffectSkill = 118u;

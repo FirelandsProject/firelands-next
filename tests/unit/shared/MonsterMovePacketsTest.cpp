@@ -13,11 +13,20 @@ TEST(MonsterMovePacketsTest, ChasePacketUsesOnMonsterMoveOpcode) {
   EXPECT_GE(pkt.Size(), 40u);
 }
 
-TEST(MonsterMovePacketsTest, StopPacketUsesStopFaceAndZeroPoints) {
-  WorldPacket const pkt =
+TEST(MonsterMovePacketsTest, StopPacketEndsAfterStopFace) {
+  WorldPacket pkt =
       monster_move_wire::BuildMonsterMoveStop(MakeCreatureObjectGuid(1, 1), 1.f, 2.f, 3.f, 9);
   EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_ON_MONSTER_MOVE));
-  EXPECT_GE(pkt.Size(), 24u);
+  pkt.SetReadPos(0);
+  (void)pkt.ReadPackedGuid();
+  (void)pkt.Read<int8_t>();
+  (void)pkt.Read<float>();
+  (void)pkt.Read<float>();
+  (void)pkt.Read<float>();
+  EXPECT_EQ(pkt.Read<int32_t>(), 9);
+  EXPECT_EQ(static_cast<int8_t>(pkt.Read<int8_t>()),
+            static_cast<int8_t>(monster_move_wire::Stop));
+  EXPECT_EQ(pkt.GetReadPos(), pkt.Size());
 }
 
 TEST(MonsterMovePacketsTest, FacingTargetEmbedsRawUint64Guid) {

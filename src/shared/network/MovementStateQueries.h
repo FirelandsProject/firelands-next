@@ -42,6 +42,22 @@ inline bool MovementIsAirborneTier(MovementInfo const &m) {
          MovementHasFlag(m, MOVEMENTFLAG_SPLINE_ELEVATION);
 }
 
+/// `UNIT_FIELD_BYTES_1` anim tier byte (Cataclysm `UnitBytes1_Flags_AnimationTier`).
+inline uint8 MovementAnimTier(MovementInfo const &m) {
+  if (MovementIsSwimming(m))
+    return 1;
+  if (MovementIsAirborneTier(m))
+    return 3;
+  return 0;
+}
+
+/// Breath / swim opcode path can be true before `MOVEMENTFLAG_SWIMMING` is merged.
+inline uint8 MovementAnimTierForLiquid(MovementInfo const &m, bool inLiquidForBreath) {
+  if (inLiquidForBreath)
+    return 1;
+  return MovementAnimTier(m);
+}
+
 inline bool MovementIsFalling(MovementInfo const &m) {
   return MovementHasFlag(m, MOVEMENTFLAG_FALLING) ||
          MovementHasFlag(m, MOVEMENTFLAG_FALLING_FAR);

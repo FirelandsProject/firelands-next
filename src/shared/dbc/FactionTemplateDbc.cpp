@@ -85,4 +85,11 @@ std::optional<FactionTemplateEntry> FactionTemplateDbc::TryGet(uint32_t template
   return it->second;
 }
 
+void FactionTemplateDbc::InjectEntryForTest(uint32_t templateId,
+                                            FactionTemplateEntry entry) {
+  entry.id = templateId;
+  m_byId[templateId] = entry;
+  m_loaded = true;
+}
+
 } // namespace Firelands

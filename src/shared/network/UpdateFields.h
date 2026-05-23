@@ -187,6 +187,11 @@ enum EUnitFields
     UNIT_END                                         = OBJECT_END + 0x008A
 };
 
+/// `UNIT_FIELD_FLAGS_2` value masks (Cataclysm 4.3.4, reference `UnitDefines.h`).
+enum UnitFlags2 : uint32 {
+  UNIT_FLAG2_REGENERATE_POWER = 0x00000800,
+};
+
 enum EPlayerFields
 {
     PLAYER_DUEL_ARBITER                              = UNIT_END + 0x0000, // Size: 2, Type: LONG, Flags: PUBLIC

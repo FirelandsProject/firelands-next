@@ -33,6 +33,9 @@ public:
   /// Empty when not loaded or unknown id.
   std::optional<FactionTemplateEntry> TryGet(uint32_t templateId) const;
 
+  /// Unit tests only: seed a row without loading a `.dbc` file.
+  void InjectEntryForTest(uint32_t templateId, FactionTemplateEntry entry);
+
 private:
   bool m_loaded = false;
   std::unordered_map<uint32_t, FactionTemplateEntry> m_byId;

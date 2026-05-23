@@ -8,10 +8,26 @@ TEST(MovementStateQueries, SwimmingAndWalk) {
   MovementInfo m{};
   EXPECT_FALSE(MovementIsSwimming(m));
   EXPECT_FALSE(MovementPrefersWalkSpeed(m));
+  EXPECT_EQ(MovementAnimTier(m), 0u);
   m.flags = MOVEMENTFLAG_SWIMMING;
   EXPECT_TRUE(MovementIsSwimming(m));
+  EXPECT_EQ(MovementAnimTier(m), 1u);
   m.flags |= MOVEMENTFLAG_WALKING;
   EXPECT_TRUE(MovementPrefersWalkSpeed(m));
+}
+
+TEST(MovementStateQueries, AnimTierPrefersSwimOverFly) {
+  MovementInfo m{};
+  m.flags = MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_FLYING;
+  EXPECT_EQ(MovementAnimTier(m), 1u);
+  m.flags = MOVEMENTFLAG_FLYING;
+  EXPECT_EQ(MovementAnimTier(m), 3u);
+}
+
+TEST(MovementStateQueries, AnimTierForLiquidBeforeSwimFlag) {
+  MovementInfo m{};
+  EXPECT_EQ(MovementAnimTierForLiquid(m, true), 1u);
+  EXPECT_EQ(MovementAnimTierForLiquid(m, false), 0u);
 }
 
 TEST(MovementStateQueries, FlyingMotionUsesMask) {

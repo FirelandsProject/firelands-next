@@ -27,6 +27,10 @@ add_library(FirelandsShared STATIC
     game/ExperienceLogic.cpp
     game/RestExperienceLogic.cpp
     game/SpellPowerResolve.cpp
+    game/UnitCombatStats.cpp
+    game/CombatDamage.cpp
+    game/PlayerResourceRegen.cpp
+    game/PhaseShift.cpp
     game/ActionButton.cpp
     network/MovementWire.cpp
     network/movement/ClientMovementMse.cpp
@@ -35,6 +39,7 @@ add_library(FirelandsShared STATIC
     network/AuraUpdateWire.cpp
     network/SpellCooldownWire.cpp
     network/SpellPeriodicAuraLogWire.cpp
+    network/PhaseShiftWire.cpp
 )
 
 target_include_directories(FirelandsShared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

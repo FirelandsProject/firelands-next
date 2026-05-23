@@ -44,6 +44,8 @@ enum WorldOpcode : uint32 {
   /// Reference: SMSG_UPDATE_ACTION_BUTTONS
   SMSG_ACTION_BUTTONS = 0x38B5,
   SMSG_UPDATE_OBJECT = 0x4715,
+  /// TrinityCore WowPacketParser `V4_3_4_15595/Opcodes.cs` — player/creature phase sync.
+  SMSG_PHASE_SHIFT_CHANGE = 0x70A0,
   /// Reference: WowPacketParser `V4_3_4_15595/Opcodes.cs` (server move acks).
   SMSG_MOVE_SET_RUN_SPEED = 0x3DB5,
   SMSG_MOVE_SET_CAN_FLY = 0x3DA1,
@@ -289,6 +291,10 @@ enum WorldOpcode : uint32 {
   SMSG_GOSSIP_COMPLETE = 0x0806,
   /// WowPacketParser `SMSG_NPC_TEXT_UPDATE` (WowPacketParser: SMSG_QUERY_NPC_TEXT_RESPONSE).
   SMSG_NPC_TEXT_UPDATE = 0x4436,
+
+  /// WowPacketParser `V4_3_4_15595` — open vendor stock after gossip (8-byte unit guid).
+  CMSG_LIST_INVENTORY = 0x2806,
+  SMSG_VENDOR_INVENTORY = 0x7CB0,
 
   /// Reference: WowPacketParser V4_3_4_15595 — quest giver interaction.
   CMSG_QUESTGIVER_HELLO = 0x0D17,

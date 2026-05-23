@@ -101,6 +101,7 @@ inline WorldPacket BuildMonsterMoveToPosition(
 }
 
 /// Stops an in-flight monster spline (ref `MoveSplineInit::Stop`, alive unit).
+/// When `Face` is `Stop`, the client ends the spline block immediately (no flags/time/points).
 inline WorldPacket BuildMonsterMoveStop(uint64_t moverGuid, float posX, float posY,
                                         float posZ, int32_t splineId,
                                         int8_t vehicleExitVoluntary = 0) {
@@ -108,12 +109,8 @@ inline WorldPacket BuildMonsterMoveStop(uint64_t moverGuid, float posX, float po
   pkt.WritePackedGuid(moverGuid);
   pkt.Append<int8_t>(vehicleExitVoluntary);
   AppendPositionXyz(pkt, posX, posY, posZ);
-
   pkt.Append<int32_t>(splineId);
   pkt.Append<int8_t>(static_cast<int8_t>(Stop));
-  pkt.Append<int32_t>(static_cast<int32_t>(Done));
-  pkt.Append<int32_t>(0);
-  pkt.Append<int32_t>(0);
   return pkt;
 }
 
