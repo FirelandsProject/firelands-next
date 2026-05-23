@@ -12,7 +12,7 @@ constexpr uint32 kPassive = 0x00000010u;
 constexpr uint32 kCantCancel = 0x00000020u;
 /// `SPELL_ATTR0_NEGATIVE_SPELL` — harmful / debuff-style classification when effects do not imply polarity.
 constexpr uint32 kNegativeSpell = 0x00000100u;
-/// `SPELL_ATTR0_AURA_IS_DEBUFF` (wowdev / vmangos name) — most harmful auras carry this bit.
+/// `SPELL_ATTR0_AURA_IS_DEBUFF` (wowdev / vname) — most harmful auras carry this bit.
 constexpr uint32 kAuraIsDebuff = 0x04000000u;
 } // namespace SpellAttr0
 

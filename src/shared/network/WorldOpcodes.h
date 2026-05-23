@@ -88,7 +88,7 @@ enum WorldOpcode : uint32 {
   SMSG_GUILD_BANK_MONEY_WITHDRAWN = 0x5DB4,
   /// Reference: OpcodeServer SMSG_QUERY_PLAYER_NAME_RESPONSE
   SMSG_QUERY_PLAYER_NAME_RESPONSE = 0x6E04,
-  /// Trinity Cataclysm `QueryCreatureResponse` (template names / tooltip cache).
+  /// Cataclysm 4.3.4 `QueryCreatureResponse` (template names / tooltip cache).
   SMSG_CREATURE_QUERY_RESPONSE = 0x6024,
   SMSG_QUERY_TIME_RESPONSE = 0x2124,
   SMSG_PLAYED_TIME = 0x6037,
@@ -101,7 +101,7 @@ enum WorldOpcode : uint32 {
   CMSG_PING = 0x444D,
   /// Reference: OpcodeClient CMSG_NAME_QUERY
   CMSG_NAME_QUERY = 0x2224,
-  /// Trinity Cataclysm `QueryCreature` (client asks `creature_template` by entry).
+  /// Cataclysm 4.3.4 `QueryCreature` (client asks `creature_template` by entry).
   CMSG_CREATURE_QUERY = 0x2706,
   CMSG_QUERY_TIME = 0x0A36,
   CMSG_PLAYED_TIME = 0x0804,
@@ -224,7 +224,7 @@ enum WorldOpcode : uint32 {
   SMSG_GM_TICKET_UPDATE_TEXT = 0x6535,
   SMSG_GM_TICKET_STATUS_UPDATE = 0x2C25,
 
-  /// Reference: WowPacketParser V4_3_4_15595 / Trinity `Opcodes.h` (build 15595).
+  /// Reference: WowPacketParser V4_3_4_15595 / `Opcodes.h` (build 15595).
   CMSG_SET_ACTION_BUTTON = 0x6F06,
   /// Client reports a failed `SMSG_UPDATE_OBJECT` (packed GUID); safe to ignore.
   CMSG_OBJECT_UPDATE_FAILED = 0x3808,
@@ -254,15 +254,17 @@ enum WorldOpcode : uint32 {
   CMSG_CANCEL_CAST = 0x0115,
   SMSG_SPELL_START = 0x6415,
   SMSG_SPELL_GO = 0x6E16,
+  /// / WowPacketParser 4.3.4.15595 — `Unit::SetPower` after spell cost (`PackedGuid`, power, amount).
+  SMSG_POWER_UPDATE = 0x4A07,
   /// Cataclysm 4.3.4.15595 — spell damage floaters / combat log (ref `Unit::SendSpellNonMeleeDamageLog`).
   SMSG_SPELLNONMELEEDAMAGELOG = 0x4315,
   /// Reference: WowPacketParser `V4_3_4_15595` — plays `SpellVisualKit` on a unit (impact VFX).
   SMSG_PLAY_SPELL_VISUAL_KIT = 0x55A5,
   SMSG_SPELL_FAILURE = 0x4535,
   SMSG_AURA_UPDATE = 0x4707,
-  /// Trinity Cataclysm — replaces the unit's visible aura list (used on login / resync).
+  /// Cataclysm 4.3.4 — replaces the unit's visible aura list (used on login / resync).
   SMSG_AURA_UPDATE_ALL = 0x6916,
-  /// Trinity Cataclysm `SMSG_PERIODICAURALOG` — HoT/DoT tick combat log.
+  /// Cataclysm 4.3.4 `SMSG_PERIODICAURALOG` — HoT/DoT tick combat log.
   SMSG_PERIODICAURALOG = 0x0416,
   /// WowPacketParser `V4_3_4_15595` — activates client cooldown UI (action bar slots).
   SMSG_COOLDOWN_EVENT = 0x4F26,
@@ -278,12 +280,12 @@ enum WorldOpcode : uint32 {
   /// Reference: Opcodes.h (NPC gossip)
   CMSG_GOSSIP_HELLO = 0x4525,
   CMSG_GOSSIP_SELECT_OPTION = 0x0216,
-  /// Client requests greeting body for `SMSG_GOSSIP_MESSAGE` TextID (TCPP 4.3.4).
+  /// Client requests greeting body for `SMSG_GOSSIP_MESSAGE` TextID (WowPacketParser 4.3.4).
   CMSG_NPC_TEXT_QUERY = 0x4E24,
   /// Reference: OpcodeServer for SMSG_GOSSIP_MESSAGE
   SMSG_GOSSIP_MESSAGE = 0x2035,
   SMSG_GOSSIP_COMPLETE = 0x0806,
-  /// TCPP `SMSG_NPC_TEXT_UPDATE` (WowPacketParser: SMSG_QUERY_NPC_TEXT_RESPONSE).
+  /// WowPacketParser `SMSG_NPC_TEXT_UPDATE` (WowPacketParser: SMSG_QUERY_NPC_TEXT_RESPONSE).
   SMSG_NPC_TEXT_UPDATE = 0x4436,
 
   /// Reference: WowPacketParser V4_3_4_15595 — quest giver interaction.
@@ -318,7 +320,7 @@ enum WorldOpcode : uint32 {
   CMSG_AUTO_EQUIP_ITEM_SLOT = 0x4A17,
   /// Item use / spell-from-item; we only handle equip when `SpellID == 0`.
   CMSG_USE_ITEM = 0x2C06,
-  /// Trinity `WorldPackets::Item::DestroyItem` — discard / destroy from inventory.
+  /// `WorldPackets::Item::DestroyItem` — discard / destroy from inventory.
   CMSG_DESTROY_ITEM = 0x4A27,
   /// Hotfix / DB2 row reply (4.3.4 item tooltips use this after `CMSG_DB_QUERY_BULK`).
   SMSG_DB_REPLY = 0x38A4,

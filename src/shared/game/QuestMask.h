@@ -4,12 +4,12 @@
 
 namespace Firelands {
 
-/// Trinity `Unit::getClassMask()` / `Player::SatisfyQuestClass`.
+/// `Unit::getClassMask()` / `Player::SatisfyQuestClass`.
 inline constexpr uint32_t PlayerClassMask(uint8_t classId) noexcept {
   return classId == 0 ? 0u : (1u << (classId - 1u));
 }
 
-/// Trinity `Unit::getRaceMask()` / `Player::SatisfyQuestRace`.
+/// `Unit::getRaceMask()` / `Player::SatisfyQuestRace`.
 inline constexpr uint32_t PlayerRaceMask(uint8_t raceId) noexcept {
   return raceId == 0 ? 0u : (1u << (raceId - 1u));
 }

@@ -4,7 +4,7 @@
 using namespace Firelands;
 using namespace Firelands::ExperienceLogic;
 
-TEST(ExperienceLogicTest, GrayLevelMatchesTrinityBands) {
+TEST(ExperienceLogicTest, GrayLevelMatchesreferenceBands) {
   EXPECT_EQ(GrayLevelForPlayer(5), 0u);
   EXPECT_EQ(GrayLevelForPlayer(10), 5u);
   EXPECT_EQ(GrayLevelForPlayer(40), 30u);

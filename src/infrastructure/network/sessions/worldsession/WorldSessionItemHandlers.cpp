@@ -18,11 +18,11 @@ bool IsItemDbTableHash(uint32_t tableHash) {
   // file — `ItemDbHotfixStore` matches those after loading from disk.
   return tableHash == 0x50238EC2u || tableHash == 0x6A7C6E76u ||
          tableHash == 0x919BE54Eu;
-}
+  }
 
 void SendDbReplyUseClientDb2(WorldSession &session, uint32_t tableHash,
                              uint32_t recordId) {
-  // Trinity `HandleDBQueryBulk`: negative `RecordID` + empty payload → client uses
+  // `HandleDBQueryBulk`: negative `RecordID` + empty payload → client uses
   // embedded Item.db2 / Item-sparse.db2 (no server hotfix row).
   WorldPacket reply(SMSG_DB_REPLY);
   int32_t const neg = -static_cast<int32_t>(recordId);
@@ -31,7 +31,7 @@ void SendDbReplyUseClientDb2(WorldSession &session, uint32_t tableHash,
   reply.Append<uint32_t>(static_cast<uint32_t>(std::time(nullptr)));
   reply.Append<uint32_t>(0);
   session.SendPacket(reply);
-}
+  }
 
 uint8_t NormalizeBag0ItemSlot(uint8_t bag, uint8_t slot) {
   if (bag != 0 && bag != CLIENT_INVENTORY_SLOT_DEFAULT_BACKPACK)
@@ -42,10 +42,10 @@ uint8_t NormalizeBag0ItemSlot(uint8_t bag, uint8_t slot) {
   if (slot < kPackSlotCount) {
     return static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + slot);
   }
-  return slot;
-}
+    return slot;
+  }
 
-/// Trinity `WorldPackets::Item::InvUpdate` / `ItemPacketsCommon.cpp` operator>>.
+  /// `WorldPackets::Item::InvUpdate` / `ItemPacketsCommon.cpp` operator>>.
 /// Bit prefix then byte pairs (ContainerSlot, Slot) per item.
 /// @return -1 if truncated, else Inv.Items.size() (0..3).
 int ReadItemInvUpdatePrefix(WorldPacket &packet) {
@@ -56,14 +56,14 @@ int ReadItemInvUpdatePrefix(WorldPacket &packet) {
   br.AlignToByteBoundary();
   for (uint32_t i = 0; i < itemCount; ++i) {
     if (packet.Size() - packet.GetReadPos() < 2)
-      return -1;
+    return -1;
     (void)packet.Read<uint8_t>();
     (void)packet.Read<uint8_t>();
   }
   return static_cast<int>(itemCount);
-}
+  }
 
-/// Trinity `WorldPackets::Item::InventoryChangeFailure::Write()` (default branch).
+  /// `WorldPackets::Item::InventoryChangeFailure::Write()` (default branch).
 /// Without this, the 4.3.4 client keeps the item greyed "pending" when equip is rejected.
 void SendInventoryChangeFailure(WorldSession &session, int32_t bagResult) {
   WorldPacket pkt(SMSG_INVENTORY_CHANGE_FAILURE, 48);
@@ -72,9 +72,9 @@ void SendInventoryChangeFailure(WorldSession &session, int32_t bagResult) {
   pkt.AppendPackGUID(0);
   pkt.Append<uint8_t>(0); // ContainerBSlot
   session.SendPacket(pkt);
-}
+  }
 
-// Trinity `InventoryResult` (client inventory error text).
+  // `InventoryResult` (client inventory error text).
 int32_t constexpr kEquipErrItemNotFound = 18;
 
 std::optional<uint8_t> FindBag0SlotByItemLowGuid(Character const &ch,
@@ -88,10 +88,10 @@ std::optional<uint8_t> FindBag0SlotByItemLowGuid(Character const &ch,
   for (size_t p = 0; p < kPackSlotCount; ++p) {
     if (ch.GetPackItemGuidLow(p) == itemLowGuid) {
       return static_cast<uint8_t>(INVENTORY_SLOT_ITEM_START + p);
-    }
   }
-  return std::nullopt;
-}
+  }
+    return std::nullopt;
+  }
 
 } // namespace
 
@@ -118,7 +118,7 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
 
   auto skipMaskByte = [&](uint32_t q, int idx) {
     if (masks[q][idx])
-      (void)packet.Read<uint8_t>();
+    (void)packet.Read<uint8_t>();
   };
 
   std::vector<uint32_t> recordIds;
@@ -133,8 +133,8 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
     skipMaskByte(i, 4);
     if (packet.Size() - packet.GetReadPos() < sizeof(uint32_t)) {
       LOG_WARN("HandleDbQueryBulk: truncated at record {}/{}", i, count);
-      return;
-    }
+    return;
+  }
     recordIds.push_back(packet.Read<uint32_t>());
     skipMaskByte(i, 2);
   }
@@ -149,7 +149,7 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
       LOG_DEBUG("HandleDbQueryBulk: unhandled tableHash=0x{:08X} ({} queries) — no "
                 "SMSG_DB_REPLY (non-item DB2)",
                 tableHash, count);
-    }
+  }
     return;
   }
 
@@ -158,16 +158,16 @@ void WorldSession::HandleDbQueryBulk(WorldPacket &packet) {
       if (auto hotfix = _itemDbHotfix->tryBuildDbReply(tableHash, entry)) {
         SendPacket(*hotfix);
         continue;
-      }
-    }
+  }
+  }
     SendDbReplyUseClientDb2(*this, tableHash, entry);
   }
-}
+  }
 
 void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
-  // Trinity `EQUIP_ERR_CANT_EQUIP_OTHER` — generic failure for minimal SMSG.
+  // `EQUIP_ERR_CANT_EQUIP_OTHER` — generic failure for minimal SMSG.
   int32_t constexpr kEquipErrCantEquipOther = 15;
 
   size_t const payloadStart = packet.GetReadPos();
@@ -189,11 +189,11 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
     packet.SetReadPos(payloadStart);
     invItems = ReadItemInvUpdatePrefix(packet);
     if (invItems >= 0 && (packet.Size() - packet.GetReadPos()) >= 2) {
-      packSlot = packet.Read<uint8_t>();
-      slot = packet.Read<uint8_t>();
-      parsed = true;
+    packSlot = packet.Read<uint8_t>();
+    slot = packet.Read<uint8_t>();
+    parsed = true;
       usedInvUpdatePrefix = true;
-    }
+  }
   }
 
   if (!parsed) {
@@ -232,7 +232,7 @@ void WorldSession::HandleAutoEquipItem(WorldPacket &packet) {
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
-}
+  }
 
 void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
   if (_playerGuid == 0)
@@ -248,7 +248,7 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
   struct ParsedAutoEquipItemSlotPayload {
     bool ok = false;
     bool usedInvPrefix = false;
-    int invItems = -1;
+  int invItems = -1;
     uint64_t itemGuid = 0;
     uint8_t dstSlot = 0;
     size_t consumed = 0;
@@ -260,18 +260,18 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
     if (withInvPrefix) {
       out.invItems = ReadItemInvUpdatePrefix(packet);
       if (out.invItems < 0)
-        return out;
+      return out;
       out.usedInvPrefix = true;
-    }
+  }
     if (packet.Size() - packet.GetReadPos() < 2)
       return out;
     out.itemGuid = packet.ReadPackedGuid();
-    if (packet.Size() - packet.GetReadPos() < 1)
+  if (packet.Size() - packet.GetReadPos() < 1)
       return out;
     out.dstSlot = packet.Read<uint8_t>();
     out.consumed = packet.GetReadPos() - startPos;
     out.ok = true;
-    return out;
+      return out;
   };
 
   size_t const payloadStart = packet.GetReadPos();
@@ -347,13 +347,13 @@ void WorldSession::HandleAutoEquipItemSlot(WorldPacket &packet) {
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
-}
+  }
 
 void WorldSession::HandleDestroyItem(WorldPacket &packet) {
   if (_playerGuid == 0)
     return;
   int32_t constexpr kEquipErrCantEquipOther = 15;
-  // Trinity `WorldPackets::Item::DestroyItem::Read()` — ContainerId, SlotNum, Count.
+  // `WorldPackets::Item::DestroyItem::Read()` — ContainerId, SlotNum, Count.
   if (packet.Size() - packet.GetReadPos() <
       sizeof(uint8_t) * 2 + sizeof(uint32_t)) {
     SendInventoryChangeFailure(*this, kEquipErrCantEquipOther);
@@ -401,7 +401,7 @@ void WorldSession::HandleDestroyItem(WorldPacket &packet) {
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
-}
+  }
 
 void WorldSession::HandleUseItem(WorldPacket &packet) {
   if (_playerGuid == 0)
@@ -441,6 +441,6 @@ void WorldSession::HandleUseItem(WorldPacket &packet) {
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
   update.Build(pkt);
   SendPacket(pkt);
-}
+  }
 
 } // namespace Firelands

@@ -11,7 +11,7 @@ struct AccountDataSlot {
   std::string data;
 };
 
-/// Cataclysm 4.3.4 account data blocks (same layout as Trinity / reference cores).
+/// Cataclysm 4.3.4 account data blocks (same layout as firelands-cata-ref).
 enum AccountDataType : uint8 {
   ACCOUNT_DATA_GLOBAL_CONFIG = 0,
   ACCOUNT_DATA_PER_CHARACTER_CONFIG = 1,

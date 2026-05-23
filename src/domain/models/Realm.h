@@ -19,7 +19,7 @@ public:
   uint8_t GetTimezone() const;
   uint8_t GetAllowedSecurityLevel() const;
   float GetPopulation() const;
-  /// AUTH_REALM_LIST third byte per realm (e.g. Trinity REALM_FLAG_OFFLINE = 2).
+  /// AUTH_REALM_LIST third byte per realm (e.g. REALM_FLAG_OFFLINE = 2).
   uint8_t GetRealmListFlags() const;
 
 private:

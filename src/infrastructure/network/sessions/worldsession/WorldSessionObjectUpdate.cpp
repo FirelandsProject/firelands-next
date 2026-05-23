@@ -798,7 +798,7 @@ void BuildCreatureQueryResponse(
     WorldPacket &out, uint32 creatureEntry,
     std::optional<std::pair<std::string, std::string>> const &nameTitle,
     std::array<uint32, 4> const &creatureDisplayIds) {
-  // Sizes match Trinity `CreatureStats` / `QueryPackets.cpp`.
+  // Sizes match `CreatureStats` / `QueryPackets.cpp`.
   static constexpr uint32 kKillCredits = 2;
   static constexpr uint32 kCreatureModels = 4;
   static constexpr uint32 kCreatureQuestItems = 6;

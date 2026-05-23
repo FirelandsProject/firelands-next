@@ -9,7 +9,7 @@ namespace StatFormulas {
 
 namespace {
 
-/// Trinity `CombatRating` indices used with `gtCombatRatings.dbc`.
+/// `CombatRating` indices used with `gtCombatRatings.dbc`.
 enum CombatRatingIndex : uint8_t {
   kCrDodge = 2,
   kCrParry = 3,
@@ -48,11 +48,11 @@ float DodgeRatingPerPercentFallback(uint8_t level) {
   if (L <= 60u) {
     float const t = (L <= 1u) ? 0.f : static_cast<float>(L - 1) / 59.f;
     return Lerp(10.5f, 27.52f, std::min(1.f, t));
-  }
+}
   if (L <= 80u) {
     float const t = static_cast<float>(L - 60) / 20.f;
     return Lerp(27.52f, 43.944f, std::min(1.f, t));
-  }
+}
   float const t = static_cast<float>(L - 80) / 5.f;
   return Lerp(43.944f, 179.28f, std::min(1.f, t));
 }
@@ -70,11 +70,11 @@ float CombatRatingPerPointFallback(uint8_t crIndex, uint8_t level) {
     return dodge * (128.057f / 179.28f);
   default:
     return dodge;
-  }
+}
 }
 
 float RatingToPercent(uint8_t level, uint32_t rating, uint8_t crIndex,
-                      GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   if (rating == 0u)
     return 0.f;
   float per = 0.f;
@@ -88,8 +88,8 @@ float RatingToPercent(uint8_t level, uint32_t rating, uint8_t crIndex,
 }
 
 constexpr float kDodgeBaseFrac[11] = {
-    0.037580f,  0.036520f,  -0.054500f, -0.005900f, 0.031830f, 0.036640f,
-    0.016750f,  0.034575f,  0.020350f,  0.0f,       0.049510f,
+  0.037580f, 0.036520f, -0.054500f, -0.005900f, 0.031830f, 0.036640f,
+  0.016750f, 0.034575f, 0.020350f, 0.0f, 0.049510f,
 };
 
 constexpr float kCritToDodge[11] = {
@@ -119,7 +119,7 @@ float MeleeCritRatioPerAgi(uint8_t level, uint8_t classId,
     float const r = gt->ChanceToMeleeCrit(classId, level);
     if (r > 0.f)
       return r;
-  }
+}
   return MeleeCritFromAgilityPerPointFallback(level);
 }
 
@@ -137,17 +137,17 @@ float AvoidanceAfterDiminishingReturns(float cap, float k, float nondiminishingP
 
 AvoidanceClassParams AvoidanceParamsForClass(uint8_t classId) {
   static constexpr float kDodgeCap[11] = {
-      65.631440f,  65.631440f,  145.560408f, 145.560408f, 150.375940f, 65.631440f,
+  65.631440f, 65.631440f, 145.560408f, 145.560408f, 150.375940f, 65.631440f,
       145.560408f, 150.375940f, 150.375940f, 145.560408f, 116.890707f,
-  };
+};
   static constexpr float kParryCap[11] = {
-      65.631440f, 65.631440f,  145.560408f, 145.560408f, 0.0f,        65.631440f,
-      145.560408f, 0.0f,        0.0f,        90.6425f,  0.0f,
-  };
+  65.631440f, 65.631440f, 145.560408f, 145.560408f, 0.0f, 65.631440f,
+  145.560408f, 0.0f, 0.0f, 90.6425f, 0.0f,
+};
   static constexpr float kDimK[11] = {
       0.9560f, 0.9560f, 0.9880f, 0.9880f, 0.9830f, 0.9560f,
       0.9880f, 0.9830f, 0.9830f, 0.9830f, 0.9720f,
-  };
+};
   size_t const i = ClassTableIndex(classId);
   return AvoidanceClassParams{kDodgeCap[i], kParryCap[i], kDimK[i]};
 }
@@ -159,7 +159,7 @@ bool ClassHasBaselineParry(uint8_t classId) {
 void ComputeDodgeContributionsFromAgility(uint8_t level, uint8_t classId,
                                           uint32_t agility, float &outDiminishingPct,
                                           float &outNondiminishingPct,
-                                          GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   size_t const i = ClassTableIndex(classId);
   float const dodgeBaseFrac = kDodgeBaseFrac[i];
   float const nondimBase = std::max(0.f, 100.f * dodgeBaseFrac);
@@ -182,7 +182,7 @@ float ParryRatingToPercent(uint8_t level, uint32_t parryRating,
 
 float PhysicalCritPercent(uint8_t level, uint8_t classId, uint32_t agility,
                           uint32_t critMeleeRating,
-                          GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   float const fromAgi =
       static_cast<float>(agility) * MeleeCritRatioPerAgi(level, classId, gt) * 100.f;
   float const fromRating =
@@ -192,7 +192,7 @@ float PhysicalCritPercent(uint8_t level, uint8_t classId, uint32_t agility,
 
 float SpellCritPercent(uint8_t level, uint8_t classId, uint32_t intellect,
                        uint32_t critSpellRating,
-                       GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   size_t const i = ClassTableIndex(classId);
   float base = kSpellCritBaseFrac[i];
   float ratio = SpellCritRatioPerIntellectAtLevelFallback(level);
@@ -201,7 +201,7 @@ float SpellCritPercent(uint8_t level, uint8_t classId, uint32_t intellect,
     float const r = gt->ChanceToSpellCrit(classId, level);
     if (r > 0.f)
       ratio = r;
-  }
+}
   float const fromInt = (base + static_cast<float>(intellect) * ratio) * 100.f;
   float const fromRating =
       RatingToPercent(level, critSpellRating, kCrCritSpell, gt);
@@ -209,22 +209,22 @@ float SpellCritPercent(uint8_t level, uint8_t classId, uint32_t intellect,
 }
 
 float MasteryPercentFromRating(uint8_t level, uint32_t masteryRating,
-                               GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   return RatingToPercent(level, masteryRating, kCrMastery, gt);
 }
 
 float MeleeHitPercentFromRating(uint8_t level, uint32_t hitRating,
-                                GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   return RatingToPercent(level, hitRating, kCrHitMelee, gt);
 }
 
 float SpellHitPercentFromRating(uint8_t level, uint32_t hitRating,
-                                GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   return RatingToPercent(level, hitRating, kCrHitSpell, gt);
 }
 
 float MeleeHastePercentFromRating(uint8_t level, uint32_t hasteRating,
-                                  GtPlayerStatGameTables const *gt) {
+                           GtPlayerStatGameTables const *gt) {
   return RatingToPercent(level, hasteRating, kCrHasteMelee, gt);
 }
 

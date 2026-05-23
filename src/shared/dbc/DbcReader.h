@@ -8,7 +8,7 @@
 
 namespace Firelands {
 
-/// Field start offsets within one record (same rules as FirelandsCore `DBCFileLoader`).
+/// Field start offsets within one record (same rules as Firelands `DBCFileLoader`).
 std::vector<uint32_t> DbcBuildFieldByteOffsets(std::string_view fmt);
 
 class DbcReader {
@@ -25,12 +25,12 @@ public:
   uint8_t ReadUInt8(uint32_t recordIndex, uint32_t fieldIndex,
                     std::vector<uint32_t> const &fieldOffsets) const;
   uint32_t ReadUInt32(uint32_t recordIndex, uint32_t fieldIndex,
-                      std::vector<uint32_t> const &fieldOffsets) const;
+                    std::vector<uint32_t> const &fieldOffsets) const;
   int32_t ReadInt32(uint32_t recordIndex, uint32_t fieldIndex,
                     std::vector<uint32_t> const &fieldOffsets) const;
 
   float ReadFloat(uint32_t recordIndex, uint32_t fieldIndex,
-                  std::vector<uint32_t> const &fieldOffsets) const;
+                    std::vector<uint32_t> const &fieldOffsets) const;
 
   /// First 4 bytes of the record as IEEE754 LE (used for `gt*` game tables where
   /// `fieldCount`/`recordSize` may not match a single `f` fmt column).

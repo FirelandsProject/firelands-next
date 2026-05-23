@@ -5,7 +5,7 @@
 
 namespace Firelands {
 
-/// Bits aligned with Cataclysm 4.3.4 client expectations (Trinity `PlayerFlags`).
+/// Bits aligned with Cataclysm 4.3.4 client expectations (`PlayerFlags`).
 inline constexpr uint32 PLAYER_FLAGS_GM_TAG = 0x00000008;
 inline constexpr uint32 PLAYER_FLAGS_DND = 0x00000004;
 inline constexpr uint32 PLAYER_FLAGS_DEVELOPER = 0x00008000;

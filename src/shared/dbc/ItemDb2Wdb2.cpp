@@ -19,7 +19,7 @@ uint32_t ReadU32Le(std::vector<uint8_t> const &data, size_t offset) {
   uint32_t v = 0;
   std::memcpy(&v, data.data() + offset, sizeof(v));
   return v;
-}
+  }
 
 } // namespace
 
@@ -60,8 +60,8 @@ bool ItemDb2Wdb2::Load(std::string const &path) {
   if (build > 12880) {
     if (raw.size() < pos + 16) {
       LOG_WARN("Item.db2: truncated extended header: {}", path);
-      return false;
-    }
+    return false;
+  }
     minIndex = ReadU32Le(raw, pos);
     pos += 4;
     maxIndex = ReadU32Le(raw, pos);
@@ -76,8 +76,8 @@ bool ItemDb2Wdb2::Load(std::string const &path) {
     uint64_t const skip = span * 4u + span * 2u;
     if (raw.size() < pos + skip) {
       LOG_WARN("Item.db2: truncated index table: {}", path);
-      return false;
-    }
+    return false;
+  }
     pos += static_cast<size_t>(skip);
   }
 
@@ -96,7 +96,7 @@ bool ItemDb2Wdb2::Load(std::string const &path) {
     return false;
   }
 
-  // Trinity `Itemfmt` "niiiiiii": each column is 4 bytes in the on-disk record
+  // `Itemfmt` "niiiiiii": each column is 4 bytes in the on-disk record
   // for Item.db2 (WDB2); DisplayInfoID = field 5, InventoryType = field 6.
   constexpr size_t kOffId = 0;
   constexpr size_t kOffDisplay = 5u * 4u;
@@ -117,7 +117,7 @@ bool ItemDb2Wdb2::Load(std::string const &path) {
 
   LOG_DEBUG("Item.db2: indexed {} item entries from {}", m_byEntry.size(), path);
   return !m_byEntry.empty();
-}
+  }
 
 std::optional<ItemDb2Wdb2::DisplayRow>
 ItemDb2Wdb2::Lookup(uint32_t itemEntry) const {
@@ -125,6 +125,6 @@ ItemDb2Wdb2::Lookup(uint32_t itemEntry) const {
   if (it == m_byEntry.end())
     return std::nullopt;
   return it->second;
-}
+  }
 
 } // namespace Firelands

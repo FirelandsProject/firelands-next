@@ -5,7 +5,7 @@
 
 using namespace Firelands;
 
-TEST(SpellPeriodicAuraLogWireTests, BuildPeriodicHealMatchesTrinityLayout) {
+TEST(SpellPeriodicAuraLogWireTests, BuildPeriodicHealMatchesreferenceLayout) {
   WorldPacket pkt;
   SpellPeriodicAuraLogWire::BuildPeriodicHeal(pkt, 0x50ULL, 0x100ULL, 774u, 42u);
 

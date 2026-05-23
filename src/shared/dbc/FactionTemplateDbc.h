@@ -7,7 +7,7 @@
 
 namespace Firelands {
 
-/// One row of client `FactionTemplate.dbc` (build 15595 / Trinity `FactionTemplateEntryfmt`).
+/// One row of client `FactionTemplate.dbc` (build 15595 / `FactionTemplateEntryfmt`).
 struct FactionTemplateEntry {
   uint32_t id = 0;
   /// Primary `Faction.dbc` id for reputation / forced reactions.

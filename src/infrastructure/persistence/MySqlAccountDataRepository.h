@@ -12,7 +12,7 @@ namespace Firelands {
 
 /**
  * Persists WoW client account-data blobs: globals in auth DB, per-character in
- * characters DB (matches Trinity-style split).
+  * characters DB (matches reference split).
  */
 class MySqlAccountDataRepository {
 public:
@@ -26,7 +26,7 @@ public:
   void UpsertGlobal(uint32_t accountId, uint8_t type, uint32_t time,
                     std::string const &data) const;
   void UpsertCharacter(uint32_t characterGuid, uint8_t type, uint32_t time,
-                       std::string const &data) const;
+                    std::string const &data) const;
 
   void DeleteGlobal(uint32_t accountId, uint8_t type) const;
   void DeleteCharacter(uint32_t characterGuid, uint8_t type) const;

@@ -10,7 +10,7 @@ namespace ExperienceLogic {
 
 constexpr uint8_t kMaxPlayerLevelCata = 85;
 
-/// Trinity-style gray level: creatures at or below this level grant no kill XP.
+/// Gray level bands: creatures at or below this level grant no kill XP.
 uint8_t GrayLevelForPlayer(uint8_t playerLevel);
 
 /// Base kill XP before level-diff and rate modifiers (Cataclysm band approximation).

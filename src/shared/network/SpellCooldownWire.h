@@ -7,7 +7,7 @@
 namespace Firelands {
 namespace SpellCooldownWire {
 
-/// `SMSG_SPELL_COOLDOWN` flags (Trinity Cataclysm 4.3.4).
+/// `SMSG_SPELL_COOLDOWN` flags (Cataclysm 4.3.4).
 enum SpellCooldownFlags : uint8 {
   kNone = 0,
   kIncludeGcd = 1,

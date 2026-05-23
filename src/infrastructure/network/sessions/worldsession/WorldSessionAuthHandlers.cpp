@@ -45,7 +45,7 @@ static bool ReadAddonCString(std::vector<uint8> const &buf, size_t &pos,
     return false;
   ++pos; // NUL
   return true;
-}
+  }
 
 /// Parses the wire blob from CMSG_AUTH_SESSION (zlib + addon list). See reference
 /// `WorldSession::ReadAddonsInfo`.
@@ -84,16 +84,16 @@ static void TryPopulateAuthAddonsFromWire(std::vector<uint8> const &wire,
   for (uint32 i = 0; i < addonsCount; ++i) {
     AuthSecureAddonEntry row;
     if (!ReadAddonCString(dec, p, row.name))
-      return;
+    return;
     if (p >= dec.size())
-      return;
+    return;
     row.hasKey = dec[p++] != 0;
     if (p + 8 > dec.size())
-      return;
+    return;
     p += 8; // publicKeyCrc, urlCrc
     out.push_back(std::move(row));
   }
-}
+  }
 
 } // namespace
 
@@ -109,8 +109,8 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
                              loginServerId);
 
   // 2. Addon blob: outer uint32 length, then [uint32 uncompressedLen][zlib...].
-  //    Must parse and later echo one SMSG_ADDON_INFO row per secure addon or the
-  //    client mis-parses the packet and flags Blizzard_* addons as "Banned".
+  // Must parse and later echo one SMSG_ADDON_INFO row per secure addon or the
+  // client mis-parses the packet and flags Blizzard_* addons as "Banned".
   _authSecureAddons.clear();
   uint32 addonWireBytes = 0;
   if (packet.GetReadPos() + 4 <= packet.Size()) {
@@ -120,9 +120,9 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
     if (packet.GetReadPos() + addonWireBytes > packet.Size()) {
       LOG_ERROR("CMSG_AUTH_SESSION: addon blob truncated ({} bytes).",
                 addonWireBytes);
-      Close();
-      return;
-    }
+    Close();
+    return;
+  }
     std::vector<uint8> wire(addonWireBytes);
     packet.Read(wire.data(), addonWireBytes);
     TryPopulateAuthAddonsFromWire(wire, _authSecureAddons);
@@ -175,7 +175,7 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
     LOG_ERROR("CMSG_AUTH_SESSION: Digest validation failed for account '{}'!",
               account);
     LOG_DEBUG("Calculated: {}", Crypto::ToHexString(calculatedDigest));
-    LOG_DEBUG("Received:   {}", Crypto::ToHexString(digest, 20));
+  LOG_DEBUG("Received: {}", Crypto::ToHexString(digest, 20));
     Close();
     return;
   }
@@ -188,26 +188,26 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
         LOG_WARN("CMSG_AUTH_SESSION: account '{}' denied for realm {} (needs "
                  "access_level >= {}).",
                  account, realmId, static_cast<int>(*gate));
-        Close();
-        return;
-      }
-    }
+    Close();
+    return;
+  }
+  }
   }
 
   _accountId = accountOpt->id;
   _accountAccessLevel = accountOpt->accessLevel;
   LOG_DEBUG("CMSG_AUTH_SESSION: Digest validated successfully for account '{}'.",
-            account);
+              account);
 
   ReloadGlobalAccountDataFromDb();
 
   SendAuthResponse();
   SendAddonInfo();
   // Reference parity: after auth success, send cache version and tutorial flags.
-  // FirelandsCore does: SendAddonsInfo(); SendClientCacheVersion(...); SendTutorialsData();
+  // Firelands does: SendAddonsInfo(); SendClientCacheVersion(...); SendTutorialsData();
   SendClientCacheVersion(0);
   SendTutorialFlagsUnauthenticated();
-}
+  }
 
 void WorldSession::HandleAuthSessionScattered(
     WorldPacket &packet, uint8 *digest, std::vector<uint8> &localChallenge,
@@ -253,7 +253,7 @@ void WorldSession::HandleAuthSessionScattered(
 
   digest[14] = packet.Read<uint8>();
   digest[13] = packet.Read<uint8>();
-}
+  }
 
 void WorldSession::HandleAuthSessionStandard(WorldPacket &packet, uint16 &build,
                                              uint8 *digest,
@@ -269,25 +269,25 @@ void WorldSession::HandleAuthSessionStandard(WorldPacket &packet, uint16 &build,
   packet.Read<uint32>(); // Unk
 
   packet.Read(digest, 20);
-}
+  }
 
 void WorldSession::SendAuthResponse() {
   WorldPacket response(SMSG_AUTH_RESPONSE);
   BitWriter bw(response);
   bw.WriteBit(false); // hasWaitInfo
-  bw.WriteBit(true);  // hasSuccessInfo
+  bw.WriteBit(true); // hasSuccessInfo
   bw.Flush();
 
   response.Append<uint32>(0); // TimeRemain
-  response.Append<uint8>(3);  // ActiveExpansionLevel (Cata)
+  response.Append<uint8>(3); // ActiveExpansionLevel (Cata)
   response.Append<uint32>(0); // TimeSecondsUntilPCKick
-  response.Append<uint8>(3);  // AccountExpansionLevel (Cata)
+  response.Append<uint8>(3); // AccountExpansionLevel (Cata)
   response.Append<uint32>(0); // TimeRested
-  response.Append<uint8>(0);  // TimeOptions
+  response.Append<uint8>(0); // TimeOptions
   response.Append<uint8>(12); // Result (AUTH_OK = 12)
 
   SendPacket(response);
-}
+  }
 
 void WorldSession::SendAddonInfo() {
   // Reference WorldSession::SendAddonsInfo — one block per entry from CMSG_AUTH_SESSION,
@@ -307,13 +307,13 @@ void WorldSession::SendAddonInfo() {
       if (!addonInfo.hasKey)
         data.Append(kAddonPublicKey, sizeof(kAddonPublicKey));
       data.Append<uint32>(0); // revision / toc version
-    }
+  }
     data.Append<uint8>(0); // UrlProvided
   }
 
   data.Append<uint32>(0); // bannedAddonCount
 
   SendPacket(data);
-}
+  }
 
 } // namespace Firelands

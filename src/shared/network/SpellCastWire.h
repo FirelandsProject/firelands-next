@@ -49,7 +49,7 @@ enum SpellFailedReason : uint8 {
   SPELL_FAILED_SPELL_UNAVAILABLE = 109,
   /// `SpellCastResult` for 4.3.4.15595 — confirm vs client/DBC if UI text mismatches.
   SPELL_FAILED_OUT_OF_RANGE = 96,
-  /// Matches cmangos-wotlk `SpellDefines.h` / typical 4.x clients; verify vs 15595 if UI mismatches.
+  /// Matches legacy WotLK `SpellDefines.h` / typical 4.x clients; verify vs 15595 if UI mismatches.
   SPELL_FAILED_TOO_CLOSE = 128,
   /// Cataclysm `SharedDefines.h`; verify against build 15595 if mismatch.
   SPELL_FAILED_LINE_OF_SIGHT = 49,
@@ -57,7 +57,7 @@ enum SpellFailedReason : uint8 {
   SPELL_FAILED_INTERRUPTED = 47,
   /// Client `SPELL_FAILED_SPELL_IS_PASSIVE` (4.3.4); passive spells are not castable.
   SPELL_FAILED_SPELL_IS_PASSIVE = 58,
-  /// Caster level below `SpellLevels.dbc` requirement (Trinity `SPELL_FAILED_LOW_CASTLEVEL`).
+  /// Caster level below `SpellLevels.dbc` requirement (`SPELL_FAILED_LOW_CASTLEVEL`).
   SPELL_FAILED_LOW_CASTLEVEL = 73,
 };
 
@@ -102,7 +102,7 @@ SpellGoMissileResolution ResolveSpellGoMissile(
 
 /// Builds SMSG_SPELL_START (no HitInfo; matches Spell::SendSpellStart for common case).
 void BuildSpellStart(WorldPacket &out, uint64 casterGuid, uint8 castId, uint32 spellId,
-                     uint32 castFlags, uint32 castFlagsEx, uint32 castTimeMs,
+                  uint32 castFlags, uint32 castFlagsEx, uint32 castTimeMs,
                      uint32 targetFlags, uint64 targetUnitGuid);
 
 /// Builds SMSG_SPELL_GO with HitInfo (self-hit) and target block.

@@ -27,20 +27,20 @@ void AuthSession::Start() {
   Asio::SpawnDetached(executor, [self, this]() -> Asio::awaitable<void> {
     co_await WriteLoop();
   });
-}
+  }
 
 void AuthSession::SendPacket(AuthPacket &packet) {
   // Auth packets are simple: opcode + payload
   // No extra header size like World packets, except for specific responses
   // that are handled by the packet struct itself.
   SendPacket(static_cast<ByteBuffer &>(packet));
-}
+  }
 
 void AuthSession::SendPacket(ByteBuffer &buffer) {
   auto shared_buffer = std::make_shared<std::vector<uint8>>(
       buffer.GetBuffer(), buffer.GetBuffer() + buffer.Size());
   QueueOutgoing(std::move(shared_buffer));
-}
+  }
 
 void AuthSession::QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer) {
   {
@@ -48,14 +48,14 @@ void AuthSession::QueueOutgoing(std::shared_ptr<std::vector<uint8>> buffer) {
     _writeQueue.push_back(std::move(buffer));
   }
   _writeWakeTimer.cancel();
-}
+  }
 
 void AuthSession::Close() {
   _writeWakeTimer.cancel();
   if (_socket.is_open()) {
     _socket.close();
   }
-}
+  }
 
 std::string AuthSession::GetIpAddress() const {
   try {
@@ -63,7 +63,7 @@ std::string AuthSession::GetIpAddress() const {
   } catch (...) {
     return "unknown";
   }
-}
+  }
 
 Asio::awaitable<void> AuthSession::ReadLoop() {
   const std::span<uint8_t> readSpan(_readBuffer, sizeof(_readBuffer));
@@ -77,22 +77,22 @@ Asio::awaitable<void> AuthSession::ReadLoop() {
       ByteBuffer buffer;
       buffer.Append(std::span<const uint8>(_readBuffer, length));
       HandlePacket(buffer);
-    }
+  }
   } catch (const boost::system::system_error &e) {
     if (e.code() != boost::asio::error::operation_aborted &&
         e.code() != boost::asio::error::eof) {
       LOG_DEBUG("AuthSession read ended: {}", e.what());
-    }
+  }
     Close();
   }
-}
+  }
 
 Asio::awaitable<void> AuthSession::WriteLoop() {
   try {
     for (;;) {
       std::shared_ptr<std::vector<uint8>> buffer;
 
-      {
+  {
         std::unique_lock<std::mutex> lock(_writeMutex);
         while (_writeQueue.empty()) {
           if (!_socket.is_open())
@@ -104,22 +104,22 @@ Asio::awaitable<void> AuthSession::WriteLoop() {
           co_await _writeWakeTimer.async_wait(
               boost::asio::redirect_error(Asio::use_awaitable, ec));
           lock.lock();
-        }
+  }
 
         buffer = std::move(_writeQueue.front());
         _writeQueue.pop_front();
-      }
+  }
 
       co_await Asio::AsyncWrite(
           _socket, std::span<const uint8>(buffer->data(), buffer->size()));
-    }
+  }
   } catch (const boost::system::system_error &e) {
     if (e.code() != boost::asio::error::operation_aborted) {
       LOG_DEBUG("AuthSession write ended: {}", e.what());
-    }
+  }
     Close();
   }
-}
+  }
 
 void AuthSession::HandlePacket(ByteBuffer &buffer) {
   if (buffer.Size() == 0)
@@ -132,7 +132,7 @@ void AuthSession::HandlePacket(ByteBuffer &buffer) {
   }
 
   ProcessPacket(packet);
-}
+  }
 
 void AuthSession::ProcessPacket(AuthPacket &packet) {
   uint8 opcode = packet.GetOpcode();
@@ -154,7 +154,7 @@ void AuthSession::ProcessPacket(AuthPacket &packet) {
     Close();
     break;
   }
-}
+  }
 
 void AuthSession::HandleLogonChallenge(AuthPacket &packet) {
   AuthLogonChallenge_C challenge;
@@ -205,7 +205,7 @@ void AuthSession::HandleLogonChallenge(AuthPacket &packet) {
   AuthPacket res(AUTH_LOGON_CHALLENGE);
   response.Write(res);
   SendPacket(res);
-}
+  }
 
 void AuthSession::HandleLogonProof(AuthPacket &packet) {
   AuthLogonProof_C proof;
@@ -229,7 +229,7 @@ void AuthSession::HandleLogonProof(AuthPacket &packet) {
   if (std::memcmp(M1.data(), proof.M1, 20) != 0) {
     response.result = AUTH_FAIL_WRONG_PASSWORD;
     LOG_WARN("Auth failed: IP={} User='{}' Reason=Wrong Password", GetIpAddress(), _username);
-    _accountAccessLevel = AccessLevel::Player;
+  _accountAccessLevel = AccessLevel::Player;
   } else {
     response.result = AUTH_SUCCESS;
     auto M2 = SRPService::CalculateM2(A, M1, K);
@@ -239,21 +239,21 @@ void AuthSession::HandleLogonProof(AuthPacket &packet) {
     response.login_flags = 0;
 
     // Persist the session key so the World Server can validate it
-    auto account = _authService->FindAccount(_username);
+  auto account = _authService->FindAccount(_username);
     uint32 accountId = account ? account->id : 0;
     if (account) {
       _authService->CreateSession(account->id, K);
       _accountAccessLevel = account->accessLevel;
-    } else {
-      _accountAccessLevel = AccessLevel::Player;
-    }
+  } else {
+  _accountAccessLevel = AccessLevel::Player;
+  }
     LOG_INFO("Auth success: IP={} User='{}' AccountId={} Access={}", GetIpAddress(), _username, accountId, static_cast<int>(_accountAccessLevel));
   }
 
   AuthPacket res(AUTH_LOGON_PROOF);
   response.Write(res);
   SendPacket(res);
-}
+  }
 
 void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
   static std::once_flag realmLinkConfigHint;
@@ -287,7 +287,7 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
           "authserver.yaml). The list comes only from the DB — killing the "
           "world will not change realm status until you configure RealmLink "
           "and set RealmLink.Enabled on the world.");
-    });
+  });
   }
 
   ByteBuffer payloadBuffer;
@@ -297,7 +297,7 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
 
   for (Realm const *rp : visibleRealms) {
     Realm const &realm = *rp;
-    // Trinity order: Type, Lock (0/1), RealmFlags, name, address, pop, ...
+  // Wire order: Type, Lock (0/1), RealmFlags, name, address, pop, ...
     payloadBuffer.Append<uint8>(realm.GetIcon());
     // Realms below the account tier are omitted; visible realms are joinable.
     payloadBuffer.Append<uint8>(0);
@@ -332,6 +332,6 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
   AuthPacket res(AUTH_REALM_LIST);
   response.Write(res);
   SendPacket(res);
-}
+  }
 
 } // namespace Firelands

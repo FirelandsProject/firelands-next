@@ -12,10 +12,10 @@
 
 namespace Firelands {
 
-/**
+  /**
  * @brief Accumulates object updates to be sent in a single SMSG_UPDATE_OBJECT
  * packet. Specific to Cataclysm 4.3.4 format.
- */
+   */
 class UpdateData {
 public:
   UpdateData() : _count(0), _mapId(0) {}
@@ -72,12 +72,12 @@ public:
     bw.WriteBit(false); // UPDATEFLAG_VEHICLE
     bw.WriteBit((flags & UPDATEFLAG_LIVING) != 0);
     bw.WriteBits(0, 24); // PauseTimes size
-    bw.WriteBit(false);  // UPDATEFLAG_NO_BIRTH_ANIM
-    bw.WriteBit(false);  // UPDATEFLAG_GO_TRANSPORT_POSITION
-    bw.WriteBit(false);  // UPDATEFLAG_STATIONARY_POSITION
-    bw.WriteBit(false);  // UPDATEFLAG_AREATRIGGER
-    bw.WriteBit(false);  // UPDATEFLAG_ENABLE_PORTALS
-    bw.WriteBit(false);  // UPDATEFLAG_TRANSPORT
+  bw.WriteBit(false); // UPDATEFLAG_NO_BIRTH_ANIM
+  bw.WriteBit(false); // UPDATEFLAG_GO_TRANSPORT_POSITION
+  bw.WriteBit(false); // UPDATEFLAG_STATIONARY_POSITION
+  bw.WriteBit(false); // UPDATEFLAG_AREATRIGGER
+  bw.WriteBit(false); // UPDATEFLAG_ENABLE_PORTALS
+  bw.WriteBit(false); // UPDATEFLAG_TRANSPORT
 
     if (flags & UPDATEFLAG_LIVING) {
       bw.WriteBit(!movementFlags0); // !Has MoveFlags0
@@ -88,7 +88,7 @@ public:
       if (movementFlags0 != 0)
         bw.WriteBits(movementFlags0, 30);
 
-      bw.WriteBit(false);     // !Has player spline data (hasSpline && !isPlayer)
+  bw.WriteBit(false); // !Has player spline data (hasSpline && !isPlayer)
       bw.WriteBit(!hasPitch); // !Has pitch
       bw.WriteBit(hasSpline); // Has spline data
       bw.WriteBit(hasFallData);
@@ -96,22 +96,22 @@ public:
       bw.WriteBit(guidBytes[5] != 0);
       // Reference: this bit is true only when transport guid is present.
       bw.WriteBit(hasTransport); // Has transport data
-      bw.WriteBit(false);         // !HasTime (always send time in bytes)
+  bw.WriteBit(false); // !HasTime (always send time in bytes)
 
       bw.WriteBit(guidBytes[4] != 0);
       bw.WriteBit(guidBytes[6] != 0);
       bw.WriteBit(guidBytes[0] != 0);
       bw.WriteBit(guidBytes[1] != 0);
-      bw.WriteBit(false);           // HeightChangeFailed
+  bw.WriteBit(false); // HeightChangeFailed
       bw.WriteBit(!movementFlags1); // !Has MoveFlags1
       if (movementFlags1 != 0)
         bw.WriteBits(movementFlags1, 12);
-    }
+  }
 
     bw.Flush();
 
     if (flags & UPDATEFLAG_LIVING) {
-      // Byte order must match Object::BuildMovementUpdate (FirelandsCore
+  // Byte order must match Object::BuildMovementUpdate (Firelands
       // Object.cpp) for this flag combination: no fall, no spline elevation,
       // no spline, no transport, no pitch, orientation omitted when zero.
       _data.WriteByteSeq(guidBytes[4]);
@@ -138,7 +138,7 @@ public:
         _data.Append<float>(move.orientation);
       _data.Append<float>(7.0f); // MOVE_RUN
       _data.Append<float>(4.5f); // MOVE_FLIGHT_BACK
-    }
+  }
 
     AppendUpdateFieldValues(fields);
   }
@@ -178,7 +178,7 @@ public:
 
 private:
   static void AppendUpdateFieldValues(ByteBuffer &buf,
-                                      std::map<uint16, uint32> const &fields) {
+                       std::map<uint16, uint32> const &fields) {
     uint32 maxField = 0;
     if (!fields.empty())
       maxField = fields.rbegin()->first + 1;
@@ -192,7 +192,7 @@ private:
     std::vector<uint32> mask(maskSize, 0);
     for (auto const &[index, value] : fields) {
       mask[index / 32] |= (1u << (index % 32));
-    }
+  }
 
     for (uint32 m : mask)
       buf.Append<uint32>(m);
@@ -200,7 +200,7 @@ private:
     for (uint32 i = 0; i < maxField; ++i) {
       if (mask[i / 32] & (1u << (i % 32)))
         buf.Append<uint32>(fields.at(i));
-    }
+  }
   }
 
   void AppendUpdateFieldValues(std::map<uint16, uint32> const &fields) {

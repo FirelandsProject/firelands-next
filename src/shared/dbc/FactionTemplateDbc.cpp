@@ -9,7 +9,7 @@ namespace Firelands {
 
 namespace {
 
-// Trinity Cataclysm 4.3.4 `FactionTemplateEntryfmt[]` (see TCPP `DBCfmt.h`).
+// Cataclysm 4.3.4 `FactionTemplateEntryfmt[]` (see WowPacketParser `DBCfmt.h`).
 constexpr std::string_view kFactionTemplateFmt = "niiiiiiiiiiiii";
 
 static size_t LastFieldSizeBytes(char lastFmt) {
@@ -46,7 +46,7 @@ bool FactionTemplateDbc::Load(std::string const &path) {
              "{}) in {}",
              kFactionTemplateFmt, reader.GetRecordSize(), reader.GetFieldCount(), path);
     return false;
-  }
+}
 
   for (uint32_t ri = 0; ri < reader.GetRecordCount(); ++ri) {
     FactionTemplateEntry row;
@@ -63,7 +63,7 @@ bool FactionTemplateDbc::Load(std::string const &path) {
     for (int i = 0; i < 4; ++i)
       row.friendFactions[i] = reader.ReadUInt32(ri, static_cast<uint32_t>(10 + i), offsets);
     m_byId[row.id] = row;
-  }
+}
 
   m_loaded = true;
   LOG_INFO("FactionTemplate.dbc: loaded {} template(s) from {}", m_byId.size(), path);

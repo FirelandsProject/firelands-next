@@ -19,7 +19,7 @@ bool EmotesTextDbc::Load(std::string const &path) {
     return false;
   }
 
-  // Trinity `EmotesTextEntryfmt`: "nxixxxxxxxxxxxxxxxx"
+  // `EmotesTextEntryfmt`: "nxixxxxxxxxxxxxxxxx"
   if (!reader.VerifyFormat("nxixxxxxxxxxxxxxxxx")) {
     LOG_WARN("EmotesText.dbc: unexpected field count {} in {} (expected 19)",
              reader.GetFieldCount(), path);
@@ -45,7 +45,7 @@ bool EmotesTextDbc::Load(std::string const &path) {
   LOG_DEBUG("EmotesText.dbc: {} text emotes from {}.", m_textEmoteToAnim.size(),
             path);
   return true;
-}
+  }
 
 std::optional<uint32_t>
 EmotesTextDbc::LookupEmoteAnim(uint32_t textEmoteId) const {
@@ -55,6 +55,6 @@ EmotesTextDbc::LookupEmoteAnim(uint32_t textEmoteId) const {
   if (it == m_textEmoteToAnim.end())
     return std::nullopt;
   return it->second;
-}
+  }
 
 } // namespace Firelands

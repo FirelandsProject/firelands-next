@@ -16,7 +16,7 @@ std::string WorldSession::ResolveTextEmoteTargetName(uint64_t targetGuid) const 
     return {};
   if (auto ch = _charService->GetCharacterByGuid(targetGuid))
     return ch->GetName();
-  return {};
+    return {};
 }
 
 bool WorldSession::IsActivePlayerAlive() const {
@@ -25,7 +25,7 @@ bool WorldSession::IsActivePlayerAlive() const {
   if (auto map = WorldService::Instance().GetMap(_mapId)) {
     if (auto pl = map->TryGetPlayer(_playerGuid))
       return pl->GetLiveHealth() > 0;
-  }
+}
   return true;
 }
 
@@ -50,10 +50,10 @@ void WorldSession::TryClearEmotesOnMovement(WorldOpcode opcode,
     case MSG_MOVE_SET_FACING:
     case MSG_MOVE_FALL_LAND:
     case MSG_MOVE_START_SWIM:
-      return true;
+  return true;
     default:
-      return false;
-    }
+    return false;
+}
   }();
 
   if (!moving && !explicitMotion && !positionChanged)
@@ -124,12 +124,12 @@ void WorldSession::HandleEmoteOpcode(WorldPacket &packet) {
     return;
 
   uint32_t const emote = packet.Read<uint32>();
-  // Client only hardcodes cancel + wave stop (Trinity `HandleEmoteOpcode`).
+  // Client only hardcodes cancel + wave stop (`HandleEmoteOpcode`).
   if (emote != EMOTE_ONESHOT_NONE && emote != EMOTE_ONESHOT_WAVE)
     return;
 
   if (_unitNpcEmoteState != 0)
-    ApplyUnitNpcEmoteState(0);
+  ApplyUnitNpcEmoteState(0);
 }
 
 void WorldSession::HandleTextEmoteOpcode(WorldPacket &packet) {
@@ -146,14 +146,14 @@ void WorldSession::HandleTextEmoteOpcode(WorldPacket &packet) {
     LOG_DEBUG("CMSG_TEXT_EMOTE id={} ignored (EmotesText.dbc not loaded)",
               textEmote);
     return;
-  }
+}
 
   std::optional<uint32_t> const animOpt =
       _emotesTextDbc->LookupEmoteAnim(textEmote);
   if (!animOpt) {
     LOG_DEBUG("CMSG_TEXT_EMOTE unknown text emote id {}", textEmote);
     return;
-  }
+}
 
   uint32_t const emoteAnim = *animOpt;
 
@@ -167,10 +167,10 @@ void WorldSession::HandleTextEmoteOpcode(WorldPacket &packet) {
   case EMOTE_STATE_READ:
     ApplyUnitNpcEmoteState(emoteAnim);
     break;
-  default:
+    default:
     BroadcastEmoteAnimation(emoteAnim);
     break;
-  }
+}
 
   BroadcastTextEmote(textEmote, emoteNum, targetGuid);
 }

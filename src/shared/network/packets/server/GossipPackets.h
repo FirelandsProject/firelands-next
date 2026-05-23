@@ -10,7 +10,7 @@
 namespace Firelands::gossip {
 
 /// Cataclysm 4.3.4 gossip wire helpers.
-/// Reference: `PlayerMenu::SendGossipMenu` / TCPP `WorldPackets::NPC::GossipMessage`.
+/// Reference: `PlayerMenu::SendGossipMenu` / WowPacketParser `WorldPackets::NPC::GossipMessage`.
 inline void AppendGossipMenuItem(WorldPacket &out, GossipMenuItem const &item) {
   out.Append<int32_t>(static_cast<int32_t>(item.optionIndex));
   out.Append<uint8_t>(static_cast<uint8_t>(item.icon));

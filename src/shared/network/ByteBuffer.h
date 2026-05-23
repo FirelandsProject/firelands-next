@@ -40,7 +40,7 @@ public:
   void WriteString(const char *str) {
     if (str) {
       Append((uint8 *)str, std::strlen(str));
-    }
+  }
     Append((uint8)0); // Null terminator
   }
 
@@ -51,8 +51,8 @@ public:
    */
   void WriteStringNoNull(const std::string &str) {
     if (!str.empty()) {
-      Append((uint8 *)str.c_str(), str.length());
-    }
+    Append((uint8 *)str.c_str(), str.length());
+  }
   }
 
   /// Length-prefixed UTF-8 with trailing null; length includes the `\0` byte.
@@ -69,7 +69,7 @@ public:
   template <typename T> T Read() {
     if (_readPos + sizeof(T) > _storage.size()) {
       return T(); // Should probably throw or handle error
-    }
+  }
     T val;
     std::memcpy(&val, &_storage[_readPos], sizeof(T));
     _readPos += sizeof(T);
@@ -80,7 +80,7 @@ public:
     if (_readPos + count > _storage.size()) {
       std::memset(dest, 0, count);
       return;
-    }
+  }
     std::memcpy(dest, &_storage[_readPos], count);
     _readPos += count;
   }
@@ -103,7 +103,7 @@ public:
       if (c == 0)
         break;
       res += c;
-    }
+  }
     return res;
   }
 
@@ -140,10 +140,10 @@ public:
   void WriteByteSeq(uint8 b) {
     if (b != 0) {
       Append<uint8>(b ^ 1);
-    }
+  }
   }
 
-  /// Cataclysm packed GUID (same as FirelandsCore ByteBuffer::appendPackGUID).
+  /// Cataclysm packed GUID (same as Firelands ByteBuffer::appendPackGUID).
   void AppendPackGUID(uint64 guid) {
     uint8 packGUID[8 + 1] = {};
     size_t size = 1;
@@ -152,9 +152,9 @@ public:
         packGUID[0] |= static_cast<uint8>(1 << i);
         packGUID[size] = static_cast<uint8>(guid & 0xFF);
         ++size;
-      }
+  }
       guid >>= 8;
-    }
+  }
     Append(packGUID, size);
   }
 
@@ -167,8 +167,8 @@ public:
       if (mask & (1 << i)) {
         uint64 b = Read<uint8>();
         guid |= (b << (i * 8));
-      }
-    }
+  }
+  }
     return guid;
   }
 

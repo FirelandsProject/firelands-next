@@ -10,7 +10,7 @@
 namespace Firelands {
 
 /// Default gossip menu used when `creature_template.gossip_menu_id` is zero; options are
-/// filtered by `OptionNpcflag` vs template `npcflag` (Trinity-style role shortcuts).
+/// filtered by `OptionNpcflag` vs template `npcflag` (reference role shortcuts).
 inline constexpr uint32_t kDefaultNpcGossipMenuId = 0u;
 
 /// Picks the menu id to load from `gossip_menu` for a creature template.
@@ -45,7 +45,7 @@ FilterGossipOptionsByNpcFlags(std::vector<GossipMenuItem> items,
     if (item.optionNpcflag == 0 ||
         (item.optionNpcflag & templateNpcFlags) != 0)
       filtered.push_back(std::move(item));
-  }
+}
   return filtered;
 }
 
@@ -55,7 +55,7 @@ FindGossipMenuItem(std::vector<GossipMenuItem> const &items,
   for (auto const &item : items) {
     if (item.optionIndex == optionIndex)
       return &item;
-  }
+}
   return nullptr;
 }
 
@@ -86,7 +86,7 @@ FilterQuestGossipForPlayer(std::vector<QuestGossipSummary> quests,
   for (auto &summary : quests) {
     if (QuestGossipAllowsPlayer(summary, playerClass, playerRace))
       filtered.push_back(std::move(summary));
-  }
+}
   return filtered;
 }
 
@@ -99,8 +99,8 @@ BuildGossipQuestItems(std::vector<QuestGossipSummary> const &quests) {
     normalized.blueQuestionMark = QuestGossipUsesBlueQuestionMark(summary.flags);
     items.push_back(
         ToGossipQuestItem(normalized, ResolveQuestGossipIcon(normalized)));
-  }
-  return items;
+}
+    return items;
 }
 
 } // namespace Firelands

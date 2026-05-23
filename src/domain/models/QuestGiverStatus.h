@@ -4,7 +4,7 @@
 
 namespace Firelands {
 
-/// Trinity 4.3.4 `QuestGiverStatus` bit flags (`QuestDef.h` in firelands-cata-ref).
+/// 4.3.4 `QuestGiverStatus` bit flags (`QuestDef.h` in firelands-cata-ref).
 /// Sent as `uint32` in `SMSG_QUESTGIVER_STATUS` / `_MULTIPLE`.
 enum class QuestGiverDialogStatus : uint32_t {
   None = 0x000,

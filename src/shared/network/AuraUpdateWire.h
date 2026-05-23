@@ -8,14 +8,14 @@
 namespace Firelands {
 namespace AuraUpdateWire {
 
-/// Cataclysm 4.3.4 `AuraFlag` (WowPacketParser / cmangos). On the wire these are `uint16`
+/// Cataclysm 4.3.4 `AuraFlag` (WowPacketParser / packet reference). On the wire these are `uint16`
 /// since build 4.2.0.14333, not a single byte.
 enum AuraFlag : uint16 {
   kEmpty = 0x0000,
   kEffectIndex0 = 0x0001,
   kEffectIndex1 = 0x0002,
   kEffectIndex2 = 0x0004,
-  /// Trinity `AFLAG_CASTER` — set when caster GUID is omitted (typically self-cast).
+  /// `AFLAG_CASTER` — set when caster GUID is omitted (typically self-cast).
   kCaster = 0x0008,
   kNotCaster = kCaster,
   kPositive = 0x0010,

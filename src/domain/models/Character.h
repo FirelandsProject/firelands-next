@@ -13,7 +13,7 @@ namespace Firelands {
 
 class Character {
 public:
-  /// Words mirrored by `SMSG_TUTORIAL_FLAGS` (Trinity `MAX_ACCOUNT_TUTORIAL_VALUES`).
+  /// Words mirrored by `SMSG_TUTORIAL_FLAGS` (`MAX_ACCOUNT_TUTORIAL_VALUES`).
   static constexpr size_t kTutorialMaskInts = 8;
 
   Character(uint32 guid, uint32 account, std::string name, uint8 race,
@@ -81,7 +81,7 @@ public:
       return gender == 0 ? 32836 : 32837; // Worgen
     default:
       return 49;
-    }
+  }
   }
 
   static std::array<uint32_t, 5> GetDefaultPrimaryStats(uint8 klass) {
@@ -108,7 +108,7 @@ public:
       return {22u, 20u, 22u, 22u, 23u}; // Druid
     default:
       return {20u, 20u, 20u, 20u, 20u};
-    }
+  }
   }
 
   uint32 GetGuid() const { return m_guid; }
@@ -187,12 +187,12 @@ public:
     for (uint32_t e : m_visibleItems) {
       if (e == entry)
         return true;
-    }
+  }
     for (uint32_t e : m_packItemEntries) {
       if (e == entry)
         return true;
-    }
-    return false;
+  }
+      return false;
   }
 
   uint8 GetActionBarToggles() const { return m_actionBarToggles; }
@@ -204,12 +204,12 @@ public:
       data.equipEntries[i] = m_visibleItems[i];
       data.equipGuids[i] = m_visibleItemGuids[i];
       data.equipStacks[i] = m_visibleItemStacks[i];
-    }
+  }
     for (size_t i = 0; i < kPackSlotCount; ++i) {
       data.packEntries[i] = m_packItemEntries[i];
       data.packGuids[i] = m_packItemGuids[i];
       data.packStacks[i] = m_packItemStacks[i];
-    }
+  }
     return data;
   }
 
@@ -259,11 +259,11 @@ public:
     if (m_loginPersistedHealth.has_value()) {
       m_health = std::min(*m_loginPersistedHealth, m_maxHealth);
       m_loginPersistedHealth.reset();
-    }
+  }
     if (m_loginPersistedPower1.has_value()) {
       m_power1 = std::min(*m_loginPersistedPower1, m_maxPower1);
       m_loginPersistedPower1.reset();
-    }
+  }
   }
 
 private:

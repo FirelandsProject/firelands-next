@@ -6,7 +6,7 @@
 namespace Firelands {
 
 /// Bitmasks for `FactionTemplateEntry::factionGroup` / `friendGroup` / `enemyGroup`
-/// (Trinity `FactionGroupMasks` / client `FactionTemplate.dbc`).
+/// (`FactionGroupMasks` / client `FactionTemplate.dbc`).
 enum FactionGroupMask : uint32_t {
   FactionGroupMaskNone = 0x0,
   FactionGroupMaskPlayer = 0x1,
@@ -20,7 +20,7 @@ enum FactionTemplateFlags : uint32_t {
   FactionTemplateFlagAttackPvPActivePlayers = 0x1000,
 };
 
-/// Trinity `FactionTemplateEntry::IsHostileToPlayers()` (mask on `enemyGroup`).
+/// `FactionTemplateEntry::IsHostileToPlayers()` (mask on `enemyGroup`).
 inline bool FactionTemplateHostileToPlayers(FactionTemplateEntry const &e) {
   return (e.enemyGroup & FactionGroupMaskPlayer) != 0;
 }
@@ -30,7 +30,7 @@ inline bool FactionTemplateFriendlyToPlayers(FactionTemplateEntry const &e) {
   return (e.friendGroup & FactionGroupMaskPlayer) != 0;
 }
 
-/// Trinity-style: `HatesAllExceptFriends` implies hostility unless explicitly friendly.
+/// When `HatesAllExceptFriends` is set, implies hostility unless explicitly friendly.
 inline bool FactionTemplateHatesAllExceptFriends(FactionTemplateEntry const &e) {
   return (e.flags & FactionTemplateFlagHatesAllExceptFriends) != 0;
 }

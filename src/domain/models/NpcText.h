@@ -7,7 +7,7 @@
 
 namespace Firelands {
 
-/// Trinity `MAX_NPC_TEXT_OPTIONS` (Cataclysm).
+/// `MAX_NPC_TEXT_OPTIONS` (Cataclysm).
 inline constexpr std::size_t kNpcTextOptionCount = 8;
 /// Emotes per text option in `SMSG_NPC_TEXT_UPDATE`.
 inline constexpr std::size_t kNpcTextEmoteCount = 3;
@@ -52,7 +52,7 @@ inline bool NpcTextHasVisibleGreeting(NpcText const &text) noexcept {
     if (option.probability > 0.f &&
         (!option.text0.empty() || !option.text1.empty()))
       return true;
-  }
+}
   return false;
 }
 

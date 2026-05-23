@@ -4,7 +4,7 @@
 
 namespace Firelands {
 
-/// Base primary attributes from `firelands_world.player_classlevelstats` (Trinity-style).
+/// Base primary attributes from `firelands_world.player_classlevelstats` (reference).
 struct PlayerClassLevelStats {
   uint16_t str = 0;
   uint16_t agi = 0;

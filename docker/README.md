@@ -48,7 +48,7 @@ docker compose --profile tools run --rm extract-charstart-items data/dbc/CharSta
 ## Backfill `item_proto_cache`
 
 1. Apply migration `sql/9_firelands_world_item_template.sql` (via migrate profile or world startup) so `firelands_world.item_template` exists.
-2. Load item rows into `item_template` (INSERT scripts from your core/TDB, or import a dump — full dumps usually replace this table with the complete Trinity schema).
+2. Load item rows into `item_template` (INSERT scripts from your world data pack, or import a dump — full dumps usually replace this table with the complete schema).
 3. Run the backfill (Option A copies all rows from `item_template` into `item_proto_cache`):
 
 ```bash

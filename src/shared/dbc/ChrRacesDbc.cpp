@@ -10,18 +10,18 @@ namespace Firelands {
 
 namespace {
 
-// TrinityCore 3.3.5 `ChrRacesEntryfmt[]`.
-constexpr std::string_view kChrRacesFmtTrinity335 =
+// legacy 3.3.5 `ChrRacesEntryfmt[]`.
+constexpr std::string_view kChrRacesFmtLegacy335 =
     "niixiixiiixxiissssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxi";
 
-// Cataclysm 4.3.4 / AzerothCore (fmt[8]/fmt[9] are `x` instead of `i`).
+    // Cataclysm 4.3.4 layout (fmt[8]/fmt[9] are `x` instead of `i`).
 constexpr std::string_view kChrRacesFmtCataclysm =
     "niixiixixxxxiissssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxi";
 
 static constexpr std::array<std::pair<std::string_view, std::string_view>, 2>
     kChrRacesFmtCandidates = {{
         {kChrRacesFmtCataclysm, "4.x / Cataclysm"},
-        {kChrRacesFmtTrinity335, "Trinity 3.3.5"},
+  {kChrRacesFmtLegacy335, "legacy 3.3.5"},
     }};
 
 static size_t LastFieldSizeBytes(char lastFmt) {
@@ -53,12 +53,12 @@ static bool LoadFromFmt(DbcReader const &reader, std::string_view fmt,
     uint32_t const fac = reader.ReadUInt32(ri, 2, offsets);
     if (fac != 0)
       outByRace[id] = fac;
-  }
+}
   return !outByRace.empty();
 }
 
 /// If the format string drifts, `RaceID` / `FactionID` are still the first two
-/// full `uint32` columns after the first `x` in many builds — but Trinity keeps
+/// full `uint32` columns after the first `x` in many builds — but keeps
 /// them at byte offsets **0** and **8** for all post-TBC ChrRaces we checked.
 static bool LoadFromFirstFieldsHeuristic(
     DbcReader const &reader, std::unordered_map<uint32_t, uint32_t> &outByRace) {
@@ -72,17 +72,17 @@ static bool LoadFromFirstFieldsHeuristic(
     uint32_t const fac = reader.ReadUInt32AtRecordByteOffset(ri, 8);
     if (fac == 0 || fac > 50000u)
       continue;
-    outByRace[id] = fac;
-  }
+      outByRace[id] = fac;
+}
   if (outByRace.empty())
     return false;
   // Minimal sanity: race 1 (Human) must map to template 1 on retail ChrRaces.
   auto h = outByRace.find(1u);
   if (h == outByRace.end() || h->second != 1u) {
     LOG_WARN("ChrRaces.dbc heuristic rejected (race 1 FactionID expected 1).");
-    outByRace.clear();
+  outByRace.clear();
     return false;
-  }
+}
   return true;
 }
 
@@ -101,21 +101,21 @@ bool ChrRacesDbc::Load(std::string const &path) {
       m_loaded = true;
       LOG_INFO("ChrRaces.dbc: loaded {} race faction row(s) from {} (layout: {})",
                m_factionByRaceId.size(), path, label);
-      return true;
-    }
-  }
+  return true;
+}
+}
 
   if (LoadFromFirstFieldsHeuristic(reader, m_factionByRaceId)) {
-    m_loaded = true;
+      m_loaded = true;
     LOG_DEBUG(
         "ChrRaces.dbc: no known layout string matched {}; using byte-offset heuristic "
         "(fields={}, recordSize={}).",
         path, reader.GetFieldCount(), reader.GetRecordSize());
-    return true;
-  }
+  return true;
+}
 
   LOG_WARN("ChrRaces.dbc: could not parse {} (wrong client build?)", path);
-  return false;
+    return false;
 }
 
 std::optional<uint32_t> ChrRacesDbc::FactionTemplateIdForRace(uint8_t race) const {

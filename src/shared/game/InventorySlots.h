@@ -5,7 +5,7 @@
 
 namespace Firelands {
 
-/// Matches Trinity/FirelandsCore equipment slots (bag 0).
+/// Matches Firelands equipment slots (bag 0).
 enum EquipmentSlots : uint8 {
   EQUIPMENT_SLOT_HEAD = 0,
   EQUIPMENT_SLOT_END = 19,

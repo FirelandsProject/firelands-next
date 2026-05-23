@@ -4,7 +4,7 @@ namespace Firelands {
 
 namespace {
 
-/// Trinity-compatible AUTH realm row flag (realm not accepting connections).
+/// AUTH realm row flag when the realm is not accepting connections.
 constexpr uint8_t kAuthRealmListFlagOffline = 2;
 
 } // namespace
@@ -33,6 +33,6 @@ std::vector<Realm> RealmListService::GetRealmList() {
                        kAuthRealmListFlagOffline);
   }
   return out;
-}
+  }
 
 } // namespace Firelands

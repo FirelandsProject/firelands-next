@@ -5,9 +5,9 @@
 
 namespace Firelands {
 
-TEST(QuestMaskTests, PlayerClassMask_MatchesTrinity) {
+TEST(QuestMaskTests, PlayerClassMask_Matches) {
   EXPECT_EQ(PlayerClassMask(11), 1024u); // Druid
-  EXPECT_EQ(PlayerClassMask(1), 1u);    // Warrior
+  EXPECT_EQ(PlayerClassMask(1), 1u); // Warrior
 }
 
 TEST(QuestMaskTests, PlayerRaceMask_Troll) {

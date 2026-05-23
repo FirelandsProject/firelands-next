@@ -11,7 +11,7 @@ namespace Firelands {
 inline constexpr uint32 kFallbackCreatureDisplayId = 169u;
 
 /// Spawn `creature.modelid` overrides template when non-zero; otherwise first non-zero
-/// `modelid1`..`modelid4` from `creature_template` (Trinity layout).
+/// `modelid1`..`modelid4` from `creature_template` (layout).
 inline uint32 ResolveCreatureDisplayId(uint32 spawnModelId, uint32 templateModelId1,
                                        uint32 templateModelId2, uint32 templateModelId3,
                                        uint32 templateModelId4) noexcept {

@@ -4,7 +4,7 @@
 
 namespace Firelands {
 
-/// Wire `ChatMsg` for build 15595 (Cataclysm 4.3.4). Must match client / Trinity
+/// Wire `ChatMsg` for build 15595 (Cataclysm 4.3.4). Must match client
 /// `SharedDefines.h::ChatMsg` — wrong values make `SMSG_MESSAGECHAT` render as
 /// system text (yellow) and omit the sender name prefix.
 enum ChatType : std::uint32_t {
@@ -99,12 +99,12 @@ enum Language {
   LANG_GOBLIN = 40
 };
 
-/// Client / Trinity `LANG_ADDON` wire value for add-on messages (party, raid,
+/// Client / `LANG_ADDON` wire value for add-on messages (party, raid,
 /// guild, whisper, battleground). Not part of the `Language` enumerator range.
 constexpr uint32 CHAT_LANG_ADDON = 0xFFFFFFFFu;
 
 /// Wire `ChatTag` suffix on `SMSG_MESSAGECHAT` / `SMSG_GM_MESSAGECHAT` (4.3.4).
-/// Bitflags — same order as WowPacketParser `ChatTag` / Trinity `ChatTags`.
+/// Bitflags — same order as WowPacketParser `ChatTag` / `ChatTags`.
 enum ChatTagWire : std::uint8_t {
   CHAT_TAG_WIRE_NONE = 0x00,
   CHAT_TAG_WIRE_AFK = 0x01,

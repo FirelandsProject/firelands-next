@@ -36,7 +36,7 @@ TEST(ActionButtonTests, MayPlaceOnBarRequiresKnownSpell) {
   EXPECT_TRUE(MayPlaceOnBar(Macro, 1u, known));
 }
 
-TEST(ActionButtonTests, TryParseSetActionButtonCmsgReadsTrinityLayout) {
+TEST(ActionButtonTests, TryParseSetActionButtonCmsgReadsreferenceLayout) {
   WorldPacket packet(CMSG_SET_ACTION_BUTTON);
   uint32_t const packed = Pack(133u, Spell);
   packet.Append<uint32_t>(packed);

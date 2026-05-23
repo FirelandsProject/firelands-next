@@ -65,12 +65,12 @@ void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
 /// `UNIT_FIELD_POSSTAT*` / `NEGSTAT*` / `PLAYER_FIELD_COMBAT_RATING_*` from aura bonuses.
 void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
                                      PlayerAuraStatBonus const &bonus,
-                                     WorldPacket &outPacket);
+                                             WorldPacket &outPacket);
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_FACTIONTEMPLATE` only (players or units).
 void BuildUnitFactionTemplateValuesUpdate(uint16 mapId, uint64 unitGuid,
                                           uint32 factionTemplate,
-                                          WorldPacket &outPacket);
+                                             WorldPacket &outPacket);
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_NPC_EMOTESTATE` only.
 void BuildUnitNpcEmoteStateValuesUpdate(uint16 mapId, uint64 unitGuid,
@@ -78,7 +78,7 @@ void BuildUnitNpcEmoteStateValuesUpdate(uint16 mapId, uint64 unitGuid,
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_TARGET` only (`targetGuid` 0 clears).
 void BuildUnitTargetValuesUpdate(uint16 mapId, uint64 unitGuid, uint64 targetGuid,
-                                 WorldPacket &outPacket);
+                                             WorldPacket &outPacket);
 
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName);
@@ -111,7 +111,7 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
                                                          uint32 factionTemplate =
                                                              Creature::kDefaultFactionTemplate);
 
-/// `SMSG_CREATURE_QUERY_RESPONSE` (Trinity `QueryCreatureResponse::Write`, 4.3.4).
+                                                             /// `SMSG_CREATURE_QUERY_RESPONSE` (`QueryCreatureResponse::Write`, 4.3.4).
 /// If `nameTitle` is empty, sends entry with high bit set (client shows no template).
 void BuildCreatureQueryResponse(
     WorldPacket &out, uint32 creatureEntry,

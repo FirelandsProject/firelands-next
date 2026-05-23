@@ -58,7 +58,7 @@ void WorldSession::HandleOpeningCinematic(WorldPacket &packet) {
   (void)packet;
   if (_playerGuid == 0 || _sentOpeningCinematic)
     return;
-  // Trinity/Kheros 4.3.4: repeat prompt only for characters that never gained XP.
+    // Cataclysm 4.3.4: repeat prompt only for characters that never gained XP.
   if (_playerXp != 0)
     return;
   auto ch = _charService->GetCharacterByGuid(_playerGuid);
@@ -158,7 +158,7 @@ void WorldSession::SendMotd() {
 void WorldSession::SendDungeonDifficulty(bool inGroup) {
   WorldPacket data(MSG_SET_DUNGEON_DIFFICULTY);
   data.Append<uint32>(0); // Difficulty::REGULAR
-  data.Append<uint32>(1); // mask (matches FirelandsCore Player::SendDungeonDifficulty)
+  data.Append<uint32>(1); // mask (matches Firelands Player::SendDungeonDifficulty)
   data.Append<uint32>(inGroup ? 1u : 0u);
   SendPacket(data);
 }
@@ -189,7 +189,7 @@ void WorldSession::SendUnlearnSpells(std::vector<uint32> const &spellIds) {
   WorldPacket data(SMSG_SEND_UNLEARN_SPELLS);
   data.Append<uint32>(static_cast<uint32>(spellIds.size()));
   for (uint32 spellId : spellIds)
-    data.Append<uint32>(spellId);
+  data.Append<uint32>(spellId);
   SendPacket(data);
 }
 
@@ -219,7 +219,7 @@ void WorldSession::SendActionButtons(uint8_t reason) {
   for (uint32_t packed : bar) {
     if (packed != 0)
       ++nonEmpty;
-  }
+}
   LOG_INFO("SMSG_UPDATE_ACTION_BUTTONS reason={} nonEmptySlots={} payload={}",
            static_cast<unsigned>(reason), nonEmpty, data.Size());
   SendPacket(data);
@@ -282,7 +282,7 @@ void WorldSession::SendForcedReactions() {
   for (auto const &kv : _forcedFactionReactions) {
     data.Append<uint32>(kv.first);
     data.Append<uint32>(kv.second);
-  }
+}
   SendPacket(data);
 }
 
@@ -293,13 +293,13 @@ void WorldSession::SendSetProficiency(uint8 itemClass, uint32 itemMask) {
 void WorldSession::SendTalentsInfo() {
   // Reference: Player::SendTalentsInfoData(false) → BuildPlayerTalentsInfoData.
   // Format: uint8(isPet) | uint32(freeTalentPoints) | uint8(specsCount) |
-  //         uint8(activeSpec) | per-spec: uint32(primaryTree) | uint8(talentCount) |
-  //         uint8(MAX_GLYPH_SLOT_INDEX=6) | uint16[6] glyphs.
+  // uint8(activeSpec) | per-spec: uint32(primaryTree) | uint8(talentCount) |
+  // uint8(MAX_GLYPH_SLOT_INDEX=6) | uint16[6] glyphs.
   // specsCount MUST be ≥ 1: with 0 the 4.3.4 client accesses specs[activeSpec]
   // out-of-bounds and crashes at the end of the loading screen.
   static constexpr uint8 kGlyphSlots = 6;
   WorldPacket data(SMSG_TALENTS_INFO);
-  data.Append<uint8>(0);  // isPet = false
+  data.Append<uint8>(0); // isPet = false
   data.Append<uint32>(0); // freeTalentPoints
   static constexpr uint8 kSpecsCount =
       static_cast<uint8>(ActionButton::kMaxActionBarSpecs);
@@ -308,11 +308,11 @@ void WorldSession::SendTalentsInfo() {
   for (uint8 spec = 0; spec < kSpecsCount; ++spec) {
     (void)spec;
     data.Append<uint32>(0); // primaryTalentTree
-    data.Append<uint8>(0);  // talentIdCount
+  data.Append<uint8>(0); // talentIdCount
     data.Append<uint8>(kGlyphSlots);
     for (uint8 i = 0; i < kGlyphSlots; ++i)
-      data.Append<uint16>(0);
-  }
+  data.Append<uint16>(0);
+}
   SendPacket(data);
 }
 
@@ -321,9 +321,9 @@ void WorldSession::SendInitialFactions() {
   WorldPacket data(SMSG_INITIALIZE_FACTIONS, 4 + count * 5);
   data.Append<uint32>(static_cast<uint32>(count));
   for (uint16 i = 0; i < count; ++i) {
-    data.Append<uint8>(0);
-    data.Append<uint32>(0);
-  }
+  data.Append<uint8>(0);
+  data.Append<uint32>(0);
+}
   SendPacket(data);
 }
 

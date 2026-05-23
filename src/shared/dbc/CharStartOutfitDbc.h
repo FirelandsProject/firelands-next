@@ -8,7 +8,7 @@
 
 namespace Firelands {
 
-/// Loads CharStartOutfit.dbc using the real FirelandsCore field layout (`DBCfmt.h`).
+/// Loads CharStartOutfit.dbc using the real Firelands field layout (`DBCfmt.h`).
 class CharStartOutfitDbc {
 public:
   struct ItemVisualInfo {
@@ -40,6 +40,6 @@ private:
   std::unordered_map<OutfitKey, std::vector<PlayerCreateVisualItem>> m_visuals;
   std::unordered_map<OutfitKey, std::vector<StarterItemGrant>> m_itemGrants;
   std::unordered_map<uint32, ItemVisualInfo> m_itemVisualByEntry;
-};
+  };
 
 } // namespace Firelands

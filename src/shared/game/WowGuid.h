@@ -7,7 +7,7 @@ namespace Firelands {
 /// Cataclysm `HighGuid::Item`: 0x400, shifted by 52 for low GUID.
 inline constexpr uint64_t kHighGuidItem = 0x400ULL;
 
-/// Trinity Cataclysm preservation `HighGuid::Unit` (Blizz-style **F130** creature GUID).
+/// Cataclysm 4.3.4 preservation `HighGuid::Unit` (Blizz-style **F130** creature GUID).
 /// Raw `creature.guid` from the DB is only the low counter; it must be combined with the
 /// template entry and this high prefix or the 4.3.4 client treats the object as a player
 /// GUID and will not render creatures correctly.
@@ -31,7 +31,7 @@ inline uint32_t ExtractCreatureEntryFromUnitObjectGuid(uint64_t objectGuid) noex
   return static_cast<uint32_t>((objectGuid >> 32) & 0x000FFFFFu);
 }
 
-/// Player `ObjectGuid` on the wire (`HighGuid::Player == 0` in Trinity 4.3.4): raw uint64 counter.
+/// Player `ObjectGuid` on the wire (`HighGuid::Player == 0` in 4.3.4): raw uint64 counter.
 inline uint64_t MakePlayerObjectGuid(uint32_t playerLowGuid) noexcept {
   return playerLowGuid != 0 ? static_cast<uint64_t>(playerLowGuid) : 0u;
 }

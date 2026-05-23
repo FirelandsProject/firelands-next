@@ -5,7 +5,7 @@
 namespace Firelands {
 
 /// Movement flag bits on the client movement wire (30-bit primary field).
-/// Bit positions match the reference core `MovementFlags` / `UnitDefines` layout.
+/// Bit positions match Cataclysm 4.3.4 `MovementFlags` / `UnitDefines` layout.
 enum MovementFlags : uint32 {
   MOVEMENTFLAG_NONE = 0x00000000,
   MOVEMENTFLAG_FORWARD = 0x00000001,

@@ -7,7 +7,7 @@ namespace Firelands {
 /// `SpellEffect.dbc` effect types (subset).
 constexpr uint32 kSpellEffectApplyAura = 6u;
 
-/// `SpellEffect.dbc` aura names (`EffectAura` / misc) — Cataclysm 4.3.4 (Trinity
+/// `SpellEffect.dbc` aura names (`EffectAura` / misc) — Cataclysm 4.3.4.
 /// `SpellAuraDefines.h`).
 constexpr uint32 kSpellAuraPeriodicDamage = 3u;
 constexpr uint32 kSpellAuraPeriodicHeal = 8u;

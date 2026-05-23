@@ -5,7 +5,7 @@
 namespace Firelands {
 
 /// Opcodes share a sequence of these markers (movement status elements, MSE).
-/// Values follow the reference core `MovementStructures` layout used by this client.
+/// Values follow Cataclysm 4.3.4 `MovementStructures` layout used by this client.
 enum MovementStatusElements : uint16_t {
   MSEHasGuidByte0,
   MSEHasGuidByte1,

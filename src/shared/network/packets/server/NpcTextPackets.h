@@ -6,7 +6,7 @@
 
 namespace Firelands::gossip {
 
-/// Build `SMSG_NPC_TEXT_UPDATE` — matches TCPP `HandleNpcTextQueryOpcode` layout.
+/// Build `SMSG_NPC_TEXT_UPDATE` — matches WowPacketParser `HandleNpcTextQueryOpcode` layout.
 inline WorldPacket BuildNpcTextUpdate(NpcText const &text) {
   WorldPacket out(SMSG_NPC_TEXT_UPDATE, 256);
   out.Append<uint32_t>(text.id);
@@ -19,8 +19,8 @@ inline WorldPacket BuildNpcTextUpdate(NpcText const &text) {
     for (NpcTextEmote const &emote : option.emotes) {
       out.Append<uint32_t>(static_cast<uint32_t>(emote.delay));
       out.Append<uint32_t>(static_cast<uint32_t>(emote.emote));
-    }
-  }
+}
+}
   return out;
 }
 

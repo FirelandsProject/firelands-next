@@ -10,8 +10,8 @@ bool TryAssignParsed(SetActionButtonCmsg &out, uint8_t index, uint32_t packedAct
     return false;
   out.index = index;
   out.packedAction = packedAction;
-  return true;
-}
+      return true;
+  }
 
 } // namespace
 
@@ -26,23 +26,23 @@ bool IsKnownType(uint8_t type) {
   case Macro:
   case ClickMacro:
   case Item:
-    return true;
+      return true;
   default:
     return false;
   }
-}
+  }
 
 bool IsValidSetRequest(uint8_t button, uint32_t packedAction) {
   if (!IsValidButtonIndex(button))
     return false;
   if (packedAction == 0)
-    return true;
+      return true;
   uint32_t const action = ActionFromPacked(packedAction);
   uint8_t const type = TypeFromPacked(packedAction);
   if (!IsValidActionValue(action))
     return false;
   return IsKnownType(type);
-}
+  }
 
 
 bool TryParseSetActionButtonCmsg(WorldPacket &packet, SetActionButtonCmsg &out) {
@@ -51,7 +51,7 @@ bool TryParseSetActionButtonCmsg(WorldPacket &packet, SetActionButtonCmsg &out) 
   if (remaining < 5)
     return false;
 
-  // AzerothCore / common: uint8 button, then uint32 packed action.
+    // Alternate wire order: uint8 button, then uint32 packed action.
   packet.SetReadPos(start);
   {
     uint8_t const index = packet.Read<uint8_t>();
@@ -60,7 +60,7 @@ bool TryParseSetActionButtonCmsg(WorldPacket &packet, SetActionButtonCmsg &out) 
       return true;
   }
 
-  // Trinity Cataclysm packet class: uint32 packed action, then uint8 button index.
+  // Cataclysm 4.3.4 packet class: uint32 packed action, then uint8 button index.
   packet.SetReadPos(start);
   {
     uint32_t const packed = packet.Read<uint32_t>();
@@ -83,15 +83,15 @@ bool TryParseSetActionButtonCmsg(WorldPacket &packet, SetActionButtonCmsg &out) 
 
   // Later clients: uint64 packed action, then uint8 index.
   if (remaining >= 9) {
-    packet.SetReadPos(start);
+  packet.SetReadPos(start);
     uint64_t const wide = packet.Read<uint64_t>();
     uint8_t const index = packet.Read<uint8_t>();
     if (TryAssignParsed(out, index, PackFromClientAction(static_cast<uint32_t>(wide))))
       return true;
   }
 
-  return false;
-}
+    return false;
+  }
 
 bool MayPlaceOnBar(uint8_t type, uint32_t action,
                    std::unordered_set<uint32_t> const &knownSpellIds) {
@@ -104,11 +104,11 @@ bool MayPlaceOnBar(uint8_t type, uint32_t action,
   case Macro:
   case ClickMacro:
   case Item:
-    return true;
+      return true;
   default:
     return false;
   }
-}
+  }
 
 void ClearBar(PackedActionBar &packed) { packed.fill(0); }
 

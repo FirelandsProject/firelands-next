@@ -5,7 +5,7 @@
 namespace Firelands {
 
 /// Standing band sent in `SMSG_SET_FORCED_REACTIONS` (second `uint32` per pair).
-/// Matches TrinityCore `ReputationRank` / client reputation tiers.
+/// Matches reference `ReputationRank` / client reputation tiers.
 enum class ReputationRank : uint32_t {
   Hated = 0,
   Hostile = 1,

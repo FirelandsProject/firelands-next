@@ -9,7 +9,7 @@ namespace Firelands {
 
 namespace {
 
-// Values align with `domain/models/Chat.h` `Language` (Trinity SharedDefines.h).
+// Values align with `domain/models/Chat.h` `Language` (SharedDefines.h).
 constexpr uint32 kLangUniversal = 0;
 constexpr uint32 kLangOrcish = 1;
 constexpr uint32 kLangDarnassian = 2;

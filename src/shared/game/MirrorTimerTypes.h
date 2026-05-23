@@ -11,7 +11,7 @@ enum class MirrorTimerType : int32_t {
   Fire = 2,
 };
 
-/// Default underwater breath duration (Trinity `Player::getMaxTimer(BREATH_TIMER)`).
+/// Default underwater breath duration (`Player::getMaxTimer(BREATH_TIMER)`).
 inline constexpr int32_t kBreathMirrorMaxMs = 3 * 60 * 1000;
 
 } // namespace Firelands

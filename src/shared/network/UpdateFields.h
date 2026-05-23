@@ -490,7 +490,7 @@ enum EPlayerFields
     PLAYER_FIELD_MOD_TARGET_RESISTANCE               = UNIT_END + 0x0437, // Size: 1, Type: INT, Flags: PRIVATE
     PLAYER_FIELD_MOD_TARGET_PHYSICAL_RESISTANCE      = UNIT_END + 0x0438, // Size: 1, Type: INT, Flags: PRIVATE
     PLAYER_FIELD_BYTES                               = UNIT_END + 0x0439, // Size: 1, Type: BYTES, Flags: PRIVATE
-    /// Byte index inside `PLAYER_FIELD_BYTES` (Cataclysm 4.3.4; Trinity Player.h).
+    /// Byte index inside `PLAYER_FIELD_BYTES` (Cataclysm 4.3.4; Player.h).
     PLAYER_FIELD_BYTES_OFFSET_FLAGS                  = 0,
     PLAYER_FIELD_BYTES_OFFSET_RAF_GRANTABLE_LEVEL    = 1,
     PLAYER_FIELD_BYTES_OFFSET_ACTION_BAR_TOGGLES     = 2,

@@ -11,7 +11,7 @@ namespace Firelands {
 /// `gtChanceToSpellCritBase.dbc` (WDBC: each record is `uint32 id` + `float value`, 8 bytes).
 ///
 /// `gtCombatRatings` rows are indexed as `combatRatingIndex * 100 + (level - 1)` with
-/// `combatRatingIndex` matching Trinity `CombatRating` (0..31) and level 1..100 in the file.
+/// `combatRatingIndex` matching `CombatRating` (0..31) and level 1..100 in the file.
 ///
 /// `gtChanceToMeleeCrit` / `gtChanceToSpellCrit` rows: `(classId - 1) * 100 + (level - 1)` for
 /// classes 1..11 and level 1..100.
@@ -30,7 +30,7 @@ public:
 
   float ChanceToMeleeCrit(uint8_t classId, uint8_t level) const;
   float ChanceToSpellCrit(uint8_t classId, uint8_t level) const;
-  /// Trinity reads `gtChanceToSpellCritBase` row by class (fraction before ×100).
+  /// reads `gtChanceToSpellCritBase` row by class (fraction before ×100).
   float ChanceToSpellCritBase(uint8_t classId) const;
 
 private:
