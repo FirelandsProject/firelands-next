@@ -1,5 +1,7 @@
 #include <application/world/PhaseAreaCatalog.h>
 
+#include <application/world/PhaseConditionEvaluator.h>
+
 #include <algorithm>
 #include <unordered_set>
 
@@ -21,12 +23,14 @@ void AppendUniquePhases(std::vector<uint16> &out, std::vector<uint16> const &add
 
 } // namespace
 
-void PhaseAreaCatalog::Load(std::unordered_map<uint32, std::vector<uint16>> areaPhases) {
+void PhaseAreaCatalog::Load(
+    std::unordered_map<uint32, std::vector<PhaseAreaEntry>> areaPhases) {
   m_areaPhases = std::move(areaPhases);
 }
 
 std::vector<uint16> PhaseAreaCatalog::ResolveForArea(
-    uint32 areaId, std::function<uint32(uint32)> parentOf) const {
+    uint32 areaId, IPlayerQuestProgress const &player,
+    std::function<uint32(uint32)> parentOf) const {
   if (areaId == 0)
     return {};
 
@@ -39,8 +43,15 @@ std::vector<uint16> PhaseAreaCatalog::ResolveForArea(
     if (!visited.insert(current).second)
       break;
 
-    if (auto const it = m_areaPhases.find(current); it != m_areaPhases.end())
-      AppendUniquePhases(phases, it->second);
+    if (auto const it = m_areaPhases.find(current); it != m_areaPhases.end()) {
+      for (PhaseAreaEntry const &entry : it->second) {
+        if (entry.phaseId == 0)
+          continue;
+        if (!EvaluatePhaseConditions(entry.conditions, player))
+          continue;
+        AppendUniquePhases(phases, {entry.phaseId});
+      }
+    }
 
     if (!parentOf)
       break;

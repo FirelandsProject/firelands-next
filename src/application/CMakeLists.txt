@@ -21,8 +21,10 @@ add_library(FirelandsApplication STATIC
     services/OnlineCharacterSessionRegistry.cpp
     services/WorldService.cpp
     world/PlayerPhaseShift.cpp
+    world/PhaseConditionEvaluator.cpp
     world/PhaseGroupCatalog.cpp
     world/PhaseAreaCatalog.cpp
+    world/PlayerQuestProgressStore.cpp
     world/WorldRuntimeAccess.cpp
     gm/GmPlayerRevive.cpp
 )
