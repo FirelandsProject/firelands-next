@@ -14,6 +14,7 @@ add_library(FirelandsShared STATIC
     dbc/GtOctCombatDbc.cpp
     dbc/GtPlayerStatGameTables.cpp
     dbc/FactionTemplateDbc.cpp
+    dbc/AreaTableDbc.cpp
     dbc/ChrRacesDbc.cpp
     game/EquipmentCache.cpp
     game/ChatLanguages.cpp

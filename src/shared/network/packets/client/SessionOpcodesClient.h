@@ -23,13 +23,13 @@ struct TimeSyncResponse {
   }
 };
 
-/// `CMSG_ZONEUPDATE` — new zone id for session bookkeeping.
+/// `CMSG_ZONEUPDATE` — client area id (`AreaTable.dbc`); often parent area, not finest sub-area.
 struct ZoneUpdateRequest {
-  uint32_t newZoneId = 0;
+  uint32_t newAreaId = 0;
   static void Read(WorldPacket &packet, ZoneUpdateRequest &out) {
-    out.newZoneId = 0;
+    out.newAreaId = 0;
     if (packet.Size() - packet.GetReadPos() >= sizeof(uint32))
-      out.newZoneId = packet.Read<uint32>();
+      out.newAreaId = packet.Read<uint32>();
   }
 };
 
