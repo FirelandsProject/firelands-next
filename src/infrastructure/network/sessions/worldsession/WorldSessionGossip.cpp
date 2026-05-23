@@ -14,6 +14,7 @@
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/Logger.h>
+#include <shared/game/GmCreatureVisibility.h>
 #include <shared/game/UnitNpcFlags.h>
 #include <shared/game/WowGuid.h>
 
@@ -139,6 +140,18 @@ uint32_t WorldSession::ResolveEffectiveNpcFlagsForCreature(
       creature.GetNpcFlags(),
       CreatureHasStarterQuests(_questGossipRepo.get(), creature.GetEntry(),
                                _playerClass, _playerRace));
+}
+
+WorldSession::CreatureClientWireFields WorldSession::ResolveCreatureWireFieldsForClient(
+    Creature const &creature) const {
+  uint32 const effectiveNpc = ResolveEffectiveNpcFlagsForCreature(creature);
+  bool const gmSeeAll = GmSeesAllCreatures();
+  return {
+      WireDisplayIdForCreature(creature.GetDisplayId(), creature.GetExtraFlags(), gmSeeAll),
+      WireNpcFlagsForCreature(creature.GetNpcFlags(), effectiveNpc, gmSeeAll),
+      WireUnitFieldFlagsForCreature(creature.GetUnitFieldFlags(), gmSeeAll),
+      creature.GetUnitFieldFlags2(),
+  };
 }
 
 void WorldSession::SendQuestGiverStatusForGuid(uint64_t npcGuid,

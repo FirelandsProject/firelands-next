@@ -186,6 +186,9 @@ void WorldSession::HandleMovement(WorldPacket &packet) {
     _position.time = move.time;
   }
 
+  if (parsed && (trustFullPosition || mergeMovementState))
+    ApplyGmFlyAuthority(_position, _gmFlyEnabled, _breathMirrorActive);
+
   // The game client expects the server to echo MSG_MOVE_* payloads for these opcodes.
   // If parsing fails (wrong layout for a given opcode), still echo the raw bytes so
   // the client state machine does not stall; only apply map/DB position when parsed.

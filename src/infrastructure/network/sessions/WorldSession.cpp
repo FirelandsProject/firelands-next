@@ -28,6 +28,7 @@ WorldSession::WorldSession(
     std::shared_ptr<IGossipRepository> gossipRepo,
     std::shared_ptr<INpcTextRepository> npcTextRepo,
     std::shared_ptr<IQuestGossipRepository> questGossipRepo,
+    std::shared_ptr<IPlayerQuestProgressRepository> questProgressRepo,
     std::shared_ptr<EmotesTextDbc const> emotesTextDbc,
     std::shared_ptr<IWorldRuntime> worldRuntime)
     : _socket(std::move(socket)), _authService(std::move(authService)),
@@ -47,6 +48,7 @@ WorldSession::WorldSession(
       _gossipRepo(std::move(gossipRepo)),
       _npcTextRepo(std::move(npcTextRepo)),
       _questGossipRepo(std::move(questGossipRepo)),
+      _questProgressRepo(std::move(questProgressRepo)),
       _emotesTextDbc(std::move(emotesTextDbc)),
       _worldRuntime(worldRuntime ? std::move(worldRuntime) : WorldRuntimePtr()),
       _serverSeed(0),

@@ -1,5 +1,6 @@
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <shared/game/EquipmentCache.h>
+#include <shared/game/PlayerClass.h>
 #include <shared/Logger.h>
 #include <shared/network/BitWriter.h>
 
@@ -69,7 +70,7 @@ void WorldSession::HandleCharEnum(WorldPacket & /*packet*/) {
     auto &gd = gd_list[i];
 
     // Exact byte order for 15595 Character Enum
-    response.Append<uint8>(ch->GetClass());
+    response.Append<uint8>(ToClassId(ch->GetClass()));
 
     const auto visualItems = EquipmentCache::Parse(ch->GetEquipmentCache());
     // Equipment (VisualItems) — 23 slots for 4.3.4.15595. Per-slot order is
@@ -153,6 +154,34 @@ void WorldSession::HandleCharCreate(WorldPacket &packet) {
   response.Append<uint8>(success ? 0x2F : 0x30);
   SendPacket(response);
   }
+
+void WorldSession::HandleGenerateRandomCharacterName(WorldPacket &packet) {
+  if (packet.Size() - packet.GetReadPos() < 2u)
+    return;
+
+  uint8 const race = packet.Read<uint8>();
+  uint8 const gender = packet.Read<uint8>();
+
+  LOG_DEBUG("CMSG_GENERATE_RANDOM_CHARACTER_NAME: Race={} Gender={}", race, gender);
+
+  WorldPacket response(SMSG_GENERATE_RANDOM_CHARACTER_NAME_RESULT);
+  BitWriter bw(response);
+
+  auto const name = _charService->GenerateRandomCharacterName(race, gender);
+  bool const success = name.has_value() && !name->empty();
+  bw.WriteBit(success);
+  if (success) {
+    bw.WriteBits(static_cast<uint32>(name->size()), 6);
+    bw.Flush();
+    response.WriteStringNoNull(*name);
+  } else {
+    bw.Flush();
+    LOG_WARN("Random name generation failed: Account={} Race={} Gender={}", _accountId,
+             race, gender);
+  }
+
+  SendPacket(response);
+}
 
 void WorldSession::HandleCharDelete(WorldPacket &packet) {
   uint64 guid = packet.Read<uint64>();

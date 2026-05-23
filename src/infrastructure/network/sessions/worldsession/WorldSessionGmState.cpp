@@ -4,6 +4,7 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/game/PlayerGmAppearance.h>
 #include <shared/network/MovementSetPackets.h>
+#include <shared/network/MovementStateQueries.h>
 #include <shared/network/UpdateFields.h>
 #include <shared/network/UpdateData.h>
 #include <cmath>
@@ -28,8 +29,13 @@ void WorldSession::ResetGmStateForLogout() {
 }
 
 void WorldSession::SetGmTagEnabled(bool on) {
+  bool const wasOn = _gmAppearance.gmTagOn;
   _gmAppearance.gmTagOn = on;
   PublishGmVisualPatchIfInWorld();
+  if (_playerGuid == 0 || wasOn == on)
+    return;
+  RefreshNearbyCreaturePhaseVisibility(_position.x, _position.y);
+  RefreshNearbyCreatureGmWireFlags();
 }
 
 void WorldSession::SetDndEnabled(bool on) {
@@ -49,6 +55,16 @@ void WorldSession::SetGmVisibleToPlayers(bool visible) {
 
 void WorldSession::SetGmFlyEnabled(bool on) {
   _gmFlyEnabled = on;
+  if (_playerGuid != 0) {
+    ApplyGmFlyAuthority(_position, _gmFlyEnabled, _breathMirrorActive);
+    _movementAnimTierSent.reset();
+    bool const inLiquid =
+        MovementIsSwimming(_position) || _breathMirrorActive;
+    UpdateBreathFromSwimmingState(inLiquid);
+    SyncPlayerMovementHintsIfNeeded(inLiquid);
+    if (auto map = runtime().GetMap(_mapId))
+      map->UpdateObjectPosition(_playerGuid, _position);
+  }
   PublishGmMovementPacketsIfInWorld();
 }
 

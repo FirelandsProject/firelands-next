@@ -21,6 +21,9 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_CHAR_ENUM:
     HandleCharEnum(packet);
     break;
+  case CMSG_GENERATE_RANDOM_CHARACTER_NAME:
+    HandleGenerateRandomCharacterName(packet);
+    break;
   case MSG_QUERY_NEXT_MAIL_TIME:
     HandleQueryNextMailTime(packet);
     break;

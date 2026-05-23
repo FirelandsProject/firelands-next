@@ -33,8 +33,11 @@
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
 #include <infrastructure/persistence/MySqlPhaseAreaCatalogRepository.h>
+#include <infrastructure/persistence/MySqlPhaseConditionRepository.h>
 #include <infrastructure/persistence/MySqlPhaseGroupCatalogRepository.h>
+#include <infrastructure/persistence/MySqlPlayerQuestProgressRepository.h>
 #include <application/world/PhaseAreaCatalog.h>
+#include <application/world/PhaseAreaCatalogBuilder.h>
 #include <application/world/PhaseGroupCatalog.h>
 #include <application/world/WorldRuntimeAccess.h>
 #include <infrastructure/persistence/MySqlGmTicketRepository.h>
@@ -59,6 +62,7 @@
 #include <shared/dbc/ItemDbHotfixStore.h>
 #include <shared/dbc/EmotesTextDbc.h>
 #include <shared/dbc/LanguagesDbc.h>
+#include <shared/dbc/NameGenDbc.h>
 #include <shared/dbc/SpellDifficultyDbc.h>
 #include <thread>
 
@@ -144,8 +148,15 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         dbcBasePath + "/CharStartOutfit.dbc";
     auto playerCreateInfoService = std::make_shared<PlayerCreateInfoService>(
         playerCreateInfoRepo, charStartOutfitDbcPath, dbcBasePath);
-    auto charService =
-        std::make_shared<CharacterService>(charRepo, playerCreateInfoService);
+    auto nameGenDbc = std::make_shared<NameGenDbc>();
+    if (!nameGenDbc->Load(dbcBasePath + "/NameGen.dbc")) {
+      LOG_WARN("NameGen.dbc not loaded from {}; character randomize-name button "
+               "will not work.",
+               dbcBasePath + "/NameGen.dbc");
+      nameGenDbc.reset();
+    }
+    auto charService = std::make_shared<CharacterService>(
+        charRepo, playerCreateInfoService, nameGenDbc);
     auto onlineCharRegistry =
         std::make_shared<OnlineCharacterSessionRegistry>();
     auto gmTicketRepo = std::make_shared<MySqlGmTicketRepository>(charConn);
@@ -296,11 +307,14 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         std::make_shared<MySqlCreatureSpawnRepository>(worldConn);
     auto phaseGroupRepo = std::make_shared<MySqlPhaseGroupCatalogRepository>(worldConn);
     auto phaseAreaRepo = std::make_shared<MySqlPhaseAreaCatalogRepository>(worldConn);
+    auto phaseConditionRepo = std::make_shared<MySqlPhaseConditionRepository>(worldConn);
+    auto questProgressRepo = std::make_shared<MySqlPlayerQuestProgressRepository>(charConn);
     auto phaseGroupCatalogOwned = std::make_shared<PhaseGroupCatalog>();
     phaseGroupCatalogOwned->Load(phaseGroupRepo->LoadPhaseGroups());
     WorldService::Instance().SetPhaseGroupCatalog(phaseGroupCatalogOwned);
     auto phaseAreaCatalogOwned = std::make_shared<PhaseAreaCatalog>();
-    phaseAreaCatalogOwned->Load(phaseAreaRepo->LoadAreaPhases());
+    phaseAreaCatalogOwned->Load(BuildPhaseAreaCatalogLoadMap(
+        phaseAreaRepo->LoadAreaPhases(), phaseConditionRepo->LoadPhaseConditions()));
     WorldService::Instance().SetPhaseAreaCatalog(phaseAreaCatalogOwned);
     LoadDatabaseCreatureSpawns(*creatureSpawnRepo, *creatureStatsRepo,
                                *phaseGroupCatalogOwned, factionTemplateDbc.get());
@@ -315,13 +329,13 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
          languagesDbc, spellDefinitions, realmRepo,
          onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
          combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo, npcTextRepo,
-         questGossipRepo, emotesTextDbc](boost::asio::ip::tcp::socket socket) {
+         questGossipRepo, questProgressRepo, emotesTextDbc](boost::asio::ip::tcp::socket socket) {
           std::make_shared<WorldSession>(
               std::move(socket), authService, charService, commandService,
               accountDataRepo, languagesDbc, spellDefinitions, realmRepo,
               onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
               combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo,
-              npcTextRepo, questGossipRepo, emotesTextDbc, WorldRuntimePtr())
+              npcTextRepo, questGossipRepo, questProgressRepo, emotesTextDbc, WorldRuntimePtr())
               ->Start();
         };
 

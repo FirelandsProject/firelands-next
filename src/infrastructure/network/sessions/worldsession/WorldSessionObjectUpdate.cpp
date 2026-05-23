@@ -6,6 +6,7 @@
 #include <shared/game/ChatLanguages.h>
 #include <shared/game/EquipmentCache.h>
 #include <shared/dbc/GtPlayerStatGameTables.h>
+#include <shared/game/PlayerClass.h>
 #include <shared/game/StatFormulas.h>
 #include <shared/game/UnitCombatStats.h>
 #include <shared/game/InventorySlots.h>
@@ -106,7 +107,15 @@ void SetBaselinePercentMultipliers(std::map<uint16, uint32> &fields, uint16 base
 }
 
 bool UsesBaselineHealingPower(uint8 classId) {
-  return classId == 2 || classId == 5 || classId == 7 || classId == 11;
+  switch (ToPlayerClass(classId)) {
+  case PlayerClass::Paladin:
+  case PlayerClass::Priest:
+  case PlayerClass::Shaman:
+  case PlayerClass::Druid:
+    return true;
+  default:
+    return false;
+  }
 }
 
 void AddBaselineMeleeFields(std::map<uint16, uint32> &fields,
@@ -140,7 +149,7 @@ void AddBaselineMeleeFields(std::map<uint16, uint32> &fields,
 void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
                             Character const &character,
                             GtPlayerStatGameTables const *statGameTables) {
-  uint8 const klass = character.GetClass();
+  uint8 const klass = ToClassId(character.GetClass());
   uint8 const level = character.GetLevel();
   uint32 const inte = character.GetPrimaryStat(3);
   uint32 const spi = character.GetPrimaryStat(4);
@@ -207,7 +216,7 @@ void AddBaselineSpellFields(std::map<uint16, uint32> &fields,
 void AddBaselineDefenseAndResistanceFields(
     std::map<uint16, uint32> &fields, Character const &character,
     GtPlayerStatGameTables const *statGameTables) {
-  uint8 const klass = character.GetClass();
+  uint8 const klass = ToClassId(character.GetClass());
   uint8 const level = character.GetLevel();
   uint32 const agi = character.GetPrimaryStat(1);
   uint32 const str = character.GetPrimaryStat(0);
@@ -310,26 +319,26 @@ void BuildPlayerMovementHintsValuesUpdate(uint16 mapId, uint64 playerGuid,
 }
 
 std::vector<uint32> BuildDefaultKnownSpells(uint8 classId) {
-  switch (classId) {
-  case 1: // Warrior
+  switch (ToPlayerClass(classId)) {
+  case PlayerClass::Warrior:
     return {2457, 71, 78, 100, 6673, 772, 3127, 34428};
-  case 2: // Paladin
+  case PlayerClass::Paladin:
     return {465, 635, 20154, 20271, 35395, 19740, 498, 633, 82242};
-  case 3: // Hunter
-    return {75, 13165, 1978, 2643, 56641, 781, 1130, 2973};
-  case 4: // Rogue
+  case PlayerClass::Hunter:
+    return {75, 883, 13165, 1978, 2643, 56641, 781, 1130, 2973};
+  case PlayerClass::Rogue:
     return {1784, 2098, 53, 1752, 921, 1766, 1776, 82245};
-  case 5: // Priest
+  case PlayerClass::Priest:
     return {585, 589, 2061, 17, 139, 2050, 8092};
-  case 6: // Death Knight
+  case PlayerClass::DeathKnight:
     return {48263, 45524, 49998, 47528, 48721, 45529, 48792};
-  case 7: // Shaman
+  case PlayerClass::Shaman:
     return {331, 8042, 8017, 8050, 324, 51730, 8004, 52127};
-  case 8: // Mage
+  case PlayerClass::Mage:
     return {116, 133, 2136, 1459, 130, 1953, 118};
-  case 9: // Warlock (688 Summon Imp is quest-gated)
+  case PlayerClass::Warlock:
     return {686, 172, 348, 1454, 5782, 980};
-  case 11: // Druid
+  case PlayerClass::Druid:
     return {8921, 5185, 774, 768, 1126, 339, 467};
   default:
     return {6673, 78, 2457, 3127};
@@ -414,7 +423,7 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
       (1 << TYPEID_OBJECT) | (1 << TYPEID_UNIT) | (1 << TYPEID_PLAYER);
   fields[OBJECT_FIELD_SCALE_X] = 0x3F800000;
 
-  uint8 bytes0[4] = {character.GetRace(), character.GetClass(),
+  uint8 bytes0[4] = {character.GetRace(), ToClassId(character.GetClass()),
                      character.GetGender(), character.GetPowerType()};
   std::memcpy(&fields[UNIT_FIELD_BYTES_0], bytes0, 4);
 
@@ -673,7 +682,7 @@ void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
   dst.WriteString(realmName);
   dst.Append<uint8>(ch.GetRace());
   dst.Append<uint8>(ch.GetGender());
-  dst.Append<uint8>(ch.GetClass());
+  dst.Append<uint8>(ToClassId(ch.GetClass()));
   dst.Append<uint8>(0); // DeclinedNames.has_value() == false
 }
 

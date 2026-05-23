@@ -1,5 +1,6 @@
 add_executable(FirelandsUnitTests
     unit/domain/UnitTests.cpp
+    unit/domain/CharacterDisplayIdTests.cpp
     unit/domain/RealmTests.cpp
     unit/domain/AuraTests.cpp
     unit/domain/SpellDefinitionTests.cpp
@@ -19,11 +20,14 @@ add_executable(FirelandsUnitTests
     unit/shared/StarterSpellsDbcTests.cpp
     unit/shared/StarterSpellFiltersTests.cpp
     unit/shared/StarterSkillFiltersTests.cpp
+    unit/shared/ChatLanguagesTests.cpp
+    unit/shared/PlayerClassTests.cpp
     unit/shared/PlayerItemProficiencyTests.cpp
     unit/shared/SkillLineCategoriesTests.cpp
     unit/shared/FactionTemplateHelpersTests.cpp
     unit/shared/PlayerRaceFactionTemplateTests.cpp
     unit/shared/ChrRacesDbcTests.cpp
+    unit/shared/NameGenDbcTests.cpp
     unit/shared/PermissionsTests.cpp
     unit/shared/SpellCastWireTests.cpp
     unit/shared/SpellVisualDbcTests.cpp
@@ -45,6 +49,7 @@ add_executable(FirelandsUnitTests
     unit/shared/RestExperienceLogicTests.cpp
     unit/shared/CombatDamageTests.cpp
     unit/shared/PhaseShiftTests.cpp
+    unit/shared/GmCreatureVisibilityTests.cpp
     unit/shared/PlayerResourceRegenTests.cpp
     unit/application/PlayerAuraRegenEffectsTests.cpp
     unit/shared/MeleeRangeTest.cpp
@@ -54,6 +59,7 @@ add_executable(FirelandsUnitTests
     unit/application/RealmListServiceTests.cpp
     unit/application/AuthServiceTests.cpp
     unit/application/CharacterServiceTests.cpp
+    unit/application/CharacterServiceRandomNameTests.cpp
     unit/application/CharacterActionButtonsTests.cpp
     unit/application/SpellHitEffectsTests.cpp
     unit/application/SpellImpactEffectsTests.cpp
@@ -63,6 +69,7 @@ add_executable(FirelandsUnitTests
     unit/application/PassiveSpellAurasTests.cpp
     unit/application/PlayerPhaseShiftTests.cpp
     unit/application/PhaseAreaCatalogTests.cpp
+    unit/application/PhaseConditionEvaluatorTests.cpp
     unit/application/CommandServiceReviveUnlearnTests.cpp
     unit/application/GmPlayerReviveTests.cpp
     unit/application/PlayerAuraStatEffectsTests.cpp

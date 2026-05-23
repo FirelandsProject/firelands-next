@@ -85,13 +85,54 @@ bool DecodeAddonChatOpcode(uint32 opcode, uint32 &outType) {
 }
 
 bool AddonLangAllowedForType(uint32 type) {
+  return IsAddonChatLanguageAllowed(type);
+}
+
+/// Build 15595 `ChatMessage::Read` — language is a plain int32, then bit-packed strings.
+/// Text length is always 11 bits; `/say` also carries a 1-bit IsSecure flag after lengths.
+bool ReadCataChatMessageBody(uint32 type, BitReader &br, std::string &message,
+                             std::string &target, std::string &channel) {
+  message.clear();
+  target.clear();
+  channel.clear();
+
   switch (type) {
+  case CHAT_MSG_SAY:
   case CHAT_MSG_PARTY:
   case CHAT_MSG_RAID:
-  case CHAT_MSG_GUILD:
-  case CHAT_MSG_WHISPER:
-  case CHAT_MSG_BATTLEGROUND:
+  case CHAT_MSG_RAID_WARNING: {
+    uint32 const textLen = br.ReadBits(11);
+    (void)br.ReadBit(); // IsSecure
+    message = br.ReadString(textLen);
     return true;
+  }
+  case CHAT_MSG_YELL:
+  case CHAT_MSG_EMOTE:
+  case CHAT_MSG_AFK:
+  case CHAT_MSG_DND:
+  case CHAT_MSG_GUILD:
+  case CHAT_MSG_OFFICER:
+  case CHAT_MSG_BATTLEGROUND: {
+    uint32 const textLen = br.ReadBits(11);
+    message = br.ReadString(textLen);
+    return true;
+  }
+  case CHAT_MSG_WHISPER: {
+    uint32 const nameLen = br.ReadBits(9);
+    uint32 const textLen = br.ReadBits(11);
+    target = br.ReadString(nameLen);
+    message = br.ReadString(textLen);
+    return true;
+  }
+  case CHAT_MSG_CHANNEL: {
+    uint32 const chLen = br.ReadBits(9);
+    uint32 const textLen = br.ReadBits(11);
+    if (br.ReadBit()) // OptionalInit(IsSecure)
+      (void)br.ReadBit();
+    channel = br.ReadString(chLen);
+    message = br.ReadString(textLen);
+    return true;
+  }
   default:
     return false;
   }
@@ -176,43 +217,8 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
   std::string message;
 
   BitReader br(packet);
-  switch (type) {
-  case CHAT_MSG_SAY:
-  case CHAT_MSG_YELL:
-  case CHAT_MSG_EMOTE:
-  case CHAT_MSG_PARTY:
-  case CHAT_MSG_GUILD:
-  case CHAT_MSG_OFFICER:
-  case CHAT_MSG_RAID:
-  case CHAT_MSG_RAID_WARNING:
-  case CHAT_MSG_BATTLEGROUND: {
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    break;
-  }
-  case CHAT_MSG_WHISPER: {
-    uint32 const nameLen = br.ReadBits(10);
-    uint32 const textLen = br.ReadBits(9);
-    target = br.ReadString(nameLen);
-    message = br.ReadString(textLen);
-    break;
-  }
-  case CHAT_MSG_CHANNEL: {
-    uint32 const chLen = br.ReadBits(10);
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    channel = br.ReadString(chLen);
-    break;
-  }
-  case CHAT_MSG_AFK:
-  case CHAT_MSG_DND: {
-    uint32 const textLen = br.ReadBits(9);
-    message = br.ReadString(textLen);
-    break;
-  }
-  default:
+  if (!ReadCataChatMessageBody(type, br, message, target, channel))
     return;
-  }
 
   if (type != CHAT_MSG_AFK && type != CHAT_MSG_DND && message.empty())
     return;
@@ -241,19 +247,7 @@ void WorldSession::HandleMessageChat(WorldPacket &packet) {
     return;
 
   if (type != CHAT_MSG_EMOTE && type != CHAT_MSG_AFK && type != CHAT_MSG_DND) {
-    // Force deterministic spoken language for this character. Some clients can
-    // keep stale language selections in the normal chat box and send invalid
-    // language ids; using race default avoids client-side "cannot speak" spam.
-    lang = DefaultLanguageForRace(_playerRace);
-    if (lang == CHAT_LANG_ADDON) {
-      if (!AddonLangAllowedForType(type)) {
-        lang = DefaultLanguageForRace(_playerRace);
-      }
-    } else {
-      // Keep permissive behavior: if spell list is out of sync, do not block chat.
-      if (!PlayerKnowsLanguage(_knownSpellIds, lang))
-        lang = DefaultLanguageForRace(_playerRace);
-    }
+    lang = NormalizePlayerChatLanguage(lang, type, _playerRace, _knownSpellIds);
   }
 
   // `receiverGuid` must be 0 for open channels (/say, /yell, party, guild, …).

@@ -1,5 +1,6 @@
 #include <application/combat/PlayerCombatStats.h>
 #include <domain/ports/IMapNotifier.h>
+#include <shared/game/PlayerClass.h>
 #include <shared/game/PlayerPowerType.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
 #include <application/spell/PassiveSpellAuras.h>
@@ -98,7 +99,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   _sentOpeningCinematic = false;
   _tutorialInts = character.GetTutorialMask();
   _playerRace = character.GetRace();
-  _playerClass = character.GetClass();
+  _playerClass = ToClassId(character.GetClass());
   _playerLevel = std::max<uint8>(1, character.GetLevel());
   _loginPower1 = character.GetPower1();
   _loginMaxPower1 = character.GetMaxPower1();
@@ -119,6 +120,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   LoginResolveMapPosition(guid, character, move);
 
   LoginSpawnInWorld(guid, character, move);
+  LoadQuestProgressForCharacter(static_cast<uint32>(guid));
   LoginSendCreateUpdatesAndMutualVisibility(guid, character, move);
   LoginFinalizeWorldEntry(guid);
 
@@ -165,17 +167,17 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
     PlayerCreateInfoService const *pci = _charService->GetPlayerCreateInfoService();
     if (pci) {
       _knownSpells = PlayerSpellbook::BuildKnownSpells(
-          character.GetRace(), character.GetClass(), character.GetLevel(), *pci,
+          character.GetRace(), ToClassId(character.GetClass()), character.GetLevel(), *pci,
           _spellDefinitions.get(),
           _charService->GetCharacterSpellIds(character.GetGuid()));
       _knownSkills = PlayerSpellbook::BuildStarterSkills(
-          character.GetRace(), character.GetClass(), *pci);
+          character.GetRace(), ToClassId(character.GetClass()), *pci);
     } else {
       _knownSpells.clear();
       AppendRacialLanguageSpells(character.GetRace(), _knownSpells);
       _knownSkills.clear();
 }
-    if (character.GetClass() == 9u) {
+    if (character.GetClass() == PlayerClass::Warlock) {
       _knownSpells.erase(
           std::remove_if(_knownSpells.begin(), _knownSpells.end(),
                          [](uint32_t sid) {
@@ -225,7 +227,7 @@ void WorldSession::LoginBuildKnownSpellsAndSendSpellbook(Character const &charac
       LOG_DEBUG("[CHAT] login race={} class={} defaultLang={} langSpell={} known={} "
                 "spells={} ids=[{}]",
                 static_cast<uint32>(character.GetRace()),
-                static_cast<uint32>(character.GetClass()), defaultLang,
+                static_cast<uint32>(ToClassId(character.GetClass())), defaultLang,
                 defaultLangSpell,
                 PlayerKnowsLanguage(_knownSpellIds, defaultLang) ? 1 : 0,
                 _knownSpells.size(), ids);
@@ -261,7 +263,7 @@ void WorldSession::RefreshKnownSpellsForCharacter(Character const &character) {
   if (!pci)
     return;
       _knownSpells = PlayerSpellbook::BuildKnownSpells(
-          character.GetRace(), character.GetClass(), character.GetLevel(), *pci,
+          character.GetRace(), ToClassId(character.GetClass()), character.GetLevel(), *pci,
           _spellDefinitions.get(),
           _charService->GetCharacterSpellIds(character.GetGuid()));
     RebuildKnownSpellIdSet(_knownSpells, _knownSpellIds);
@@ -337,10 +339,10 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
     float dimDodge = 0.f;
     float nondimDodge = 0.f;
     StatFormulas::ComputeDodgeContributionsFromAgility(
-        character.GetLevel(), character.GetClass(), character.GetPrimaryStat(1),
+        character.GetLevel(), ToClassId(character.GetClass()), character.GetPrimaryStat(1),
         dimDodge, nondimDodge, gt);
     StatFormulas::AvoidanceClassParams const av =
-        StatFormulas::AvoidanceParamsForClass(character.GetClass());
+        StatFormulas::AvoidanceParamsForClass(ToClassId(character.GetClass()));
     player->SetBaselineDodgePct(StatFormulas::AvoidanceAfterDiminishingReturns(
         av.dodgeCap, av.diminishingK, nondimDodge, dimDodge));
   }
@@ -406,11 +408,11 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
     if (!IsCreatureVisibleToPlayer(*cr))
       return;
     _visibleCreatureGuids.insert(cr->GetGuid());
-    const uint32_t npcFlags = ResolveEffectiveNpcFlagsForCreature(*cr);
+    auto const wire = ResolveCreatureWireFieldsForClient(*cr);
     auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
-        cr->GetGuid(), cr->GetEntry(), cr->GetDisplayId(), cr->GetLiveHealth(),
-        cr->GetLiveMaxHealth(), cr->GetLevel(), npcFlags, cr->GetFactionTemplate(),
-        cr->GetUnitFieldFlags(), cr->GetUnitFieldFlags2());
+        cr->GetGuid(), cr->GetEntry(), wire.displayId, cr->GetLiveHealth(),
+        cr->GetLiveMaxHealth(), cr->GetLevel(), wire.npcFlags, cr->GetFactionTemplate(),
+        wire.unitFieldFlags, wire.unitFieldFlags2);
     batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
                           npcFields);
     ++inBatch;

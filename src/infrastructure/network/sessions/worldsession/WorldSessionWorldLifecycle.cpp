@@ -122,6 +122,7 @@ void WorldSession::FinalizeWorldExit() {
   _mapId = 0;
   _zoneId = 0;
   _areaId = 0;
+  _questProgress.LoadSnapshot({});
   _timeSyncNextCounter = 0;
   _position = MovementInfo{};
 }

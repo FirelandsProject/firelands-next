@@ -36,7 +36,8 @@
 #include <application/combat/CombatService.h>
 #include <application/services/AuthService.h>
 #include <application/services/CharacterService.h>
-#include <application/spell/SpellManager.h>
+#include <application/world/PlayerQuestProgressStore.h>
+#include <domain/repositories/IPlayerQuestProgressRepository.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -60,6 +61,7 @@ struct GmTicketUiSession;
 }
 
 class SpellManager;
+struct SpellCastOutcome;
 
 class UpdateData;
 
@@ -80,6 +82,7 @@ class FactionTemplateDbc;
 class IGossipRepository;
 class INpcTextRepository;
 class IQuestGossipRepository;
+class IPlayerQuestProgressRepository;
 class Creature;
 class Map;
 class Player;
@@ -107,6 +110,7 @@ public:
       std::shared_ptr<IGossipRepository> gossipRepo,
       std::shared_ptr<INpcTextRepository> npcTextRepo,
       std::shared_ptr<IQuestGossipRepository> questGossipRepo,
+      std::shared_ptr<IPlayerQuestProgressRepository> questProgressRepo,
       std::shared_ptr<EmotesTextDbc const> emotesTextDbc,
       std::shared_ptr<IWorldRuntime> worldRuntime = {});
 
@@ -203,6 +207,8 @@ public:
 
   /// After phase-related auras apply or expire (spell effects, scripts).
   void RefreshPlayerPhaseVisibilityFromAuras();
+  /// Re-evaluate `phase_area` conditions after quest progress changes.
+  void RefreshPlayerPhaseVisibilityFromQuestProgress();
   uint32_t ResolveSessionAreaId(uint32_t clientAreaHint) const;
   void SetSessionAreaId(uint32_t clientAreaHint);
 
@@ -231,6 +237,7 @@ public:
   void HandleCharEnum(WorldPacket &packet);
   void HandleCharCreate(WorldPacket &packet);
   void HandleCharDelete(WorldPacket &packet);
+  void HandleGenerateRandomCharacterName(WorldPacket &packet);
   void HandlePlayerLogin(WorldPacket &packet);
   void HandleLogoutRequest(WorldPacket &packet);
   void HandleLogoutCancel(WorldPacket &packet);
@@ -412,7 +419,16 @@ public:
   bool TrySendDatabaseGossipMenu(uint64_t npcGuid, uint32_t templateEntry);
   /// Gossip menu or quest list for a quest giver NPC (used by gossip + quest hello opcodes).
   bool TryOpenQuestGiverDialog(uint64_t npcGuid);
+  struct CreatureClientWireFields {
+    uint32 displayId = 0;
+    uint32 npcFlags = 0;
+    uint32 unitFieldFlags = 0;
+    uint32 unitFieldFlags2 = 0;
+  };
+  bool GmSeesAllCreatures() const { return _gmAppearance.gmTagOn; }
   uint32_t ResolveEffectiveNpcFlagsForCreature(Creature const &creature) const;
+  CreatureClientWireFields ResolveCreatureWireFieldsForClient(
+      Creature const &creature) const;
   void SendQuestGiverStatusForGuid(uint64_t npcGuid, uint32_t creatureEntry);
   void SendQuestGiverStatusMultipleNearby();
 
@@ -467,8 +483,10 @@ public:
   void RebuildPlayerPhaseShiftFromActiveAuras();
   void SendPlayerPhaseShiftToClient();
   void RefreshNearbyCreaturePhaseVisibility(float x, float y);
+  void RefreshNearbyCreatureGmWireFlags();
   bool IsCreatureVisibleToPlayer(Creature const &creature) const;
   void LoginFinalizeWorldEntry(uint64 guid);
+  void LoadQuestProgressForCharacter(uint32 characterGuid);
   void TrySendFirstLoginOpeningCinematic(Character const &character);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
   /// Persists position, `player_logout`, removes from map and online registry, clears
@@ -535,8 +553,10 @@ public:
   std::shared_ptr<IGossipRepository> _gossipRepo;
   std::shared_ptr<INpcTextRepository> _npcTextRepo;
   std::shared_ptr<IQuestGossipRepository> _questGossipRepo;
+  std::shared_ptr<IPlayerQuestProgressRepository> _questProgressRepo;
   std::shared_ptr<EmotesTextDbc const> _emotesTextDbc;
   std::shared_ptr<IWorldRuntime> _worldRuntime;
+  PlayerQuestProgressStore _questProgress;
 
   bool IsActivePlayerAlive() const;
   void ApplyUnitNpcEmoteState(uint32_t emoteAnim);
