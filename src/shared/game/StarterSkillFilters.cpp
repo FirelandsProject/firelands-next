@@ -5,6 +5,7 @@ namespace Firelands {
 
 bool IsMetaOrInternalStarterSkill(uint32_t skillId) {
   switch (skillId) {
+  case 95u:   // Defense — playercreateinfo row; clutters profession UI when unlearned
   case 183u:  // GENERIC (DND)
   case 777u:  // Mounts
   case 778u:  // Companion Pets
@@ -91,11 +92,13 @@ bool IsClassSpellTabStarterSkill(uint32_t skillId) {
 }
 
 bool IsExcludedStarterSkill(uint32_t skillId) {
+  if (IsMetaOrInternalStarterSkill(skillId) || IsSecondaryProfessionSkillLine(skillId) ||
+      IsRidingStarterSkill(skillId) || IsProfessionStarterSkill(skillId) ||
+      IsClassSpellTabStarterSkill(skillId))
+    return true;
   if (SkillLineCategoriesLoaded())
     return !IsAllowedStarterSkillLine(skillId);
-  return IsMetaOrInternalStarterSkill(skillId) ||
-         IsRidingStarterSkill(skillId) || IsProfessionStarterSkill(skillId) ||
-         IsClassSpellTabStarterSkill(skillId);
+  return false;
 }
 
 } // namespace Firelands

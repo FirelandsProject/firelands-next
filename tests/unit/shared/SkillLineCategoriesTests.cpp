@@ -47,5 +47,6 @@ TEST_F(SkillLineCategoriesTest, ExcludesRacialFromSkillWireSlots) {
   ASSERT_TRUE(SkillLineCategoriesLoaded());
   EXPECT_TRUE(IsExcludedStarterSkill(777u));   // Mounts meta → blocked from wire
   EXPECT_TRUE(IsExcludedStarterSkill(754u));   // Human racial → blocked from wire
-  EXPECT_FALSE(IsExcludedStarterSkill(95u));   // Defense → weapon cat → allowed
+  EXPECT_TRUE(IsExcludedStarterSkill(95u));    // Defense — never on wire (profession UI)
+  EXPECT_TRUE(IsExcludedStarterSkill(129u));   // First Aid — secondary profession
 }

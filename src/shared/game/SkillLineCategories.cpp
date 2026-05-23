@@ -49,6 +49,8 @@ bool LoadSkillLineCategories(std::string const &skillLineDbcPath) {
 bool SkillLineCategoriesLoaded() { return g_loaded; }
 
 bool IsAllowedStarterSkillLine(uint32_t skillId) {
+  if (IsSecondaryProfessionSkillLine(skillId))
+    return false;
   if (!g_loaded)
     return true;
   auto it = g_categoryBySkill.find(skillId);
@@ -64,9 +66,7 @@ bool IsAllowedStarterSkillLine(uint32_t skillId) {
   }
 }
 
-// Secondary professions are category 9 (same as racial skills) so they need
-// an explicit ID list. Racials in cat 9 are allowed; these are not.
-static bool IsSecondaryProfessionSkillLine(uint32_t skillId) {
+bool IsSecondaryProfessionSkillLine(uint32_t skillId) {
   switch (skillId) {
   case 129u: // First Aid
   case 185u: // Cooking

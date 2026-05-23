@@ -318,7 +318,7 @@ TEST_F(PlayerSpellbookTest, StarterSkillsOmitMetaProfessionsAndFixZeroRanks) {
                          return g.skillId == id;
                        });
   };
-  EXPECT_TRUE(hasSkill(95u));
+  EXPECT_FALSE(hasSkill(95u));
   EXPECT_TRUE(hasSkill(413u));
   EXPECT_FALSE(hasSkill(777u));
   EXPECT_FALSE(hasSkill(129u));

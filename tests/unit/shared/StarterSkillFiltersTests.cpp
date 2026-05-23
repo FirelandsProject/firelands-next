@@ -9,6 +9,10 @@ TEST(StarterSkillFiltersTests, MetaSkillsAreExcluded) {
   EXPECT_FALSE(IsMetaOrInternalStarterSkill(95u));
 }
 
+TEST(StarterSkillFiltersTests, DefenseSkillExcludedFromStarterUi) {
+  EXPECT_TRUE(IsExcludedStarterSkill(95u));
+}
+
 TEST(StarterSkillFiltersTests, ProfessionsAndRidingAreExcluded) {
   EXPECT_TRUE(IsProfessionStarterSkill(129u));
   EXPECT_TRUE(IsRidingStarterSkill(762u));

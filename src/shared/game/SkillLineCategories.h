@@ -5,9 +5,9 @@
 
 namespace Firelands {
 
-/// SkillLine.dbc `categoryId` values (Cataclysm 4.3.4, Trinity `SkillLineCategory`).
+/// SkillLine.dbc `categoryId` values (Cataclysm 4.3.4, `SkillLineCategory`).
 namespace SkillLineCategory {
-/// `SkillLine.dbc` categoryId (Cataclysm 4.3.4); ref Trinity `SkillLineCategory`.
+/// `SkillLine.dbc` categoryId (Cataclysm 4.3.4); ref `SkillLineCategory`.
 constexpr uint32_t Guild = 5u;
 constexpr uint32_t Weapon = 6u;
 constexpr uint32_t Class = 7u;
@@ -21,6 +21,9 @@ constexpr uint32_t Generic = 12u;
 /// Loads `SkillLine.dbc` for category-based starter skill filtering.
 bool LoadSkillLineCategories(std::string const &skillLineDbcPath);
 bool SkillLineCategoriesLoaded();
+
+/// First Aid / Cooking / Fishing / Riding — category 9 in DBC, must not fill PLAYER_SKILL slots.
+bool IsSecondaryProfessionSkillLine(uint32_t skillId);
 
 /// Starter characters only receive weapon, armor, and language skill lines on the wire
 /// (PLAYER_SKILL_* update fields). Categories 6, 8, 10 only.
