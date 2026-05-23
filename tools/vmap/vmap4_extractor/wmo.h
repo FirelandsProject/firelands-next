@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -48,21 +48,21 @@ namespace ADT { struct MODF; }
 namespace WMO
 {
     struct MODS
-    {
+{
         char Name[20];
         uint32 StartIndex;     // index of first doodad instance in this set
         uint32 Count;          // number of doodad instances in this set
         char _pad[4];
-    };
+};
 
     struct MODD
-    {
+{
         uint32 NameIndex : 24;
         Vec3D Position;
         Quaternion Rotation;
         float Scale;
         uint32 Color;
-    };
+};
 }
 
 struct WMODoodadData

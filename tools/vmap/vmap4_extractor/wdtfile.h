@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -44,10 +44,10 @@ private:
     std::string _mapName;
     std::vector<std::string> _wmoNames;
     struct ADTCache
-    {
+{
         std::unique_ptr<ADTFile> file[64][64];
     };
     std::unique_ptr<ADTCache> _adtCache;
-};
+    };
 
 #endif

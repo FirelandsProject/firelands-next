@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -27,7 +27,7 @@
 #include <cstdlib>
 
 bool ExtractSingleModel(std::string& fname)
-{
+    {
     if (fname.length() < 4)
         return false;
 
@@ -56,12 +56,12 @@ bool ExtractSingleModel(std::string& fname)
         return false;
 
     return mdl.ConvertToVMAPModel(output.c_str());
-}
+    }
 
 extern HANDLE LocaleMpq;
 
 void ExtractGameobjectModels()
-{
+    {
     if (!g_vmap4Quiet)
         printf("Extracting GameObject models...");
     Firelands::VMap::DbcReader dbc(LocaleMpq, "DBFilesClient\\GameObjectDisplayInfo.dbc");
@@ -94,7 +94,7 @@ void ExtractGameobjectModels()
 
         FixNameCase((char*)path.c_str(), path.size());
         char * name = GetPlainName((char*)path.c_str());
-        FixNameSpaces(name, strlen(name));
+    FixNameSpaces(name, strlen(name));
 
         char * ch_ext = GetExtension(name);
         if (!ch_ext)
@@ -103,28 +103,28 @@ void ExtractGameobjectModels()
         bool result = false;
         uint8 isWmo = 0;
         if (!strcmp(ch_ext, ".wmo"))
-        {
+    {
             isWmo = 1;
             result = ExtractSingleWmo(path);
-        }
+    }
         else if (!strcmp(ch_ext, ".mdl"))   // TODO: extract .mdl files, if needed
             continue;
         else //if (!strcmp(ch_ext, ".mdx") || !strcmp(ch_ext, ".m2"))
             result = ExtractSingleModel(path);
 
         if (result)
-        {
+    {
             uint32 displayId = dbc.GetUInt(row, 0);
             uint32 path_length = strlen(name);
             fwrite(&displayId, sizeof(uint32), 1, model_list);
             fwrite(&isWmo, sizeof(uint8), 1, model_list);
             fwrite(&path_length, sizeof(uint32), 1, model_list);
             fwrite(name, sizeof(char), path_length, model_list);
-        }
+    }
     }
 
     fclose(model_list);
 
     if (!g_vmap4Quiet)
         printf("Done!\n");
-}
+    }

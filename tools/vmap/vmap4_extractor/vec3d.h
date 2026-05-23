@@ -1,7 +1,7 @@
 #pragma once
 
 // Thin aliases so ported vmap4_extractor sources can keep using Vec3D / AaBox3D
-// names from the original Trinity/Firelands reference.
+// names retained from the Firelands vmap port.
 
 #include "../common/Vec3.h"
 #include "../common/Mat3.h"

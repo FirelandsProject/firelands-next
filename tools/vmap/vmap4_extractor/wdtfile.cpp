@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -35,10 +35,10 @@ WDTFile::WDTFile(char const* filePath, std::string mapName, bool cache)
     : _file(WorldMpq, filePath), _mapName(std::move(mapName))
 {
     if (cache)
-    {
+{
         _adtCache = std::make_unique<ADTCache>();
         memset(_adtCache->file, 0, sizeof(_adtCache->file));
-    }
+}
     else
         _adtCache = nullptr;
 }
@@ -56,13 +56,13 @@ bool WDTFile::init(uint32 mapId)
     std::string dirname = g_workDirWmo + "/dir_bin";
     FILE* dirfile = fopen(dirname.c_str(), "ab");
     if (!dirfile)
-    {
+{
         printf("Can't open dirfile!'%s'\n", dirname.c_str());
         return false;
-    }
+}
 
     while (!_file.isEof())
-    {
+{
         _file.read(fourcc, 4);
         _file.read(&size, 4);
 
@@ -72,18 +72,18 @@ bool WDTFile::init(uint32 mapId)
         size_t nextpos = _file.getPos() + size;
 
         if (!strcmp(fourcc, "MAIN"))
-        {
-        }
+{
+}
         if (!strcmp(fourcc, "MWMO"))
-        {
+{
             // global map objects
             if (size)
-            {
+{
                 char *buf = new char[size];
                 _file.read(buf, size);
                 char *p = buf;
                 while (p < buf + size)
-                {
+{
                     std::string path(p);
 
                     char* s = wdtGetPlainName(p);
@@ -93,27 +93,27 @@ bool WDTFile::init(uint32 mapId)
                     _wmoNames.push_back(s);
 
                     ExtractSingleWmo(path);
-                }
+}
                 delete[] buf;
-            }
-        }
+}
+}
         else if (!strcmp(fourcc, "MODF"))
-        {
+{
             // global wmo instance data
             if (size)
-            {
+{
                 uint32 mapObjectCount = size / sizeof(ADT::MODF);
                 for (uint32 i = 0; i < mapObjectCount; ++i)
-                {
+{
                     ADT::MODF mapObjDef;
                     _file.read(&mapObjDef, sizeof(ADT::MODF));
                     MapObject::Extract(mapObjDef, _wmoNames[mapObjDef.Id].c_str(), true, mapId, mapId, dirfile, nullptr);
                     Doodad::ExtractSet(WmoDoodads[_wmoNames[mapObjDef.Id]], mapObjDef, true, mapId, mapId, dirfile, nullptr);
-                }
-            }
-        }
+}
+}
+}
         _file.seek((int)nextpos);
-    }
+}
 
     _file.close();
     fclose(dirfile);

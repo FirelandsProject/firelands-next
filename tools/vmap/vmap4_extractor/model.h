@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -33,7 +33,7 @@ class Model
 {
 private:
     void _unload()
-    {
+{
         delete[] vertices;
         delete[] indices;
         vertices = nullptr;
@@ -60,6 +60,6 @@ namespace Doodad
 
     void ExtractSet(WMODoodadData const& doodadData, ADT::MODF const& wmo, bool isGlobalWmo, uint32 mapID, uint32 originalMapId,
         FILE* pDirfile, std::vector<ADTOutputCache>* dirfileCache);
-}
+    }
 
 #endif

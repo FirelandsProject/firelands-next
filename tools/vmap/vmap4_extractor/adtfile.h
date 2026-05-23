@@ -1,5 +1,5 @@
 /*
- * This file is part of the FirelandsCore Project. See AUTHORS file for Copyright information
+  * This file is part of the Firelands project.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -27,7 +27,7 @@
 namespace ADT
 {
     struct MDDF
-    {
+{
         uint32 Id;
         uint32 UniqueId;
         Vec3D Position;
@@ -37,7 +37,7 @@ namespace ADT
     };
 
     struct MODF
-    {
+{
         uint32 Id;
         uint32 UniqueId;
         Vec3D Position;
@@ -55,7 +55,7 @@ struct ADTOutputCache
 {
     uint8 Flags;
     std::vector<uint8> Data;
-};
+    };
 
 class ADTFile
 {
@@ -71,7 +71,7 @@ public:
     std::vector<std::string> ModelInstanceNames;
     bool init(uint32 map_num, uint32 originalMapId);
     bool initFromCache(uint32 map_num, uint32 originalMapId);
-};
+    };
 
 char const* GetPlainName(char const* FileName);
 char* GetPlainName(char* FileName);

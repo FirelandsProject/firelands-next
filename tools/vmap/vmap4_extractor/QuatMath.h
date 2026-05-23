@@ -1,7 +1,7 @@
 #pragma once
 
 // Quaternion → rotation matrix and Euler XYZ extraction.
-// Matrix row layout and quaternion convention match G3D / AzerothCore
+// Matrix row layout and quaternion convention match G3D
 // `deps/g3dlite/source/Matrix3.cpp` (Watt & Watt) so doodad-set extraction
 // stays numerically aligned with the reference vmap4_extractor.
 
@@ -12,7 +12,7 @@ namespace Firelands::VMap::Vmap4 {
 // Build rotation matrix from a *unit* quaternion (x, y, z, w).
 Mat3 Mat3FromQuaternion(float x, float y, float z, float w);
 
-// G3D `Matrix3::toEulerAnglesXYZ` (see AzerothCore Matrix3.cpp:1383).
+// G3D `Matrix3::toEulerAnglesXYZ` (standard G3D convention).
 // OUT order matches the reference call-site mapping onto Vec3 fields:
 //   rfXAngle → rotation.z, rfYAngle → rotation.x, rfZAngle → rotation.y
 void Mat3ToEulerAnglesXYZ_G3D(const Mat3& m, float& outZ, float& outX, float& outY);
