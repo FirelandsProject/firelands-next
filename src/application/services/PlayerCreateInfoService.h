@@ -7,7 +7,6 @@
 #include <shared/dbc/CharStartOutfitDbc.h>
 #include <shared/dbc/GtOctCombatDbc.h>
 #include <shared/dbc/GtPlayerStatGameTables.h>
-#include <shared/dbc/StarterSpellsDbc.h>
 #include <string>
 #include <vector>
 
@@ -48,15 +47,12 @@ public:
     return {};
   }
 
-  /// Class spells from `playercreateinfo_spell` plus racial abilities from DBC when loaded.
-  /// Riding/transport spells are omitted. Caller applies level filtering.
+  /// Starter spells from `playercreateinfo_spell` (race/class masks). Riding omitted.
+  /// Caller applies level filtering.
   std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) const;
 
-  /// Race-restricted starter spells from DBC (empty when DBCs are not loaded).
+  /// Race-restricted rows in `playercreateinfo_spell`.
   std::vector<uint32_t> GetRacialSpells(uint8_t race, uint8_t klass) const;
-
-  /// Profession / meta skill-line spells from `SkillLineAbility.dbc` (not for login).
-  bool IsSpellFromExcludedSkillLine(uint32_t spellId) const;
 
   std::vector<StarterSkillGrant> GetStarterSkills(uint8_t race, uint8_t klass) const;
 
@@ -90,11 +86,9 @@ public:
 private:
   std::shared_ptr<IPlayerCreateInfoRepository> m_repository;
   CharStartOutfitDbc m_charStartOutfitDbc;
-  StarterSpellsDbc m_starterSpellsDbc;
   GtOctCombatDbc m_gtOct;
   GtPlayerStatGameTables m_statGameTables;
   bool m_charStartOutfitDbcLoaded = false;
-  bool m_starterSpellsDbcLoaded = false;
 };
 
 } // namespace Firelands

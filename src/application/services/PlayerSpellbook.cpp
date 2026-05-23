@@ -2,7 +2,9 @@
 #include <application/services/PlayerSpellbook.h>
 #include <application/services/PlayerCreateInfoService.h>
 #include <shared/game/ChatLanguages.h>
+#include <domain/models/Chat.h>
 #include <shared/game/SpellLevelGate.h>
+#include <shared/game/SkillLineCategories.h>
 #include <shared/game/StarterSpellFilters.h>
 #include <shared/game/StarterSkillFilters.h>
 #include <shared/Logger.h>
@@ -85,6 +87,21 @@ void FilterBySpellDbc(ISpellDefinitionStore const *store, uint8_t race,
   }
 }
 
+bool IsRacialLanguageSkillId(uint32_t skillId) {
+  if (skillId == 0u)
+    return false;
+  static uint32_t const kLangIds[] = {
+      LANG_COMMON,       LANG_ORCISH,     LANG_DARNASSIAN, LANG_TAURAHE,
+      LANG_DWARVISH,     LANG_THALASSIAN, LANG_GNOMISH,    LANG_TROLL,
+      LANG_GUTTERSPEAK,  LANG_DRAENEI,    LANG_WORGEN,     LANG_GOBLIN,
+      LANG_GNOMISH_BINARY, LANG_GOBLIN_BINARY};
+  for (uint32_t lang : kLangIds) {
+    if (LanguageSkillIdForLang(lang) == skillId)
+      return true;
+  }
+  return false;
+}
+
 } // namespace
 
 std::vector<uint32_t> BuildKnownSpells(
@@ -119,7 +136,7 @@ std::vector<uint32_t> BuildKnownSpells(
   FilterBySpellDbc(spellDefinitions, race, klass, spells);
 
   for (uint32_t sid : extraSpellIdsFromCharacter) {
-    if (createInfo.IsSpellFromExcludedSkillLine(sid))
+    if (IsSpellFromExcludedSkillLine(sid))
       continue;
     if (IsExcludedKnownSpell(spellDefinitions, sid))
       continue;
@@ -153,8 +170,9 @@ std::vector<StarterSkillGrant> BuildStarterSkills(
   std::vector<StarterSkillGrant> out;
   std::unordered_set<uint32_t> seen;
   auto pushGrant = [&](StarterSkillGrant g, bool nativeLanguage) {
-    if (g.skillId == 0u || IsExcludedStarterSkill(g.skillId) ||
-        !seen.insert(g.skillId).second)
+    if (g.skillId == 0u || !seen.insert(g.skillId).second)
+      return;
+    if (!nativeLanguage && IsExcludedStarterSkill(g.skillId))
       return;
     if (nativeLanguage) {
       g.rank = 300;
@@ -176,7 +194,7 @@ std::vector<StarterSkillGrant> BuildStarterSkills(
     pushGrant(g, true);
   }
   for (StarterSkillGrant const &g : createInfo.GetStarterSkills(race, klass))
-    pushGrant(g, false);
+    pushGrant(g, IsRacialLanguageSkillId(g.skillId));
   return out;
 }
 

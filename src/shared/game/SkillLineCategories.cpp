@@ -12,7 +12,9 @@ namespace {
 constexpr char kSkillLineFmt[] = "niiiiii";
 
 std::unordered_map<uint32_t, uint32_t> g_categoryBySkill;
+std::unordered_map<uint32_t, uint32_t> g_skillLineBySpell;
 bool g_loaded = false;
+bool g_spellIndexLoaded = false;
 
 } // namespace
 
@@ -113,6 +115,49 @@ bool IsExcludedSpellGrantSkillLine(uint32_t skillId) {
   default:
     return false;
   }
+}
+
+bool LoadSkillLineAbilitySpellIndex(std::string const &skillLineAbilityDbcPath) {
+  g_skillLineBySpell.clear();
+  g_spellIndexLoaded = false;
+
+  DbcReader reader;
+  if (!reader.Load(skillLineAbilityDbcPath)) {
+    LOG_WARN("SkillLineAbility.dbc not loaded from {}; excluded spell filter "
+             "uses skill-line categories only.",
+             skillLineAbilityDbcPath);
+    return false;
+  }
+
+  constexpr char kSkillLineAbilityFmt[] = "niiiiiiiiiiiii";
+  std::vector<uint32_t> const offs = DbcBuildFieldByteOffsets(kSkillLineAbilityFmt);
+  if (!reader.VerifyFormat(kSkillLineAbilityFmt)) {
+    LOG_WARN("SkillLineAbility.dbc format mismatch at {}", skillLineAbilityDbcPath);
+    return false;
+  }
+
+  for (uint32_t rec = 0; rec < reader.GetRecordCount(); ++rec) {
+    uint32_t const skillLine = reader.ReadUInt32(rec, 1, offs);
+    uint32_t const spellId = reader.ReadUInt32(rec, 2, offs);
+    if (spellId != 0u)
+      g_skillLineBySpell[spellId] = skillLine;
+  }
+
+  g_spellIndexLoaded = true;
+  LOG_DEBUG("SkillLineAbility.dbc: {} spell → skill line mappings for filters.",
+            g_skillLineBySpell.size());
+  return true;
+}
+
+bool IsSpellFromExcludedSkillLine(uint32_t spellId) {
+  if (spellId == 0u)
+    return false;
+  if (g_spellIndexLoaded) {
+    auto it = g_skillLineBySpell.find(spellId);
+    if (it != g_skillLineBySpell.end())
+      return IsExcludedSpellGrantSkillLine(it->second);
+  }
+  return false;
 }
 
 } // namespace Firelands

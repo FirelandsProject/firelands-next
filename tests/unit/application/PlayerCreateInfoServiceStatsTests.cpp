@@ -12,13 +12,6 @@
 using namespace Firelands;
 using namespace testing;
 
-namespace {
-
-std::string const kTestDbcDir =
-    std::string(FIRELANDS_TEST_DATA_DIR) + "/data/dbc";
-
-} // namespace
-
 class MockPlayerCreateInfoRepo : public IPlayerCreateInfoRepository {
 public:
   MOCK_METHOD(std::optional<PlayerCreateInfo>, GetStartPosition, (uint8, uint8),
@@ -28,6 +21,8 @@ public:
   MOCK_METHOD(std::vector<StarterItemGrant>, GetExtraCreateItems, (uint8, uint8),
               (override));
   MOCK_METHOD(std::vector<uint32_t>, GetStarterSpells, (uint8_t, uint8_t),
+              (override));
+  MOCK_METHOD(std::vector<uint32_t>, GetRacialStarterSpells, (uint8_t, uint8_t),
               (override));
   MOCK_METHOD(std::vector<StarterSkillGrant>, GetStarterSkills, (uint8_t, uint8_t),
               (override));
@@ -67,51 +62,51 @@ TEST(PlayerCreateInfoServiceStats, AppliesClassRaceAndSetsHealth) {
   EXPECT_EQ(ch.GetPowerType(), 1u); // warrior rage
 }
 
-TEST(PlayerCreateInfoServiceStats, HumanHunterMergesClassTabLearnOnSkillSpells) {
+TEST(PlayerCreateInfoServiceStats, HumanHunterReturnsDbStarterSpells) {
   if (!Logger::IsInitialized())
     Logger::Init(LoggerBuilder().WithConsole(false).Build());
   auto repo = std::make_shared<MockPlayerCreateInfoRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 3))
-      .WillOnce(Return(std::vector<uint32_t>{1978u, 56641u}));
-  EXPECT_CALL(*repo, GetStarterSkills(1, 3))
-      .WillOnce(Return(std::vector<StarterSkillGrant>{
-          StarterSkillGrant{50u, 0u, 0u},
-          StarterSkillGrant{51u, 0u, 0u},
-          StarterSkillGrant{163u, 0u, 0u},
-          StarterSkillGrant{795u, 0u, 0u},
-      }));
+      .WillOnce(Return(std::vector<uint32_t>{1978u, 56641u, 75u, 883u}));
 
-  PlayerCreateInfoService svc(repo, "", kTestDbcDir);
+  PlayerCreateInfoService svc(repo, "", "");
   std::vector<uint32_t> spells = svc.GetStarterSpells(1, 3);
   auto has = [&](uint32_t id) {
     return std::find(spells.begin(), spells.end(), id) != spells.end();
   };
   EXPECT_TRUE(has(1978u));
   EXPECT_TRUE(has(56641u));
-  EXPECT_TRUE(has(75u)) << "Auto Shot from class-tab learn-on-skill";
-  EXPECT_TRUE(has(883u)) << "Call Pet from class-tab learn-on-skill";
+  EXPECT_TRUE(has(75u));
+  EXPECT_TRUE(has(883u));
 }
 
-TEST(PlayerCreateInfoServiceStats, MergesDbcSkillLineAndRacialSpellsWithWorldDb) {
+TEST(PlayerCreateInfoServiceStats, DbStarterSpellsStripRidingOnly) {
   if (!Logger::IsInitialized())
     Logger::Init(LoggerBuilder().WithConsole(false).Build());
   auto repo = std::make_shared<MockPlayerCreateInfoRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(2, 1))
-      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u}));
+      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u, 20572u, 6603u, 33388u}));
 
-  PlayerCreateInfoService svc(repo, "", kTestDbcDir);
+  PlayerCreateInfoService svc(repo, "", "");
   std::vector<uint32_t> spells = svc.GetStarterSpells(2, 1);
-  ASSERT_FALSE(spells.empty());
-
   auto has = [&](uint32_t id) {
     return std::find(spells.begin(), spells.end(), id) != spells.end();
   };
   EXPECT_TRUE(has(78u));
-  EXPECT_TRUE(has(2457u));
-  EXPECT_TRUE(has(20572u)) << "Orc Blood Fury from SkillLineAbility.dbc";
-  EXPECT_TRUE(has(6603u)) << "Attack from starter weapon skill lines";
-  EXPECT_TRUE(has(3018u)) << "Shoot from skill-value ability rows";
-  EXPECT_TRUE(has(2764u)) << "Throw from skill-value ability rows";
+  EXPECT_TRUE(has(20572u));
+  EXPECT_TRUE(has(6603u));
+  EXPECT_FALSE(has(33388u)) << "Riding stripped at service layer";
+}
+
+TEST(PlayerCreateInfoServiceStats, GetRacialSpellsUsesRepository) {
+  auto repo = std::make_shared<MockPlayerCreateInfoRepo>();
+  EXPECT_CALL(*repo, GetRacialStarterSpells(2, 1))
+      .WillOnce(Return(std::vector<uint32_t>{20572u, 20573u}));
+
+  PlayerCreateInfoService svc(repo, "", "");
+  std::vector<uint32_t> spells = svc.GetRacialSpells(2, 1);
+  ASSERT_EQ(spells.size(), 2u);
+  EXPECT_EQ(spells[0], 20572u);
 }
 
 TEST(PlayerCreateInfoServiceStats, ReturnsFalseWithoutClassRow) {

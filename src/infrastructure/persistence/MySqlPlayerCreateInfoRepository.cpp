@@ -157,6 +157,33 @@ std::vector<uint32_t> MySqlPlayerCreateInfoRepository::GetStarterSpells(
   return out;
 }
 
+std::vector<uint32_t> MySqlPlayerCreateInfoRepository::GetRacialStarterSpells(
+    uint8_t race, uint8_t klass) {
+  std::vector<uint32_t> out;
+  std::unordered_set<uint32_t> seen;
+  uint32_t const raceMask = PlayerRaceMask(race);
+  uint32_t const classMask = PlayerClassMask(klass);
+  try {
+    std::unique_ptr<sql::PreparedStatement> stmt(m_connection->prepareStatement(
+        "SELECT spellId FROM firelands_world.playercreateinfo_spell "
+        "WHERE raceMask != 0 AND raceMask != 4294967295 "
+        "  AND (raceMask & ?) != 0 "
+        "  AND (classMask = 0 OR classMask = 4294967295 OR (classMask & ?) != 0)"));
+    stmt->setUInt(1, raceMask);
+    stmt->setUInt(2, classMask);
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next()) {
+      uint32_t const sid = rs->getUInt("spellId");
+      if (sid != 0u && seen.insert(sid).second)
+        out.push_back(sid);
+    }
+  } catch (sql::SQLException &e) {
+    if (!IsMissingTableError(e))
+      LOG_ERROR("GetRacialStarterSpells query failed: {}", e.what());
+  }
+  return out;
+}
+
 std::vector<StarterSkillGrant> MySqlPlayerCreateInfoRepository::GetStarterSkills(
     uint8_t race, uint8_t klass) {
   std::vector<StarterSkillGrant> out;

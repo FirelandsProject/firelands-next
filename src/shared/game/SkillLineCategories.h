@@ -34,4 +34,10 @@ bool IsAllowedStarterSkillLine(uint32_t skillId);
 /// Weapon (6), armor (8), language (10), class (7), and racial/secondary (9) allowed.
 bool IsExcludedSpellGrantSkillLine(uint32_t skillId);
 
+/// Loads `SkillLineAbility.dbc` spell → skill line index for login filters.
+bool LoadSkillLineAbilitySpellIndex(std::string const &skillLineAbilityDbcPath);
+
+/// True when `spellId` is granted via guild/profession/generic skill lines in DBC.
+bool IsSpellFromExcludedSkillLine(uint32_t spellId);
+
 } // namespace Firelands

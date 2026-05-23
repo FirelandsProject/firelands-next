@@ -20,6 +20,8 @@ protected:
       Logger::Init(LoggerBuilder().WithConsole(false).Build());
     LoadSkillLineCategories(std::string(FIRELANDS_TEST_DATA_DIR) +
                             "/data/dbc/SkillLine.dbc");
+    LoadSkillLineAbilitySpellIndex(std::string(FIRELANDS_TEST_DATA_DIR) +
+                                   "/data/dbc/SkillLineAbility.dbc");
   }
 };
 
@@ -39,6 +41,8 @@ public:
   MOCK_METHOD(std::vector<StarterItemGrant>, GetExtraCreateItems, (uint8, uint8),
               (override));
   MOCK_METHOD(std::vector<uint32_t>, GetStarterSpells, (uint8_t, uint8_t),
+              (override));
+  MOCK_METHOD(std::vector<uint32_t>, GetRacialStarterSpells, (uint8_t, uint8_t),
               (override));
   MOCK_METHOD(std::vector<StarterSkillGrant>, GetStarterSkills, (uint8_t, uint8_t),
               (override));
@@ -172,10 +176,9 @@ TEST_F(PlayerSpellbookTest, FiltersPersistedMountAndProfessionSpells) {
 TEST_F(PlayerSpellbookTest, HumanWarlockExcludesQuestGatedSummonImp) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 9))
-      .WillOnce(Return(std::vector<uint32_t>{686u, 688u, 697u, 172u}));
+      .WillOnce(Return(std::vector<uint32_t>{686u, 688u, 697u, 172u, 6603u}));
 
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
@@ -193,10 +196,9 @@ TEST_F(PlayerSpellbookTest, HumanWarlockExcludesQuestGatedSummonImp) {
 TEST_F(PlayerSpellbookTest, HumanWarlockIncludesShadowBoltFromPci) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 9))
-      .WillOnce(Return(std::vector<uint32_t>{686u, 172u, 348u, 5782u}));
+      .WillOnce(Return(std::vector<uint32_t>{686u, 172u, 348u, 5782u, 6603u}));
 
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
@@ -208,16 +210,15 @@ TEST_F(PlayerSpellbookTest, HumanWarlockIncludesShadowBoltFromPci) {
   };
   EXPECT_TRUE(has(686u)) << "Shadow Bolt (level 1, not trainer-yellow)";
   EXPECT_TRUE(has(172u)) << "Corruption";
-  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+  EXPECT_TRUE(has(6603u)) << "Attack from playercreateinfo_spell";
 }
 
 TEST_F(PlayerSpellbookTest, HumanMageIncludesFireballFromPci) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 8))
-      .WillOnce(Return(std::vector<uint32_t>{116u, 133u, 1459u, 2136u}));
+      .WillOnce(Return(std::vector<uint32_t>{116u, 133u, 1459u, 2136u, 6603u}));
 
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
@@ -229,16 +230,15 @@ TEST_F(PlayerSpellbookTest, HumanMageIncludesFireballFromPci) {
   };
   EXPECT_TRUE(has(133u)) << "Fireball (level 1, not trainer-yellow)";
   EXPECT_TRUE(has(116u)) << "Frostbolt";
-  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+  EXPECT_TRUE(has(6603u)) << "Attack from playercreateinfo_spell";
 }
 
 TEST_F(PlayerSpellbookTest, HumanRogueIncludesSinisterStrikeFromPci) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 4))
-      .WillOnce(Return(std::vector<uint32_t>{1784u, 1752u, 2098u, 921u}));
+      .WillOnce(Return(std::vector<uint32_t>{1784u, 1752u, 2098u, 921u, 6603u}));
 
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
@@ -250,17 +250,16 @@ TEST_F(PlayerSpellbookTest, HumanRogueIncludesSinisterStrikeFromPci) {
   };
   EXPECT_TRUE(has(1752u)) << "Sinister Strike (level 1, not trainer-yellow)";
   EXPECT_TRUE(has(1784u)) << "Stealth";
-  EXPECT_TRUE(has(6603u)) << "Attack from weapon skill lines";
+  EXPECT_TRUE(has(6603u)) << "Attack from playercreateinfo_spell";
 }
 
-TEST_F(PlayerSpellbookTest, HumanPaladinUsesPciPlusWeaponArmorLanguageFromDbc) {
+TEST_F(PlayerSpellbookTest, HumanPaladinUsesPciWeaponArmorLanguageFromDb) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(1, 2))
       .WillOnce(Return(std::vector<uint32_t>{635u, 20271u, 35395u, 20154u, 465u,
-                                             19740u}));
+                                             19740u, 203u, 8737u, 6603u}));
 
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));
@@ -273,17 +272,17 @@ TEST_F(PlayerSpellbookTest, HumanPaladinUsesPciPlusWeaponArmorLanguageFromDbc) {
   EXPECT_TRUE(has(635u));
   EXPECT_TRUE(has(20271u));
   EXPECT_TRUE(has(35395u)) << "Crusader Strike (level 1, not trainer-yellow)";
-  EXPECT_TRUE(has(203u)) << "Unarmed from weapon skill line";
-  EXPECT_TRUE(has(8737u)) << "Mail from armor skill line";
+  EXPECT_TRUE(has(203u)) << "Unarmed from playercreateinfo_spell";
+  EXPECT_TRUE(has(8737u)) << "Mail from playercreateinfo_spell";
   EXPECT_FALSE(has(83951u)) << "Guild perk";
 }
 
-TEST_F(PlayerSpellbookTest, OrcWarriorIncludesWeaponSkillSpellsFromDbc) {
+TEST_F(PlayerSpellbookTest, OrcWarriorIncludesWeaponAndRacialSpellsFromDb) {
   auto repo = std::make_shared<MockPciRepo>();
   EXPECT_CALL(*repo, GetStarterSpells(2, 1))
-      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u, 6673u}));
-  PlayerCreateInfoService svc(repo, "", std::string(FIRELANDS_TEST_DATA_DIR) +
-                                              "/data/dbc");
+      .WillOnce(Return(std::vector<uint32_t>{78u, 2457u, 6673u, 6603u, 3018u,
+                                             2764u, 20572u}));
+  PlayerCreateInfoService svc(repo, "", "");
 
   MockSpellStore spells;
   EXPECT_CALL(spells, GetDefinition(_)).WillRepeatedly(Return(std::nullopt));

@@ -2,6 +2,7 @@
 #include <shared/game/PlayerClass.h>
 #include <domain/models/Character.h>
 #include <shared/game/PlayerPowerType.h>
+#include <shared/game/SkillLineCategories.h>
 #include <shared/Logger.h>
 #include <shared/game/StarterSpellFilters.h>
 #include <shared/game/StarterSkillFilters.h>
@@ -20,17 +21,6 @@ uint32_t SumPrimary(uint16_t base, int16_t raceBonus) {
   v = std::max<int64_t>(1, v);
   v = std::min<int64_t>(v, static_cast<int64_t>(0xFFFFFFFFu));
   return static_cast<uint32_t>(v);
-}
-
-void MergeUniqueSpellIds(std::vector<uint32_t> &dest,
-                         std::vector<uint32_t> const &extra) {
-  std::unordered_set<uint32_t> seen(dest.begin(), dest.end());
-  for (uint32_t const sid : extra) {
-    if (sid == 0u || IsRidingOrTransportStarterSpell(sid))
-      continue;
-    if (seen.insert(sid).second)
-      dest.push_back(sid);
-  }
 }
 
 void StripRidingSpells(std::vector<uint32_t> &spells) {
@@ -57,15 +47,6 @@ PlayerCreateInfoService::PlayerCreateInfoService(
   }
   if (!clientGameTablesDbcDir.empty()) {
     m_statGameTables.Load(clientGameTablesDbcDir);
-    m_starterSpellsDbcLoaded = m_starterSpellsDbc.Load(
-        clientGameTablesDbcDir + "/SkillLineAbility.dbc",
-        clientGameTablesDbcDir + "/SkillRaceClassInfo.dbc");
-    if (!m_starterSpellsDbcLoaded) {
-      LOG_DEBUG(
-          "PlayerCreateInfoService: SkillLineAbility/SkillRaceClassInfo not "
-          "loaded from {} (racial starter spells unavailable).",
-          clientGameTablesDbcDir);
-    }
   }
 }
 
@@ -75,41 +56,11 @@ std::vector<uint32_t> PlayerCreateInfoService::GetStarterSpells(uint8_t race,
   if (m_repository)
     spells = m_repository->GetStarterSpells(race, klass);
   StripRidingSpells(spells);
-  // playercreateinfo_spell is authoritative for class abilities; do not strip
-  // spells that also appear on class-tab skill lines in SkillLineAbility.dbc.
-
-  if (m_starterSpellsDbcLoaded) {
-    // Skill-line abilities (Attack, Shoot, Throw, armor passives, etc.) from
-    // SkillRaceClassInfo + SkillLineAbility — ref Player::learnDefaultSpells.
-    std::vector<uint32_t> skillLineSpells =
-        m_starterSpellsDbc.GetWeaponArmorLanguageStarterSpells(race, klass);
-    StripRidingSpells(skillLineSpells);
-    MergeUniqueSpellIds(spells, skillLineSpells);
-
-    std::vector<uint32_t> racial = m_starterSpellsDbc.GetRacialSpells(race, klass);
-    StripRidingSpells(racial);
-    MergeUniqueSpellIds(spells, racial);
-
-    if (m_repository) {
-      std::vector<uint32_t> classTabSkillLines;
-      for (StarterSkillGrant const &grant :
-           m_repository->GetStarterSkills(race, klass)) {
-        if (IsClassSpellTabStarterSkill(grant.skillId))
-          classTabSkillLines.push_back(grant.skillId);
-      }
-      std::vector<uint32_t> onSkillLearn =
-          m_starterSpellsDbc.GetSpellsLearnedOnSkillLearn(classTabSkillLines, race,
-                                                          klass);
-      StripRidingSpells(onSkillLearn);
-      MergeUniqueSpellIds(spells, onSkillLearn);
-    }
-  }
 
   if (spells.empty()) {
     LOG_WARN(
         "No starter spells for race={} class={} (apply world migrations "
-        "45_world_playercreateinfo_restore_data.sql and/or provide DBCs under "
-        "Data.DbcPath).",
+        "43/45/62_world_playercreateinfo*.sql).",
         static_cast<uint32_t>(race), static_cast<uint32_t>(klass));
   }
   return spells;
@@ -117,9 +68,9 @@ std::vector<uint32_t> PlayerCreateInfoService::GetStarterSpells(uint8_t race,
 
 std::vector<uint32_t> PlayerCreateInfoService::GetRacialSpells(uint8_t race,
                                                               uint8_t klass) const {
-  if (!m_starterSpellsDbcLoaded)
+  if (!m_repository)
     return {};
-  return m_starterSpellsDbc.GetRacialSpells(race, klass);
+  return m_repository->GetRacialStarterSpells(race, klass);
 }
 
 std::vector<StarterSkillGrant> PlayerCreateInfoService::GetStarterSkills(
@@ -135,12 +86,6 @@ std::vector<StarterSkillGrant> PlayerCreateInfoService::GetStarterSkills(
                      }),
       skills.end());
   return skills;
-}
-
-bool PlayerCreateInfoService::IsSpellFromExcludedSkillLine(
-    uint32_t spellId) const {
-  return m_starterSpellsDbcLoaded &&
-         m_starterSpellsDbc.IsSpellFromExcludedSkillLine(spellId);
 }
 
 uint32_t PlayerCreateInfoService::GetXpToNextLevelForLevel(uint8_t level) const {

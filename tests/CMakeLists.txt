@@ -17,7 +17,6 @@ add_executable(FirelandsUnitTests
     unit/shared/ItemDb2Wdb2Tests.cpp
     unit/shared/FactionTemplateDbcTests.cpp
     unit/shared/EmotesTextDbcTests.cpp
-    unit/shared/StarterSpellsDbcTests.cpp
     unit/shared/StarterSpellFiltersTests.cpp
     unit/shared/StarterSkillFiltersTests.cpp
     unit/shared/ChatLanguagesTests.cpp

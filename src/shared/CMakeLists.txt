@@ -4,7 +4,6 @@ add_library(FirelandsShared STATIC
     system/SystemBeep.cpp
     dbc/DbcReader.cpp
     dbc/CharStartOutfitDbc.cpp
-    dbc/StarterSpellsDbc.cpp
     dbc/ItemDb2Wdb2.cpp
     dbc/ItemDbHotfixStore.cpp
     dbc/LanguagesDbc.cpp

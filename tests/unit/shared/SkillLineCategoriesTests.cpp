@@ -50,3 +50,9 @@ TEST_F(SkillLineCategoriesTest, ExcludesRacialFromSkillWireSlots) {
   EXPECT_TRUE(IsExcludedStarterSkill(95u));    // Defense — never on wire (profession UI)
   EXPECT_TRUE(IsExcludedStarterSkill(129u));   // First Aid — secondary profession
 }
+
+TEST_F(SkillLineCategoriesTest, ExcludesGuildPerkSpellsBySkillLineAbility) {
+  LoadSkillLineAbilitySpellIndex(std::string(FIRELANDS_TEST_DATA_DIR) +
+                                 "/data/dbc/SkillLineAbility.dbc");
+  EXPECT_TRUE(IsSpellFromExcludedSkillLine(83951u));
+}

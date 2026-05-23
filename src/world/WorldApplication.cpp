@@ -185,6 +185,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     if (!LoadSkillLineCategories(dbcBasePath + "/SkillLine.dbc")) {
       LOG_WARN("SkillLine.dbc not loaded; starter skill filter uses legacy IDs only.");
     }
+    if (!LoadSkillLineAbilitySpellIndex(dbcBasePath + "/SkillLineAbility.dbc")) {
+      LOG_WARN("SkillLineAbility.dbc not loaded; profession/guild spell filter may be incomplete.");
+    }
 
     bool const spellDbcOk = spellEntryStore->Load(dbcBasePath + "/Spell.dbc");
     if (!spellDbcOk) {

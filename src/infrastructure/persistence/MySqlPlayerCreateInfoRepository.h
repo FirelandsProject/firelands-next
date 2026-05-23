@@ -24,6 +24,8 @@ public:
                                                      uint8 klass) override;
 
   std::vector<uint32_t> GetStarterSpells(uint8_t race, uint8_t klass) override;
+  std::vector<uint32_t> GetRacialStarterSpells(uint8_t race,
+                                               uint8_t klass) override;
   std::vector<StarterSkillGrant> GetStarterSkills(uint8_t race,
                                                 uint8_t klass) override;
 

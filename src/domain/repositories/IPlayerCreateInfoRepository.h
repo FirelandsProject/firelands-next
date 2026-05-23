@@ -26,6 +26,10 @@ public:
   virtual std::vector<uint32_t> GetStarterSpells(uint8_t race,
                                                  uint8_t klass) = 0;
 
+  /// Race-restricted rows in `playercreateinfo_spell` (`raceMask` != 0).
+  virtual std::vector<uint32_t> GetRacialStarterSpells(uint8_t race,
+                                                       uint8_t klass) = 0;
+
   /// Skills from `playercreateinfo_skill` (`raceMask`/`classMask`, 0 = all).
   virtual std::vector<StarterSkillGrant> GetStarterSkills(uint8_t race,
                                                  uint8_t klass) = 0;
