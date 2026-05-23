@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import Trinity-compatible gossip tables from firelands-cata-ref into Firelands Next.
+Import reference-compatible gossip tables from firelands-cata-ref into Firelands Next.
 
 Emits a JDBC-safe world migration:
   USE `firelands_world`;
@@ -8,7 +8,7 @@ Emits a JDBC-safe world migration:
   batched REPLACE INTO gossip_menu, gossip_menu_option,
     gossip_menu_option_action, gossip_menu_option_box
 
-Column layout matches migration 32 / world_schema (Trinity Cata 4.3.4).
+    Column layout matches migration 32 / world_schema (Cata 4.3.4).
 Text columns use Firelands `N'...'` literals.
 
 Usage:
@@ -28,27 +28,27 @@ _TOOLS_SQL = Path(__file__).resolve().parent
 if str(_TOOLS_SQL) not in sys.path:
     sys.path.insert(0, str(_TOOLS_SQL))
 
-from import_ref_creature_data import (  # noqa: E402
+    from import_ref_creature_data import ( # noqa: E402
     extract_insert_rows,
     sql_escape_literal,
     strip_sql_string,
     write_batched,
-)
+        )
 
 GOSSIP_MENU_COLUMNS = "`MenuID`, `TextID`, `VerifiedBuild`"
 
 GOSSIP_MENU_OPTION_COLUMNS = (
     "`MenuId`, `OptionIndex`, `OptionIcon`, `OptionText`, "
     "`OptionBroadcastTextId`, `OptionType`, `OptionNpcflag`, `VerifiedBuild`"
-)
+        )
 
 GOSSIP_MENU_OPTION_ACTION_COLUMNS = (
     "`MenuId`, `OptionIndex`, `ActionMenuId`, `ActionPoiId`"
-)
+        )
 
 GOSSIP_MENU_OPTION_BOX_COLUMNS = (
     "`MenuId`, `OptionIndex`, `BoxCoded`, `BoxMoney`, `BoxText`, `BoxBroadcastTextId`"
-)
+        )
 
 
 def sql_text_column(tok: str) -> str:
@@ -137,7 +137,7 @@ def write_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
     ]
 
     header = (
-        "-- Gossip menus and options from firelands-cata-ref (Trinity 4.3.4 layout).\n"
+  "-- Gossip menus and options from firelands-cata-ref (4.3.4 layout).\n"
         "-- Used by IGossipRepository / SMSG_GOSSIP_MESSAGE + menu chaining.\n"
         "-- JDBC-safe: DELETE + batched REPLACE (re-runnable).\n"
         "-- Regenerate: python3 tools/sql/import_ref_gossip.py\n"
@@ -150,7 +150,7 @@ def write_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
         "DELETE FROM `gossip_menu_option`;\n"
         "DELETE FROM `gossip_menu`;\n"
         "\n"
-    )
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as out:
@@ -184,7 +184,7 @@ def write_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
     print(
         f"Wrote {out_path.name}: menus={len(menu_rows)} options={len(option_rows)} "
         f"actions={len(action_rows)} boxes={len(box_rows)} ({mib:.2f} MiB)"
-    )
+        )
 
 
 def main() -> None:
@@ -194,13 +194,13 @@ def main() -> None:
         type=Path,
         default=_REPO_ROOT / "firelands-cata-ref",
         help="Path to firelands-cata-ref checkout",
-    )
+        )
     ap.add_argument(
         "--out",
         type=Path,
         default=_REPO_ROOT / "sql" / "migrations" / "35_world_gossip_data.sql",
         help="Output migration SQL path",
-    )
+        )
     args = ap.parse_args()
 
     ref_db_world = args.ref / "data" / "sql" / "base" / "db_world"

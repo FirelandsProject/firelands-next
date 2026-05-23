@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import Trinity-compatible quest gossip data from firelands-cata-ref into Firelands Next.
+Import reference-compatible quest gossip data from firelands-cata-ref into Firelands Next.
 
 Reads reference mysqldump INSERTs and emits a JDBC-safe world migration:
   USE `firelands_world`;
@@ -29,16 +29,16 @@ _TOOLS_SQL = Path(__file__).resolve().parent
 if str(_TOOLS_SQL) not in sys.path:
     sys.path.insert(0, str(_TOOLS_SQL))
 
-from import_ref_creature_data import (  # noqa: E402
+    from import_ref_creature_data import ( # noqa: E402
     extract_insert_rows,
     sql_escape_literal,
     strip_sql_string,
     write_batched,
-)
+    )
 
 QUEST_TEMPLATE_COLUMNS = (
     "`ID`, `QuestLevel`, `LogTitle`, `Flags`, `AllowableClasses`, `AllowableRaces`"
-)
+    )
 CREATURE_QUESTSTARTER_COLUMNS = "`id`, `quest`"
 
 
@@ -80,7 +80,7 @@ def map_creature_queststarter_row(fields: list[str]) -> str:
     if len(fields) != 2:
         raise ValueError(
             f"creature_queststarter row expected 2 fields, got {len(fields)}"
-        )
+    )
     return f"({fields[0].strip()},{fields[1].strip()})"
 
 
@@ -96,7 +96,7 @@ def load_quest_addon_masks(ref_dir: Path) -> dict[int, tuple[int, int]]:
         if required not in col_index:
             raise SystemExit(
                 f"quest_template_addon missing column {required!r}; found: {cols[:12]}..."
-            )
+    )
 
     masks: dict[int, tuple[int, int]] = {}
     for row in extract_insert_rows(addon_sql, "quest_template_addon"):
@@ -172,7 +172,7 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
             raise SystemExit(
                 f"quest_template in reference missing column {required!r}; "
                 f"found: {quest_cols[:20]}..."
-            )
+    )
 
     quest_rows_raw = extract_insert_rows(quest_sql, "quest_template")
     quest_rows: list[str] = []
@@ -203,13 +203,13 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
             f"REPLACE INTO `quest_template` ({QUEST_TEMPLATE_COLUMNS}) VALUES",
             quest_rows,
             400,
-        )
+    )
         write_batched(
             out,
             f"REPLACE INTO `creature_queststarter` ({CREATURE_QUESTSTARTER_COLUMNS}) VALUES",
             starter_rows,
             500,
-        )
+    )
 
     mask_out = out_path.parent / "40_world_quest_gossip_allowable_masks.sql"
     mask_updates = []
@@ -218,7 +218,7 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
         mask_updates.append(
             f"UPDATE `quest_template` SET `AllowableClasses`={ac}, "
             f"`AllowableRaces`={ar} WHERE `ID`={qid};"
-        )
+    )
     mask_header = (
         "-- Backfill AllowableClasses / AllowableRaces (when 38 predates mask columns).\n"
         "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py\n"
@@ -253,10 +253,10 @@ def main() -> None:
 
     ref_db_world = args.ref / "data" / "sql" / "base" / "db_world"
     if not ref_db_world.is_dir():
-        raise SystemExit(
+            raise SystemExit(
             f"Missing ref db_world directory: {ref_db_world}\n"
             "Clone firelands-cata-ref next to this repo, then re-run."
-        )
+    )
 
     write_quest_gossip_data_migration(ref_db_world, args.out)
 

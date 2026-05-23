@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import Trinity-compatible `npc_text` rows from firelands-cata-ref into Firelands Next.
+Import reference-compatible `npc_text` rows from firelands-cata-ref into Firelands Next.
 
 Reads reference mysqldump INSERTs and emits a JDBC-safe world migration:
   USE `firelands_world`;
@@ -28,12 +28,12 @@ _TOOLS_SQL = Path(__file__).resolve().parent
 if str(_TOOLS_SQL) not in sys.path:
     sys.path.insert(0, str(_TOOLS_SQL))
 
-from import_ref_creature_data import (  # noqa: E402
+    from import_ref_creature_data import ( # noqa: E402
     extract_insert_rows,
     sql_escape_literal,
     strip_sql_string,
     write_batched,
-)
+    )
 
 _FIELDS_PER_ROW = 90
 _OPTIONS = 8
@@ -57,7 +57,7 @@ def build_npc_text_column_list() -> str:
                 f"`EmoteDelay{i}_2`",
                 f"`Emote{i}_2`",
             ]
-        )
+    )
     parts.append("`VerifiedBuild`")
     return ", ".join(parts)
 
@@ -88,7 +88,7 @@ def map_npc_text_row(fields: list[str]) -> str:
     if len(fields) != _FIELDS_PER_ROW:
         raise ValueError(
             f"npc_text row expected {_FIELDS_PER_ROW} fields, got {len(fields)}"
-        )
+    )
 
     vals: list[str] = [fields[0].strip()]
     for opt in range(_OPTIONS):
@@ -112,7 +112,7 @@ def write_npc_text_data_migration(
 
     header = (
         "-- NPC gossip page copy (`npc_text`) from firelands-cata-ref.\n"
-        "-- Reference: Trinity `npc_text` (read-only); Firelands serves text*_* on\n"
+  "-- Reference: `npc_text` (read-only); Firelands serves text*_* on\n"
         "-- CMSG_NPC_TEXT_QUERY. BroadcastTextID* retained for future broadcast_text.\n"
         "-- JDBC-safe: DELETE + batched REPLACE (re-runnable).\n"
         "-- Regenerate: python3 tools/sql/import_ref_npc_text.py\n"
@@ -132,7 +132,7 @@ def write_npc_text_data_migration(
             f"REPLACE INTO `npc_text` ({NPC_TEXT_COLUMNS}) VALUES",
             mapped,
             batch_size,
-        )
+    )
 
     mib = out_path.stat().st_size / (1024 * 1024)
     batches = (len(mapped) + batch_size - 1) // batch_size if mapped else 0

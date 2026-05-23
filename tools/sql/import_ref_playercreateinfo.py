@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import Trinity Cata `playercreateinfo*` starter data from firelands-cata-ref.
+Import Cata `playercreateinfo*` starter data from firelands-cata-ref.
 
 Emits:
   sql/migrations/42_world_playercreateinfo_tables.sql
@@ -21,7 +21,7 @@ _TOOLS_SQL = Path(__file__).resolve().parent
 if str(_TOOLS_SQL) not in sys.path:
     sys.path.insert(0, str(_TOOLS_SQL))
 
-from import_ref_creature_data import extract_insert_rows  # noqa: E402
+    from import_ref_creature_data import extract_insert_rows # noqa: E402
 
 
 def append_batched(
@@ -98,7 +98,7 @@ def map_playercreateinfo_row(fields: list[str]) -> str:
 # Warlock demon summons — starter quests (e.g. Piercing the Veil → 688), not create.
 _WARLOCK_QUEST_SUMMON_SPELL_IDS = frozenset(
     {688, 687, 689, 691, 693, 697, 698, 702, 710, 712}
-)
+    )
 
 _RIDING_SPELL_IDS = frozenset(
     {
@@ -114,7 +114,7 @@ _RIDING_SPELL_IDS = frozenset(
         86470,
         86530,
     }
-)
+    )
 
 
 def map_spell_row(fields: list[str]) -> str | None:
@@ -186,7 +186,7 @@ _EXCLUDED_STARTER_SKILL_IDS = frozenset(
         803,
         804,
     }
-)
+    )
 
 
 def map_skill_row(fields: list[str]) -> str | None:
@@ -239,7 +239,7 @@ def main() -> None:
     args.tables_out.write_text(TABLES_SQL, encoding="utf-8")
 
     lines: list[str] = [
-        "-- Starter spawn / spells / skills from firelands-cata-ref (Trinity 4.3.4).",
+  "-- Starter spawn / spells / skills from firelands-cata-ref (4.3.4).",
         "USE `firelands_world`;",
         "",
         DATA_SCHEMA_PREAMBLE.strip(),
@@ -268,9 +268,9 @@ def main() -> None:
     )
     args.data_out.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {args.tables_out} and {args.data_out}")
-    print(f"  playercreateinfo: {len(spawn_rows)} rows")
-    print(f"  playercreateinfo_spell: {len(spell_rows)} rows")
-    print(f"  playercreateinfo_skill: {len(skill_rows)} rows")
+  print(f" playercreateinfo: {len(spawn_rows)} rows")
+  print(f" playercreateinfo_spell: {len(spell_rows)} rows")
+  print(f" playercreateinfo_skill: {len(skill_rows)} rows")
 
 
 if __name__ == "__main__":

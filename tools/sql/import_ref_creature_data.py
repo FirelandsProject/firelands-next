@@ -3,7 +3,7 @@
 Convert Firelands Cata reference `creature.sql` / `creature_template.sql` dumps
 (tab-separated mysqldump multi-row INSERTs) into Firelands Next world schema.
 
-Reads Trinity-compatible column order from the reference CREATE TABLE and emits:
+Reads reference-compatible column order from the reference CREATE TABLE and emits:
   USE `firelands_world`;
   DELETE FROM `creature`;
   Batched REPLACE INTO `creature_template` (...)
@@ -38,21 +38,21 @@ def split_top_level_tuple_inners(values_blob: str) -> list[str]:
             break
         if s[i] != "(":
             i += 1
-            continue
+                continue
         depth = 0
         start = i
         j = i
         while j < n:
             c = s[j]
             if c == "'":
-                j += 1
-                while j < n:
+                    j += 1
+        while j < n:
                     if s[j] == "\\":
                         j += 2
-                        continue
+                continue
                     if s[j] == "'":
-                        j += 1
-                        break
+                    j += 1
+            break
                     j += 1
                 continue
             if c == "(":
@@ -63,9 +63,9 @@ def split_top_level_tuple_inners(values_blob: str) -> list[str]:
                     out.append(s[start + 1 : j])
                     j += 1
                     i = j
-                    break
-            j += 1
-        else:
+            break
+                    j += 1
+    else:
             break
     return out
 
@@ -84,22 +84,22 @@ def split_sql_fields(inner: str) -> list[str]:
                 i += 2
                 continue
             if c == "'":
-                in_str = False
+    in_str = False
             i += 1
-            continue
-        if c == "'":
+                continue
+            if c == "'":
             in_str = True
             cur.append(c)
             i += 1
-            continue
+                continue
         if c == ",":
             parts.append("".join(cur).strip())
             cur = []
             i += 1
-            continue
-        cur.append(c)
-        i += 1
-    parts.append("".join(cur).strip())
+                continue
+            cur.append(c)
+            i += 1
+            parts.append("".join(cur).strip())
     return parts
 
 
@@ -112,7 +112,7 @@ def strip_sql_string(tok: str) -> str:
             .replace("\\'", "'")
             .replace('\\"', '"')
             .replace("''", "'")
-        )
+    )
     return tok
 
 
@@ -147,7 +147,7 @@ def extract_insert_rows(sql_path: Path, table: str) -> list[list[str]]:
 
 
 def _template_spell_sql(tok: str) -> str:
-    """Trinity `spell1`..`spell8` are unsigned; resistances/loot must not be mapped here."""
+  """`spell1`..`spell8` are unsigned; resistances/loot must not be mapped here."""
     if tok.upper() == "NULL":
         return "0"
     try:
@@ -165,14 +165,14 @@ def map_creature_template_row(f: list[str]) -> str:
 
     def text_or_empty(idx: int) -> str:
         tok = f[idx]
-        if tok.upper() == "NULL":
+    if tok.upper() == "NULL":
             return ""
         return strip_sql_string(tok) if tok.startswith("'") else tok
 
     name = text_or_empty(10)
     female = text_or_empty(11)
 
-    # Firelands Next may retain `subname NOT NULL` from migration 23; Trinity allows NULL.
+  # Firelands Next may retain `subname NOT NULL` from migration 23; allows NULL.
     sub_tok = f[12]
     if sub_tok.upper() == "NULL":
         sub_sql = "N''"
@@ -381,7 +381,7 @@ TEMPLATE_COLUMNS = (
     "`spell1`, `spell2`, `spell3`, `spell4`, `spell5`, `spell6`, `spell7`, `spell8`, "
     "`ScriptName`, `StringId`, "
     "`VerifiedBuild`, `minlevel`, `maxlevel`"
-)
+    )
 
 CREATURE_COLUMNS = (
     "`guid`, `id`, `map`, `zoneId`, `areaId`, `spawnDifficulties`, `phaseUseFlags`, "
@@ -389,16 +389,16 @@ CREATURE_COLUMNS = (
     "`position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecs`, "
     "`wander_distance`, `currentwaypoint`, `curHealthPct`, `MovementType`, `npcflag`, "
     "`unit_flags`, `unit_flags2`, `unit_flags3`, `ScriptName`, `StringId`, `VerifiedBuild`"
-)
+    )
 
 
 def build_template_model_map(template_sql: Path) -> dict[str, tuple[str, str, str, str]]:
-    """entry -> (modelid1..4) from Trinity `creature_template.sql` dump."""
+  """entry -> (modelid1..4) from `creature_template.sql` dump."""
     rows = extract_insert_rows(template_sql, "creature_template")
     out: dict[str, tuple[str, str, str, str]] = {}
     for r in rows:
         if len(r) < 80:
-            continue
+                continue
         entry = r[0].strip()
         out[entry] = (r[6].strip(), r[7].strip(), r[8].strip(), r[9].strip())
     return out
@@ -425,7 +425,7 @@ def _peel_outer_tuple_sql_row(line_stripped: str) -> tuple[str, str] | None:
         return s[1:-2], ");"
     if s.endswith(","):
         return s[1:-1], ","
-    return None
+        return None
 
 
 def write_gossip_menu_id_migration(
@@ -439,18 +439,18 @@ def write_gossip_menu_id_migration(
     pairs: list[tuple[str, str]] = []
     for r in rows:
         if len(r) < 80:
-            continue
+                continue
         entry = r[0].strip()
         gid = r[14].strip()
-        try:
+    try:
             if int(gid) <= 0:
                 continue
-        except ValueError:
-            continue
+    except ValueError:
+                continue
         pairs.append((entry, gid))
 
     header = (
-        "-- Links creature_template to gossip_menu (Trinity `gossip_menu_id` → MenuID).\n"
+  "-- Links creature_template to gossip_menu (`gossip_menu_id` → MenuID).\n"
         "-- Data backfill from firelands-cata-ref creature_template.sql.\n"
         "-- JDBC-safe conditional DDL + batched UPDATE … CASE.\n"
         "-- Regenerate: python3 tools/sql/import_ref_creature_data.py --write-gossip-menu-id-migration\n"
@@ -459,17 +459,17 @@ def write_gossip_menu_id_migration(
         "USE `firelands_world`;\n"
         "\n"
         "SET @exist_gossip_menu_id :=\n"
-        "  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS\n"
-        "   WHERE TABLE_SCHEMA = DATABASE()\n"
-        "     AND TABLE_NAME = 'creature_template'\n"
-        "     AND COLUMN_NAME = 'gossip_menu_id');\n"
+  " (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS\n"
+  " WHERE TABLE_SCHEMA = DATABASE()\n"
+  " AND TABLE_NAME = 'creature_template'\n"
+  " AND COLUMN_NAME = 'gossip_menu_id');\n"
         "\n"
         "SET @fl_sql := IF(@exist_gossip_menu_id = 0,\n"
-        "  'ALTER TABLE `creature_template`\n"
-        "     ADD COLUMN `gossip_menu_id` int unsigned NOT NULL DEFAULT ''0''\n"
-        "     COMMENT ''Links to gossip_menu.MenuID (Trinity cata)''\n"
-        "     AFTER `IconName`',\n"
-        "  'SELECT 1');\n"
+  " 'ALTER TABLE `creature_template`\n"
+  " ADD COLUMN `gossip_menu_id` int unsigned NOT NULL DEFAULT ''0''\n"
+  " COMMENT ''Links to gossip_menu.MenuID (cata)''\n"
+  " AFTER `IconName`',\n"
+  " 'SELECT 1');\n"
         "\n"
         "PREPARE _fl_m31_p FROM @fl_sql;\n"
         "EXECUTE _fl_m31_p;\n"
@@ -485,8 +485,8 @@ def write_gossip_menu_id_migration(
             entries = ", ".join(p[0] for p in chunk)
             out.write("UPDATE `creature_template` SET `gossip_menu_id` = CASE `entry`\n")
             for entry, gid in chunk:
-                out.write(f"  WHEN {entry} THEN {gid}\n")
-            out.write("  ELSE `gossip_menu_id` END\n")
+  out.write(f" WHEN {entry} THEN {gid}\n")
+  out.write(" ELSE `gossip_menu_id` END\n")
             out.write(f"WHERE `entry` IN ({entries});\n\n")
 
     print(
@@ -496,7 +496,7 @@ def write_gossip_menu_id_migration(
 
 
 def patch_migration_modelids(template_sql: Path, migration_path: Path, out_path: Path) -> None:
-    """Rewrite legacy ref-import SQL (no model columns) using Trinity template modelids."""
+  """Rewrite legacy ref-import SQL (no model columns) using template modelids."""
     model_map = build_template_model_map(template_sql)
     old_frag = "`KillCredit2`, `name`"
     new_frag = (
@@ -520,7 +520,7 @@ def patch_migration_modelids(template_sql: Path, migration_path: Path, out_path:
                 continue
 
             inner, tail = peeled
-            fields = split_sql_fields(inner)
+                fields = split_sql_fields(inner)
             if not _migration_row_is_creature_template_tuple(fields):
                 outp.write(line)
                 continue
@@ -542,7 +542,7 @@ def patch_migration_modelids(template_sql: Path, migration_path: Path, out_path:
 
 
 def write_batched(
-    out,
+            out,
     stmt_prefix: str,
     rows: list[str],
     batch_size: int,
@@ -606,18 +606,18 @@ def main() -> None:
 
     print("Parsing creature_template...")
     t_rows = extract_insert_rows(template_sql, "creature_template")
-    print(f"  {len(t_rows)} templates")
+  print(f" {len(t_rows)} templates")
     mapped_templates = [map_creature_template_row(r) for r in t_rows]
 
     print("Parsing creature spawns...")
     c_rows = extract_insert_rows(creature_sql, "creature")
-    print(f"  {len(c_rows)} spawns")
+  print(f" {len(c_rows)} spawns")
     mapped_creatures = [map_creature_row(r) for r in c_rows]
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     header = (
         "-- Imported from firelands-cata-ref data/sql/base/db_world/\n"
-        "-- creature.sql + creature_template.sql (Trinity-compatible layout).\n"
+  "-- creature.sql + creature_template.sql (reference-compatible layout).\n"
         "-- JDBC-safe: short batched statements for MariaDB max_allowed_packet.\n"
         "-- Regenerate: python3 tools/sql/import_ref_creature_data.py\n"
         "-- File must sort AFTER `29_world_creature_template_modelids.sql` (use `30_` prefix).\n"
@@ -634,13 +634,13 @@ def main() -> None:
             f"REPLACE INTO `creature_template` ({TEMPLATE_COLUMNS}) VALUES",
             mapped_templates,
             args.template_batch,
-        )
+    )
         write_batched(
             out,
             f"INSERT INTO `creature` ({CREATURE_COLUMNS}) VALUES",
             mapped_creatures,
             args.creature_batch,
-        )
+    )
 
     print(f"Wrote {args.out} ({args.out.stat().st_size // (1024 * 1024)} MiB)")
 
