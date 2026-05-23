@@ -1,7 +1,9 @@
 #ifndef FIRELANDS_SHARED_CONFIG_H
 #define FIRELANDS_SHARED_CONFIG_H
 
+#include <filesystem>
 #include <string>
+#include <vector>
 #include <yaml-cpp/yaml.h>
 #include <optional>
 #include <shared/Logger.h>
@@ -22,19 +24,19 @@ namespace YAML {
                 case Firelands::LogLevel::Critical: node = "critical"; break;
                 case Firelands::LogLevel::Off: node = "off"; break;
                 default: node = "info"; break;
-            }
+        }
             return node;
         }
 
         static bool decode(const Node& node, Firelands::LogLevel& rhs) {
             if (!node.IsScalar()) {
                 return false;
-            }
+        }
 
             std::string val = node.as<std::string>();
             for (auto& c : val) {
                 c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
+        }
 
             if (val == "trace") rhs = Firelands::LogLevel::Trace;
             else if (val == "debug") rhs = Firelands::LogLevel::Debug;
@@ -48,7 +50,7 @@ namespace YAML {
             return true;
         }
     };
-}
+        }
 
 namespace Firelands {
 
@@ -62,15 +64,15 @@ namespace Firelands {
                 _filename = filename;
                 if (Logger::IsInitialized()) {
                     LOG_INFO("Config loaded: {}", filename);
-                }
-                return true;
+        }
+            return true;
             } catch (const std::exception& e) {
                 _filename.clear();
                 if (Logger::IsInitialized()) {
                     LOG_ERROR("Failed to load config {}: {}", filename, e.what());
-                }
+        }
                 return false;
-            }
+        }
         }
 
         /// Tries `basename` in cwd, then next to `argv0` and parent dirs, then
@@ -83,6 +85,11 @@ namespace Firelands {
         /// Path passed to the last successful `Load`, or empty.
         const std::string &GetLoadedConfigPath() const { return _filename; }
 
+                /// Resolves `Data.DbcPath` (or similar) against cwd, the loaded yaml directory,
+                /// and parent folders of the executable (same search as `LoadFromSearchPaths`).
+                /// Picks the first directory that contains `Spell.dbc`.
+                static std::string ResolveDataDirectory(const std::string &relativePath);
+
         /// True if every key segment exists (final node may be null).
         bool HasNestedKey(const std::vector<std::string> &keys) const;
 
@@ -91,9 +98,9 @@ namespace Firelands {
             try {
                 if (_config[key]) {
                     return _config[key].as<T>();
-                }
+        }
             } catch (...) {}
-            return defaultValue;
+                return defaultValue;
         }
 
         template<typename T>
@@ -101,7 +108,7 @@ namespace Firelands {
             try {
                 if (_config[key]) {
                     return _config[key].as<T>();
-                }
+        }
             } catch (...) {}
             return std::nullopt;
         }
@@ -115,7 +122,7 @@ namespace Firelands {
                 return located.as<T>();
             } catch (...) {
                 return defaultValue;
-            }
+        }
         }
 
         /// Scalar string at nested path using YAML’s raw scalar text (avoids
@@ -125,13 +132,13 @@ namespace Firelands {
             try {
                 YAML::Node const located = resolveNestedRead(_config, keys, 0);
                 if (!located.IsDefined())
-                    return defaultValue;
+                return defaultValue;
                 if (located.IsScalar())
                     return located.Scalar();
                 return located.as<std::string>();
             } catch (...) {
                 return defaultValue;
-            }
+        }
         }
 
         /// Reads nested booleans reliably (YAML bool nodes and scalars like yes/on/1).
@@ -148,6 +155,7 @@ namespace Firelands {
                                           std::size_t i);
         YAML::Node _config;
         std::string _filename;
+                static std::vector<std::filesystem::path> s_dataSearchRoots;
     };
 
 } // namespace Firelands
