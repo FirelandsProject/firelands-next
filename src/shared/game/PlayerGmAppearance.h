@@ -23,4 +23,8 @@ struct PlayerGmAppearanceForUpdates {
 void MergeGmAppearanceIntoPlayerFields(std::map<uint16, uint32> &fields,
                                        PlayerGmAppearanceForUpdates const &gm);
 
+/// Live `UNIT_FIELD_FLAGS` for player values updates (swim + GM invis + combat).
+uint32 ComputePlayerWireUnitFieldFlags(PlayerGmAppearanceForUpdates const &gm,
+                                       bool inCombat);
+
 } // namespace Firelands

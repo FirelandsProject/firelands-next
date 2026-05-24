@@ -9,6 +9,7 @@
 #include <shared/game/PlayerClass.h>
 #include <shared/game/StatFormulas.h>
 #include <shared/game/UnitCombatStats.h>
+#include <shared/game/UnitFieldFlags.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/WowGuid.h>
 #include <shared/game/RestExperienceLogic.h>
@@ -287,8 +288,6 @@ void AddBaselineDefenseAndResistanceFields(
 void ApplyMovementHintsToPlayerCreateFields(std::map<uint16, uint32> &fields,
                                             MovementInfo const &move) {
   /// `UnitDefines` / client: swim-capable player (shows swim animation in liquid).
-  constexpr uint32 kUnitFlagCanSwim = 0x00008000u;
-
   uint32 uf = 0;
   if (auto it = fields.find(static_cast<uint16>(UNIT_FIELD_FLAGS));
       it != fields.end())
@@ -554,14 +553,19 @@ std::map<uint16, uint32> BuildPlayerUpdateFields(
   return fields;
 }
 
-void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
-                                   uint32 maxHealth, WorldPacket &outPacket) {
+void BuildUnitHealthValuesUpdate(uint16 mapId, uint64 unitGuid, uint32 health,
+                                 uint32 maxHealth, WorldPacket &outPacket) {
   std::map<uint16, uint32> fields;
   fields[UNIT_FIELD_HEALTH] = health;
   fields[UNIT_FIELD_MAXHEALTH] = maxHealth;
   UpdateData update(mapId);
-  update.AddValuesUpdate(playerGuid, fields);
+  update.AddValuesUpdate(unitGuid, fields);
   update.Build(outPacket);
+}
+
+void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
+                                   uint32 maxHealth, WorldPacket &outPacket) {
+  BuildUnitHealthValuesUpdate(mapId, playerGuid, health, maxHealth, outPacket);
 }
 
 void BuildPlayerPower1ValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 power1,
@@ -676,6 +680,24 @@ void BuildUnitTargetValuesUpdate(uint16 mapId, uint64 unitGuid, uint64 targetGui
   update.Build(outPacket);
 }
 
+void BuildUnitFlagsValuesUpdate(uint16 mapId, uint64 unitGuid, uint32 unitFieldFlags,
+                                WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  fields[UNIT_FIELD_FLAGS] = unitFieldFlags;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(unitGuid, fields);
+  update.Build(outPacket);
+}
+
+void BuildUnitDynamicFlagsValuesUpdate(uint16 mapId, uint64 unitGuid,
+                                       uint32 dynamicFlags, WorldPacket &outPacket) {
+  std::map<uint16, uint32> fields;
+  fields[UNIT_DYNAMIC_FLAGS] = dynamicFlags;
+  UpdateData update(mapId);
+  update.AddValuesUpdate(unitGuid, fields);
+  update.Build(outPacket);
+}
+
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName) {
   dst.WriteString(ch.GetName());
@@ -727,16 +749,11 @@ void SendPlayerCreateToNotifier(
   target->SendPacket(pkt);
 }
 
-std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
-                                                         uint32 creatureEntry,
-                                                         uint32 displayId,
-                                                         uint32 health,
-                                                         uint32 maxHealth,
-                                                         uint8 level,
-                                                         uint32 npcFlags,
-                                                         uint32 factionTemplate,
-                                                         uint32 unitFieldFlags,
-                                                         uint32 unitFieldFlags2) {
+std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(
+    uint64 objectGuid, uint32 creatureEntry, uint32 displayId, uint32 health,
+    uint32 maxHealth, uint8 level, uint32 npcFlags, uint32 factionTemplate,
+    uint32 unitFieldFlags, uint32 unitFieldFlags2, uint32 unitDynamicFlags,
+    UnitCombatStats const *combatStats) {
   auto const packF = [](float v) {
     uint32 b = 0;
     std::memcpy(&b, &v, sizeof(b));
@@ -785,8 +802,6 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[UNIT_FIELD_DISPLAYID] = displayId;
   fields[UNIT_FIELD_NATIVEDISPLAYID] = displayId;
   fields[UNIT_FIELD_MOUNTDISPLAYID] = 0;
-  fields[UNIT_FIELD_MINDAMAGE] = packF(1.0f);
-  fields[UNIT_FIELD_MAXDAMAGE] = packF(2.0f);
   fields[UNIT_FIELD_MINOFFHANDDAMAGE] = packF(0.0f);
   fields[UNIT_FIELD_MAXOFFHANDDAMAGE] = packF(0.0f);
   fields[UNIT_FIELD_BYTES_1] = 0;
@@ -794,7 +809,7 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[UNIT_FIELD_PET_NAME_TIMESTAMP] = 0;
   fields[UNIT_FIELD_PETEXPERIENCE] = 0;
   fields[UNIT_FIELD_PETNEXTLEVELEXP] = 0;
-  fields[UNIT_DYNAMIC_FLAGS] = 0;
+  fields[UNIT_DYNAMIC_FLAGS] = unitDynamicFlags;
   fields[UNIT_MOD_CAST_SPEED] = packF(1.0f);
   fields[UNIT_MOD_CAST_HASTE] = packF(0.0f);
   fields[UNIT_CREATED_BY_SPELL] = 0;
@@ -811,10 +826,21 @@ std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
   fields[UNIT_FIELD_BASE_HEALTH] = maxHealth;
   fields[UNIT_FIELD_BYTES_2] = 0;
 
-  fields[UNIT_FIELD_ATTACK_POWER] = 0;
+  int32 const ap = combatStats ? EffectiveAttackPower(*combatStats) : 0;
+  fields[UNIT_FIELD_ATTACK_POWER] = static_cast<uint32>(std::max(0, ap));
   fields[UNIT_FIELD_ATTACK_POWER_MOD_POS] = 0;
   fields[UNIT_FIELD_ATTACK_POWER_MOD_NEG] = 0;
   fields[UNIT_FIELD_ATTACK_POWER_MULTIPLIER] = packF(0.0f);
+  if (combatStats && ap > 0) {
+    constexpr uint32 kAttackTimeMs = 2000u;
+    float const speedSec = static_cast<float>(kAttackTimeMs) / 1000.0f;
+    float const dpsFromAp = static_cast<float>(ap) / 14.0f;
+    fields[UNIT_FIELD_MINDAMAGE] = packF(1.0f + dpsFromAp * speedSec * 0.85f);
+    fields[UNIT_FIELD_MAXDAMAGE] = packF(2.0f + dpsFromAp * speedSec * 1.15f);
+  } else {
+    fields[UNIT_FIELD_MINDAMAGE] = packF(1.0f);
+    fields[UNIT_FIELD_MAXDAMAGE] = packF(2.0f);
+  }
   fields[UNIT_FIELD_HOVERHEIGHT] = packF(1.0f);
 
   return fields;

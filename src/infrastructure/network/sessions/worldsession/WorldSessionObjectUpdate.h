@@ -58,6 +58,9 @@ void BuildPlayerMovementHintsValuesUpdate(uint16 mapId, uint64 playerGuid,
                                           WorldPacket &outPacket);
 
 /// `SMSG_UPDATE_OBJECT` with `UPDATETYPE_VALUES` for `UNIT_FIELD_HEALTH` / max only.
+void BuildUnitHealthValuesUpdate(uint16 mapId, uint64 unitGuid, uint32 health,
+                                 uint32 maxHealth, WorldPacket &outPacket);
+
 void BuildPlayerHealthValuesUpdate(uint16 mapId, uint64 playerGuid, uint32 health,
                                    uint32 maxHealth, WorldPacket &outPacket);
 
@@ -91,7 +94,15 @@ void BuildUnitNpcEmoteStateValuesUpdate(uint16 mapId, uint64 unitGuid,
 
 /// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_TARGET` only (`targetGuid` 0 clears).
 void BuildUnitTargetValuesUpdate(uint16 mapId, uint64 unitGuid, uint64 targetGuid,
-                                             WorldPacket &outPacket);
+                                 WorldPacket &outPacket);
+
+/// `SMSG_UPDATE_OBJECT` values block for `UNIT_FIELD_FLAGS` only.
+void BuildUnitFlagsValuesUpdate(uint16 mapId, uint64 unitGuid, uint32 unitFieldFlags,
+                                WorldPacket &outPacket);
+
+/// `SMSG_UPDATE_OBJECT` values block for `UNIT_DYNAMIC_FLAGS` only.
+void BuildUnitDynamicFlagsValuesUpdate(uint16 mapId, uint64 unitGuid,
+                                       uint32 dynamicFlags, WorldPacket &outPacket);
 
 void AppendPlayerGuidLookupData(WorldPacket &dst, Character const &ch,
                                 std::string const &realmName);
@@ -116,17 +127,14 @@ void SendPlayerCreateToNotifier(
 /// \param factionTemplate `FactionTemplate.dbc` id (`UNIT_FIELD_FACTIONTEMPLATE`).
 /// \param unitFieldFlags `UNIT_FIELD_FLAGS` (`creature_template.unit_flags`).
 /// \param unitFieldFlags2 `UNIT_FIELD_FLAGS_2` (`creature_template.unit_flags2`).
-std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(uint64 objectGuid,
-                                                         uint32 creatureEntry,
-                                                         uint32 displayId,
-                                                         uint32 health,
-                                                         uint32 maxHealth,
-                                                         uint8 level,
-                                                         uint32 npcFlags = 0,
-                                                         uint32 factionTemplate =
-                                                             Creature::kDefaultFactionTemplate,
-                                                         uint32 unitFieldFlags = 0,
-                                                         uint32 unitFieldFlags2 = 0);
+/// \param unitDynamicFlags `UNIT_DYNAMIC_FLAGS` (lootable corpse, etc.).
+/// \param combatStats When set, populates melee AP and min/max damage from template stats.
+std::map<uint16, uint32> BuildMinimalNpcUnitCreateFields(
+    uint64 objectGuid, uint32 creatureEntry, uint32 displayId, uint32 health,
+    uint32 maxHealth, uint8 level, uint32 npcFlags = 0,
+    uint32 factionTemplate = Creature::kDefaultFactionTemplate,
+    uint32 unitFieldFlags = 0, uint32 unitFieldFlags2 = 0,
+    uint32 unitDynamicFlags = 0, UnitCombatStats const *combatStats = nullptr);
 
                                                              /// `SMSG_CREATURE_QUERY_RESPONSE` (`QueryCreatureResponse::Write`, 4.3.4).
 /// If `nameTitle` is empty, sends entry with high bit set (client shows no template).

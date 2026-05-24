@@ -413,7 +413,8 @@ void WorldSession::SendNearbyCreatureCreatesInChunks(float x, float y) {
     auto npcFields = ws_obj::BuildMinimalNpcUnitCreateFields(
         cr->GetGuid(), cr->GetEntry(), wire.displayId, cr->GetLiveHealth(),
         cr->GetLiveMaxHealth(), cr->GetLevel(), wire.npcFlags, cr->GetFactionTemplate(),
-        wire.unitFieldFlags, wire.unitFieldFlags2);
+        wire.unitFieldFlags, wire.unitFieldFlags2, cr->GetUnitDynamicFlags(),
+        &cr->GetCombatStats());
     batch.AddCreateObject(cr->GetGuid(), TYPEID_UNIT, cr->GetPosition(),
                           npcFields);
     ++inBatch;

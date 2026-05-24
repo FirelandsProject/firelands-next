@@ -1,4 +1,5 @@
 #include <shared/game/PlayerGmAppearance.h>
+#include <shared/game/UnitFieldFlags.h>
 #include <shared/network/UpdateFields.h>
 
 namespace Firelands {
@@ -34,6 +35,16 @@ void MergeGmAppearanceIntoPlayerFields(std::map<uint16, uint32> &fields,
   else
     uf &= ~UNIT_FLAG_INVISIBLE;
   fields[static_cast<uint16>(UNIT_FIELD_FLAGS)] = uf;
+}
+
+uint32 ComputePlayerWireUnitFieldFlags(PlayerGmAppearanceForUpdates const &gm,
+                                       bool inCombat) {
+  uint32 uf = kUnitFlagCanSwim;
+  if (inCombat)
+    uf |= kUnitFlagInCombat;
+  if (!gm.visibleToOthers)
+    uf |= UNIT_FLAG_INVISIBLE;
+  return uf;
 }
 
 } // namespace Firelands

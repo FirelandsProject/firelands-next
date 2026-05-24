@@ -89,6 +89,7 @@ add_executable(FirelandsUnitTests
     unit/infrastructure/ActionButtonPacketTests.cpp
     unit/infrastructure/ActionBarTogglesObjectUpdateTests.cpp
     unit/infrastructure/Power1ObjectUpdateTests.cpp
+    unit/infrastructure/UnitObjectUpdateTests.cpp
     unit/infrastructure/PlayerBaselineStatsObjectUpdateTests.cpp
     unit/infrastructure/GossipPacketTests.cpp
     unit/infrastructure/VendorPacketTests.cpp

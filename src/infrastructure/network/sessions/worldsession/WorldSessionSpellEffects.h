@@ -80,4 +80,21 @@ bool RemoveAuraOnMapBySpellId(uint32 mapId, std::shared_ptr<Map> const &map,
 void BroadcastUnitHealthAfterDelta(uint32 mapId, std::shared_ptr<Map> const &map,
                                    uint64 unitGuid, uint32 health, uint32 maxHealth);
 
+/// Same as above, but always delivers to `observer` first (grid broadcast can miss the fighter).
+void BroadcastUnitHealthAfterDelta(uint32 mapId, std::shared_ptr<Map> const &map,
+                                   uint64 unitGuid, uint32 health, uint32 maxHealth,
+                                   class WorldSession *observer);
+
+/// Broadcasts `UNIT_FIELD_FLAGS` to nearby observers.
+void BroadcastUnitFlagsOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                             uint64 unitGuid, uint32 unitFieldFlags);
+
+/// Broadcasts `UNIT_DYNAMIC_FLAGS` to nearby observers.
+void BroadcastUnitDynamicFlagsOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                    uint64 unitGuid, uint32 dynamicFlags);
+
+/// Broadcasts `UNIT_FIELD_TARGET` to nearby observers.
+void BroadcastUnitTargetOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                              uint64 unitGuid, uint64 targetGuid);
+
 } // namespace Firelands

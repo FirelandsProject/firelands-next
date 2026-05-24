@@ -14,6 +14,7 @@
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
 #include <domain/world/Player.h>
+#include <infrastructure/network/sessions/WorldSession.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <shared/Logger.h>
 #include <shared/game/SpellAttributes.h>
@@ -253,10 +254,50 @@ bool ApplyAuraFromOutcome(std::shared_ptr<Map> const &map,
 
 void BroadcastUnitHealthAfterDelta(uint32 mapId, std::shared_ptr<Map> const &map,
                                  uint64 unitGuid, uint32 health, uint32 maxHealth) {
+  BroadcastUnitHealthAfterDelta(mapId, map, unitGuid, health, maxHealth, nullptr);
+}
+
+void BroadcastUnitHealthAfterDelta(uint32 mapId, std::shared_ptr<Map> const &map,
+                                 uint64 unitGuid, uint32 health, uint32 maxHealth,
+                                 WorldSession *observer) {
+  if (!map || unitGuid == 0)
+    return;
   WorldPacket hpUpdate;
-  ws_obj::BuildPlayerHealthValuesUpdate(static_cast<uint16>(mapId), unitGuid, health,
-                                        maxHealth, hpUpdate);
+  ws_obj::BuildUnitHealthValuesUpdate(static_cast<uint16>(mapId), unitGuid, health,
+                                      maxHealth, hpUpdate);
+  if (observer)
+    observer->SendPacket(hpUpdate);
   map->BroadcastPacketToNearby(unitGuid, hpUpdate, true);
+}
+
+void BroadcastUnitFlagsOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                             uint64 unitGuid, uint32 unitFieldFlags) {
+  if (!map || unitGuid == 0)
+    return;
+  WorldPacket pkt;
+  ws_obj::BuildUnitFlagsValuesUpdate(static_cast<uint16>(mapId), unitGuid, unitFieldFlags,
+                                     pkt);
+  map->BroadcastPacketToNearby(unitGuid, pkt, true);
+}
+
+void BroadcastUnitDynamicFlagsOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                                    uint64 unitGuid, uint32 dynamicFlags) {
+  if (!map || unitGuid == 0)
+    return;
+  WorldPacket pkt;
+  ws_obj::BuildUnitDynamicFlagsValuesUpdate(static_cast<uint16>(mapId), unitGuid,
+                                           dynamicFlags, pkt);
+  map->BroadcastPacketToNearby(unitGuid, pkt, true);
+}
+
+void BroadcastUnitTargetOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
+                              uint64 unitGuid, uint64 targetGuid) {
+  if (!map || unitGuid == 0)
+    return;
+  WorldPacket pkt;
+  ws_obj::BuildUnitTargetValuesUpdate(static_cast<uint16>(mapId), unitGuid, targetGuid,
+                                      pkt);
+  map->BroadcastPacketToNearby(unitGuid, pkt, true);
 }
 
 void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const &map,
@@ -565,6 +606,8 @@ std::optional<CreatureKillByPlayerHint> ApplySpellCastOutcomeOnMap(
       BroadcastUnitHealthAfterDelta(mapId, map, outcome.directHealthTargetGuid,
                                     healthAfter, target->GetLiveMaxHealth());
     } else if (auto cr = map->TryGetCreature(outcome.directHealthTargetGuid)) {
+      if (cr->IsEvading())
+        return killHint;
       uint32_t const hpBefore = cr->GetLiveHealth();
       cr->ApplyHealthDelta(healthDelta);
       uint32_t const healthAfter = cr->GetLiveHealth();
