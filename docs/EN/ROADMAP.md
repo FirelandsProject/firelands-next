@@ -1,16 +1,29 @@
 # Roadmap (EN)
 
-The roadmap currently lives in Spanish under [docs/ES/ROADMAP.md](../ES/ROADMAP.md) and is the **single source of truth**.
+The **single source of truth** for core development tracking is the wiki:
 
-If you prefer, we can later translate the full roadmap into English and keep both versions in sync.
+**https://firelands-core.github.io/wiki/docs/roadmap/**
 
-## Workspace snapshot (doc update 2026-05-18)
+Edit `wiki/src/content/docs/en/roadmap.md` in the [wiki repository](https://github.com/firelands-core/wiki).
 
-Full tracking lives in [docs/ES/ROADMAP.md](../ES/ROADMAP.md) (single source of truth).
+## What moved here
 
-- **Last commit (`d5b48b1`):** NPC gossip menus from world DB — `SMSG_GOSSIP_MESSAGE` / `SMSG_GOSSIP_COMPLETE`, Lua-first then `IGossipRepository` fallback, migrations `31`–`32` + gossip data import. See [modules/gossip-npc-text.md](modules/gossip-npc-text.md#shipped-d5b48b1--npc-gossip-menus).
-- **In progress (uncommitted):** `npc_text` table + `CMSG_NPC_TEXT_QUERY` → `SMSG_NPC_TEXT_UPDATE` for dialog copy; migrations `33`–`34`, `MySqlNpcTextRepository`, unit tests. See [gossip-npc-text.md](modules/gossip-npc-text.md#in-progress--npc_text-dialog-copy).
-- **Still open:** `WorldSession` split + `shared/network/packets/` refactor; regenerate `sql/bundled/firelands_world.sql` after `npc_text` lands.
-- **2026-05-03 (stability):** idle ≥5 min validated; `Network.TimeSyncPeriodMs` in `worldserver.yaml` (see Spanish roadmap).
-- **Toolchain:** [C++20 migration plan](CPP20_MIGRATION_PLAN.md) — Phase 1 done (CMake `C++20`); Phase 2 feature adoption open.
+This page previously duplicated phased roadmap, parity matrix, client stability, and next-steps content. Those sections are now unified in the wiki **Core Roadmap**, together with:
 
+- VMap / mmap extractor pipeline (formerly `VMAP_EXTRACTION_PLAN.md`)
+- StormLib milestones (formerly `STORM_LIB_ROADMAP.md`)
+- C++20 migration status (detail remains in `CPP20_MIGRATION_PLAN.md`; tracker on wiki)
+- MapService isolation plan (`docs/plan-mapservice-isolation.md`)
+- SpellManager phases (`docs/ES/modules/spell-manager-plan.md`)
+
+## Local deep-dive docs (technical detail)
+
+| Topic | File |
+|-------|------|
+| VMap master plan | [VMAP_EXTRACTION_PLAN.md](VMAP_EXTRACTION_PLAN.md) |
+| StormLib | [STORM_LIB_ROADMAP.md](STORM_LIB_ROADMAP.md) |
+| C++20 | [CPP20_MIGRATION_PLAN.md](CPP20_MIGRATION_PLAN.md) |
+| MapService plan | [../plan-mapservice-isolation.md](../plan-mapservice-isolation.md) |
+| SpellManager plan | [../ES/modules/spell-manager-plan.md](../ES/modules/spell-manager-plan.md) |
+
+**Do not** update phased status in these files — update the wiki roadmap only.
