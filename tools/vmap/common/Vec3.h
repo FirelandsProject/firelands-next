@@ -5,6 +5,7 @@
 // and from G3D::AABox layout expected by the binary format.
 // Intentionally stand-alone — no G3D or Boost dependency.
 
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <algorithm>
@@ -118,16 +119,8 @@ struct Quaternion {
 // ─────────────────────────── Helpers ─────────────────────────────────────────
 
 // Bit-cast float ↔ uint32 (avoids UB; used by BIH node encoding).
-inline uint32_t FloatToRawBits(float f) {
-    uint32_t i;
-    __builtin_memcpy(&i, &f, 4);
-    return i;
-}
-inline float RawBitsToFloat(uint32_t i) {
-    float f;
-    __builtin_memcpy(&f, &i, 4);
-    return f;
-}
+inline uint32_t FloatToRawBits(float f) { return std::bit_cast<uint32_t>(f); }
+inline float RawBitsToFloat(uint32_t i) { return std::bit_cast<float>(i); }
 
 inline float FInf()  { return std::numeric_limits<float>::infinity(); }
 inline float FNan()  { return std::numeric_limits<float>::quiet_NaN(); }

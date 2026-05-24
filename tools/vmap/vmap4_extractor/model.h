@@ -20,6 +20,7 @@
 
 #include "vec3d.h"
 #include "modelheaders.h"
+#include <string>
 #include <vector>
 
 class MPQFile;
