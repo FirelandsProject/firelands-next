@@ -2,6 +2,11 @@
 
 #include <ftxui/screen/color.hpp>
 
+// <windows.h> defines RGB as a macro; undefine it so ftxui::Color::RGB compiles.
+#ifdef RGB
+#undef RGB
+#endif
+
 namespace Firelands {
 
 struct FtxuiServerPalette {
