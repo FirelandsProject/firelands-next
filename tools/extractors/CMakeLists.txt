@@ -7,6 +7,9 @@ add_library(FirelandsExtractCommon STATIC
 target_include_directories(FirelandsExtractCommon PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(FirelandsExtractCommon PUBLIC storm)
 target_compile_features(FirelandsExtractCommon PUBLIC cxx_std_20)
+if(WIN32)
+    target_compile_definitions(FirelandsExtractCommon PUBLIC UNICODE _UNICODE)
+endif()
 
 add_executable(firelands-dbc-extractor dbc_extractor_main.cpp)
 target_link_libraries(firelands-dbc-extractor PRIVATE FirelandsExtractCommon)

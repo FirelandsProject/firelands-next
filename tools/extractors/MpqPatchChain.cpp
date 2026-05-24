@@ -8,15 +8,13 @@ bool MpqPatchChain::Open(const std::vector<std::filesystem::path> &orderedArchiv
     return false;
   }
 
-  const std::string first = orderedArchives.front().string();
-  if (!SFileOpenArchive(first.c_str(), 0, MPQ_FLAG_READ_ONLY, &handle_)) {
+  if (!SFileOpenArchive(orderedArchives.front().c_str(), 0, MPQ_FLAG_READ_ONLY, &handle_)) {
     handle_ = nullptr;
     return false;
   }
 
   for (size_t i = 1; i < orderedArchives.size(); ++i) {
-    const std::string p = orderedArchives[i].string();
-    if (!SFileOpenPatchArchive(handle_, p.c_str(), nullptr, 0)) {
+    if (!SFileOpenPatchArchive(handle_, orderedArchives[i].c_str(), nullptr, 0)) {
       Close();
       return false;
     }
@@ -89,8 +87,7 @@ bool MpqPatchChain::EnumerateAcrossArchives(
 
   for (const auto &archivePath : orderedArchives) {
     HANDLE h = nullptr;
-    const std::string p = archivePath.string();
-    if (!SFileOpenArchive(p.c_str(), 0, MPQ_FLAG_READ_ONLY, &h) || h == nullptr) {
+    if (!SFileOpenArchive(archivePath.c_str(), 0, MPQ_FLAG_READ_ONLY, &h) || h == nullptr) {
       continue;
     }
 
