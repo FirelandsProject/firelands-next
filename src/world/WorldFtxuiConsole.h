@@ -21,6 +21,17 @@ struct MapStatusPanelModel {
   int screen_rows = 2;
 };
 
+/// Lightweight watch state — full panel rebuild only when this changes.
+struct MapStatusWatchState {
+  std::size_t registered_map_count = 0;
+  std::vector<std::pair<uint32, int>> player_count_by_map;
+
+  bool operator==(MapStatusWatchState const &other) const {
+    return registered_map_count == other.registered_map_count &&
+           player_count_by_map == other.player_count_by_map;
+  }
+};
+
 /// Shared state between the FTXUI main thread (render + tick) and the
 /// background bootstrap thread that builds network services.
 struct WorldFtxuiRuntime {
@@ -33,6 +44,7 @@ struct WorldFtxuiRuntime {
 
   std::mutex map_status_mutex;
   MapStatusPanelModel map_status;
+  MapStatusWatchState map_status_watch;
 };
 
 /// Full-screen terminal UI (FTXUI): scrollable log pane and a fixed bottom

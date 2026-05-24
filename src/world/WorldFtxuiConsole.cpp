@@ -86,7 +86,24 @@ void FinalizeMapStatusPanelModel(MapStatusPanelModel &model,
   model.screen_rows = MapStatusPanelScreenRows(model);
 }
 
-/// Called from the ticker thread only — snapshots a subset of maps (not every frame).
+MapStatusWatchState CollectMapStatusWatchState() {
+  MapStatusWatchState watch;
+  WorldService::Instance().ForEachMapService([&](MapService &svc) {
+    ++watch.registered_map_count;
+    auto const map = svc.SharedMap();
+    if (!map) {
+      return;
+    }
+    int const players = map->CountPlayers();
+    if (players > 0) {
+      watch.player_count_by_map.emplace_back(svc.MapId(), players);
+    }
+  });
+  std::sort(watch.player_count_by_map.begin(), watch.player_count_by_map.end());
+  return watch;
+}
+
+/// Called from the ticker thread when watch state changes — no grid scans.
 MapStatusPanelModel BuildMapStatusPanelModelFromWorld() {
   std::vector<MapSnapshot> selected;
   std::size_t loaded_map_count = 0;
@@ -100,7 +117,7 @@ MapStatusPanelModel BuildMapStatusPanelModelFromWorld() {
     if (!IsContinentMapId(mapId) && map->IsEmpty()) {
       return;
     }
-    selected.push_back(svc.Snapshot());
+    selected.push_back(svc.DisplaySnapshot());
   });
 
   std::sort(selected.begin(), selected.end(),
@@ -131,6 +148,20 @@ void RefreshMapStatusCache(std::shared_ptr<WorldFtxuiRuntime> const &runtime) {
   MapStatusPanelModel const model = BuildMapStatusPanelModelFromWorld();
   std::lock_guard<std::mutex> lock(runtime->map_status_mutex);
   runtime->map_status = model;
+}
+
+/// Returns true when the panel cache was rebuilt (map set or player counts changed).
+bool MaybeRefreshMapStatusCache(std::shared_ptr<WorldFtxuiRuntime> const &runtime) {
+  MapStatusWatchState const next = CollectMapStatusWatchState();
+  {
+    std::lock_guard<std::mutex> lock(runtime->map_status_mutex);
+    if (runtime->map_status_watch == next) {
+      return false;
+    }
+    runtime->map_status_watch = next;
+  }
+  RefreshMapStatusCache(runtime);
+  return true;
 }
 
 MapStatusPanelModel CopyMapStatusPanelModel(
@@ -332,14 +363,17 @@ void RunWorldFtxuiConsoleImpl(
 
   auto root = Renderer(shell, [&] { return shell->Render(); });
 
+  {
+    std::lock_guard<std::mutex> lock(runtime->map_status_mutex);
+    runtime->map_status_watch = CollectMapStatusWatchState();
+  }
   RefreshMapStatusCache(runtime);
 
   std::atomic<bool> run_ticks{true};
   std::thread ticker([&, runtime] {
-    auto const auraTickInterval = std::chrono::milliseconds(100);
-    auto const mapStatusInterval = std::chrono::milliseconds(500);
-    auto lastAuraTick = std::chrono::steady_clock::now();
-    auto lastMapStatusRefresh = std::chrono::steady_clock::now();
+    auto const pollInterval = std::chrono::milliseconds(100);
+    auto lastPoll = std::chrono::steady_clock::now();
+    auto lastAuraTick = lastPoll;
 
     while (run_ticks.load()) {
       bool failed = false;
@@ -357,29 +391,32 @@ void RunWorldFtxuiConsoleImpl(
           cs = runtime->command_service;
         }
       }
+      auto const tickNow = std::chrono::steady_clock::now();
       if (failed) {
         screen.ExitLoopClosure()();
-      } else if (ready && ws) {
-        ws->Update();
-        if (ic) {
-          ic->ProcessPending();
+      } else {
+        if (ready && ws) {
+          ws->Update();
+          if (ic) {
+            ic->ProcessPending();
+          }
+          if (cs) {
+            cs->PollScheduledRestart();
+          }
+          if (tickNow - lastAuraTick >= pollInterval) {
+            TickMapAuras(tickNow);
+            TickMapPlayerResourceRegen(tickNow);
+            lastAuraTick = tickNow;
+          }
+          if (ic && ic->ShutdownRequested()) {
+            screen.ExitLoopClosure()();
+          }
         }
-        if (cs) {
-          cs->PollScheduledRestart();
-        }
-        auto const tickNow = std::chrono::steady_clock::now();
-        if (tickNow - lastAuraTick >= auraTickInterval) {
-          TickMapAuras(tickNow);
-          TickMapPlayerResourceRegen(tickNow);
-          lastAuraTick = tickNow;
-        }
-        if (tickNow - lastMapStatusRefresh >= mapStatusInterval) {
-          RefreshMapStatusCache(runtime);
-          lastMapStatusRefresh = tickNow;
-          screen.RequestAnimationFrame();
-        }
-        if (ic && ic->ShutdownRequested()) {
-          screen.ExitLoopClosure()();
+        if (tickNow - lastPoll >= pollInterval) {
+          lastPoll = tickNow;
+          if (MaybeRefreshMapStatusCache(runtime)) {
+            screen.RequestAnimationFrame();
+          }
         }
       }
       if (log_sink->ConsumeRenderDirty()) {

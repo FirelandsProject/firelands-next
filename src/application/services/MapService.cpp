@@ -36,4 +36,20 @@ MapSnapshot MapService::Snapshot() const {
   return snap;
 }
 
+MapSnapshot MapService::DisplaySnapshot() const {
+  MapSnapshot snap;
+  snap.mapId = m_mapId;
+  if (m_map) {
+    snap.playerCount = m_map->CountPlayers();
+    snap.creatureCount = m_map->CountCreatures();
+    snap.isEmpty = snap.playerCount == 0 && snap.creatureCount == 0;
+  }
+  {
+    std::lock_guard<std::mutex> lock(m_snapshotMutex);
+    snap.avgTickTimeMs = m_avgTickTimeMs;
+    snap.lastTickTimeMs = m_lastTickTimeMs;
+  }
+  return snap;
+}
+
 } // namespace Firelands

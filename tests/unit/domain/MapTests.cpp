@@ -220,6 +220,15 @@ TEST_F(MapTests, IsEmpty_IgnoresGameObjectsOnly) {
   EXPECT_FALSE(map->IsEmpty());
 }
 
+TEST_F(MapTests, CountPlayersAndCreatures_WithoutGridScan) {
+  auto map = std::make_shared<Map>(1);
+  auto notifier = std::make_shared<MockNotifier>();
+  map->AddObject(std::make_shared<Player>(1u, notifier));
+  map->AddObject(std::make_shared<Creature>(2u, 1u, 1u));
+  EXPECT_EQ(map->CountPlayers(), 1);
+  EXPECT_EQ(map->CountCreatures(), 1);
+}
+
 TEST_F(MapTests, RecordTickTime_UpdatesRollingAverage) {
   auto map = std::make_shared<Map>(1);
   map->RecordTickTime(10.0);

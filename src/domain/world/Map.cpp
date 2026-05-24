@@ -187,6 +187,28 @@ bool Map::IsEmpty() const {
   return true;
 }
 
+int Map::CountPlayers() const {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  int count = 0;
+  for (auto const &[id, obj] : m_objects) {
+    (void)id;
+    if (std::dynamic_pointer_cast<Player>(obj))
+      ++count;
+  }
+  return count;
+}
+
+int Map::CountCreatures() const {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  int count = 0;
+  for (auto const &[id, obj] : m_objects) {
+    (void)id;
+    if (std::dynamic_pointer_cast<Creature>(obj))
+      ++count;
+  }
+  return count;
+}
+
 MapSnapshot Map::CreateSnapshot() const {
   MapSnapshot snap;
   snap.mapId = m_id;

@@ -17,6 +17,8 @@ public:
   Map *GetMap();
   std::shared_ptr<Map> SharedMap() const;
   MapSnapshot Snapshot() const;
+  /// Occupancy + tick stats for TUI (no grid scan).
+  MapSnapshot DisplaySnapshot() const;
   void RecordTick(double tickMs);
 
 private:

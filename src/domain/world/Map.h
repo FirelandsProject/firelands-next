@@ -57,6 +57,10 @@ public:
   /// True when the map has no players and no creatures (game objects ignored).
   bool IsEmpty() const;
 
+  /// Player/creature counts without scanning the spatial grid (for TUI watches).
+  int CountPlayers() const;
+  int CountCreatures() const;
+
   /// Invokes `fn` for each `Creature` in grid cells within `cellRadius` of (x,y).
   void ForEachCreatureNear(
       float x, float y, int cellRadius,

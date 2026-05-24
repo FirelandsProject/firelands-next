@@ -2,6 +2,7 @@
 #include <domain/world/Creature.h>
 #include <domain/world/Player.h>
 #include <domain/ports/IMapNotifier.h>
+#include <shared/Logger.h>
 #include <shared/network/WorldPacket.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -40,4 +41,18 @@ TEST(MapServiceTests, RecordTickUpdatesSnapshotTiming) {
   EXPECT_DOUBLE_EQ(snap.lastTickTimeMs, 7.5);
   EXPECT_GT(snap.avgTickTimeMs, 7.5);
   EXPECT_LT(snap.avgTickTimeMs, 12.5);
+}
+
+TEST(MapServiceTests, DisplaySnapshotSkipsGridCellCount) {
+  if (!Logger::IsInitialized()) {
+    Logger::Init(LoggerBuilder().WithConsole(false).Build());
+  }
+  auto map = std::make_shared<Map>(5);
+  map->AddObject(std::make_shared<Creature>(10u, 1u, 1u));
+  MapService svc(5, map);
+  MapSnapshot const display = svc.DisplaySnapshot();
+  MapSnapshot const full = svc.Snapshot();
+  EXPECT_EQ(display.creatureCount, 1);
+  EXPECT_EQ(display.loadedGridCells, 0);
+  EXPECT_GE(full.loadedGridCells, 1);
 }
