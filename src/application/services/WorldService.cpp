@@ -8,6 +8,23 @@
 
 namespace Firelands {
 
+std::shared_ptr<Map> WorldService::GetMap(uint32 mapId) {
+  std::lock_guard<std::mutex> lock(m_worldMutex);
+  return m_mapRegistry.GetOrCreate(mapId)->SharedMap();
+}
+
+void WorldService::RemovePlayerFromMap(uint32 mapId, uint64 guid) {
+  std::shared_ptr<MapService> service;
+  {
+    std::lock_guard<std::mutex> lock(m_worldMutex);
+    service = m_mapRegistry.TryGet(mapId);
+  }
+  if (!service)
+    return;
+  if (auto *map = service->GetMap())
+    map->RemoveObject(guid);
+}
+
 void WorldService::AddCreatureToMap(uint32 mapId,
                                     std::shared_ptr<Creature> creature) {
   const uint64 guid = creature->GetGuid();
@@ -133,18 +150,25 @@ ExperienceRates WorldService::GetExperienceRates() {
 
 void WorldService::ForEachMap(
     std::function<void(uint32 mapId, std::shared_ptr<Map> const &)> const &fn) {
-  std::lock_guard<std::mutex> lock(m_worldMutex);
-  for (auto const &[mapId, map] : m_maps) {
-    if (map)
-      fn(mapId, map);
-  }
+  ForEachMapService([&](MapService &svc) {
+    if (auto map = svc.SharedMap())
+      fn(svc.MapId(), map);
+  });
+}
+
+void WorldService::ForEachMapService(
+    std::function<void(MapService &)> const &fn) {
+  m_mapRegistry.ForEach(fn);
+}
+
+std::vector<MapSnapshot> WorldService::GetMapSnapshots() const {
+  return m_mapRegistry.AllSnapshots();
 }
 
 void WorldService::ResetForShutdown() {
-  std::unordered_map<uint32, std::shared_ptr<Map>> mapsToDestroy;
   {
     std::lock_guard<std::mutex> lock(m_worldMutex);
-    mapsToDestroy.swap(m_maps);
+    m_mapRegistry.Clear();
   }
   {
     std::lock_guard<std::mutex> lock(m_auxMutex);
@@ -154,7 +178,6 @@ void WorldService::ResetForShutdown() {
     m_spellDefinitions.reset();
     m_spellVisualDbc.reset();
   }
-  mapsToDestroy.clear();
 }
 
 } // namespace Firelands

@@ -1,6 +1,8 @@
 #include <infrastructure/world/MapAuraTicker.h>
 
 #include <application/combat/MapCombatDamage.h>
+#include <application/services/MapService.h>
+#include <application/services/WorldService.h>
 #include <application/world/WorldRuntimeAccess.h>
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
@@ -59,10 +61,17 @@ void TickMap(uint32 mapId, std::shared_ptr<Map> const &map,
 } // namespace
 
 void TickMapAuras(std::chrono::steady_clock::time_point now) {
-  WorldRuntime().ForEachMap(
-      [&](uint32 mapId, std::shared_ptr<Map> const &map) {
-        TickMap(mapId, map, now);
-      });
+  WorldService::Instance().ForEachMapService([&](MapService &svc) {
+    auto const map = svc.SharedMap();
+    if (!map || map->IsEmpty())
+      return;
+    auto const start = std::chrono::steady_clock::now();
+    TickMap(svc.MapId(), map, now);
+    auto const elapsed = std::chrono::duration<double, std::milli>(
+                             std::chrono::steady_clock::now() - start)
+                             .count();
+    svc.RecordTick(elapsed);
+  });
 }
 
 } // namespace Firelands

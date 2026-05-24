@@ -72,6 +72,9 @@ add_executable(FirelandsUnitTests
     unit/application/CommandServiceReviveUnlearnTests.cpp
     unit/application/GmPlayerReviveTests.cpp
     unit/application/PlayerAuraStatEffectsTests.cpp
+    unit/application/MapServiceTests.cpp
+    unit/application/MapRegistryTests.cpp
+    unit/application/WorldServiceMapRegistryTests.cpp
     unit/application/WorldServiceCreatureScriptTests.cpp
     unit/application/CreatureSpawnLogicTests.cpp
     unit/application/CreatureProximityAggroTests.cpp
@@ -98,6 +101,7 @@ add_executable(FirelandsUnitTests
     unit/combat/CreatureChaseMovementTest.cpp
     integration/combat/CombatIntegrationTest.cpp
     unit/infrastructure/LuaGameScriptHostTests.cpp
+    unit/infrastructure/MapAuraTickerTests.cpp
     unit/infrastructure/MapCollisionQueriesStubTests.cpp
     unit/infrastructure/SpellCastTablesSpellPowerTests.cpp
     unit/infrastructure/SpellCastTablesDurationTests.cpp

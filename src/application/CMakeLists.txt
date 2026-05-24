@@ -19,6 +19,8 @@ add_library(FirelandsApplication STATIC
     services/CommandService.cpp
     services/GmTicketService.cpp
     services/OnlineCharacterSessionRegistry.cpp
+    services/MapService.cpp
+    services/MapRegistry.cpp
     services/WorldService.cpp
     world/PlayerPhaseShift.cpp
     world/PhaseConditionEvaluator.cpp

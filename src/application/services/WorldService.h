@@ -6,13 +6,16 @@
 #include <domain/repositories/ISpellDefinitionStore.h>
 #include <domain/world/Creature.h>
 #include <domain/world/GameObject.h>
+#include <application/services/MapRegistry.h>
+#include <application/services/MapService.h>
 #include <domain/world/Map.h>
+#include <domain/world/MapSnapshot.h>
 #include <domain/world/Player.h>
 #include <shared/game/ExperienceRates.h>
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
+#include <vector>
 
 namespace Firelands {
 
@@ -31,31 +34,13 @@ public:
     return instance;
   }
 
-  std::shared_ptr<Map> GetMap(uint32 mapId) {
-    std::lock_guard<std::mutex> lock(m_worldMutex);
-    auto it = m_maps.find(mapId);
-    if (it == m_maps.end()) {
-      m_maps[mapId] = std::make_shared<Map>(mapId);
-    }
-    return m_maps[mapId];
-  }
+  std::shared_ptr<Map> GetMap(uint32 mapId);
 
   void AddPlayerToMap(uint32 mapId, std::shared_ptr<Player> player) {
     GetMap(mapId)->AddObject(player);
   }
 
-  void RemovePlayerFromMap(uint32 mapId, uint64 guid) {
-    std::shared_ptr<Map> map;
-    {
-      std::lock_guard<std::mutex> lock(m_worldMutex);
-      auto it = m_maps.find(mapId);
-      if (it == m_maps.end()) {
-        return;
-      }
-      map = it->second;
-    }
-    map->RemoveObject(guid);
-  }
+  void RemovePlayerFromMap(uint32 mapId, uint64 guid);
 
   /// Adds a creature to the map grid and notifies Lua (`creature_spawn`).
   void AddCreatureToMap(uint32 mapId, std::shared_ptr<Creature> creature);
@@ -97,11 +82,15 @@ public:
   void ForEachMap(
       std::function<void(uint32 mapId, std::shared_ptr<Map> const &)> const &fn);
 
+  void ForEachMapService(std::function<void(MapService &)> const &fn);
+
+  std::vector<MapSnapshot> GetMapSnapshots() const;
+
 private:
   WorldService() = default;
 
-  std::mutex m_worldMutex;
-  std::unordered_map<uint32, std::shared_ptr<Map>> m_maps;
+  mutable std::mutex m_worldMutex;
+  MapRegistry m_mapRegistry;
 
   std::mutex m_auxMutex;
   std::shared_ptr<IGameScriptHost> m_scriptHost;
