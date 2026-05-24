@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace Firelands {
@@ -19,14 +20,21 @@ struct FtxuiLogViewLayout {
   int banner_screen_rows = 11;
   int log_text_left_screen_x = 1;
   int separator_below_banner_rows = 1;
+  /// Extra rows between the banner separator and log window (e.g. map status +
+  /// separator).
+  int middle_top_rows = 0;
   int log_window_title_rows = 1;
+  /// Top border row of the `window()` before the title bar.
+  int log_window_border_top_rows = 1;
+  /// Bottom border row inside `window()` (subtracted from body height).
+  int log_window_border_bottom_rows = 1;
 
   int LogBodyFirstScreenY() const;
 };
 
-/// Viewport height for the log body given terminal size and bottom chrome.
+/// Viewport height for the log window given terminal size and layout chrome.
 int ComputeFtxuiLogViewportHeight(int bottom_chrome_rows,
-                                  int banner_budget = 12);
+                                  FtxuiLogViewLayout const &layout);
 
 struct FtxuiLogCell {
   int line = 0;
@@ -39,6 +47,7 @@ public:
   FtxuiLogView(FtxuiLogViewLayout layout, FtxuiLogSinkPtr sink);
 
   FtxuiLogViewLayout const &layout() const { return layout_; }
+  void SetLayout(FtxuiLogViewLayout layout) { layout_ = std::move(layout); }
   FtxuiLogSinkPtr const &sink() const { return sink_; }
 
   int view_first() const { return view_first_; }
@@ -53,6 +62,8 @@ public:
   ftxui::Elements BuildRows(int log_viewport_height) const;
 
   ftxui::Element Window(int log_viewport_height) const;
+
+  int LogBodyRowCount(int log_viewport_height) const;
 
 private:
   bool ApplyScrollDelta(int delta, int log_viewport_height);

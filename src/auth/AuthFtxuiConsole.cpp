@@ -34,7 +34,7 @@ void RunAuthFtxuiConsoleImpl(
   Closure const requestExit = screen.ExitLoopClosure();
 
   FtxuiLogSinkPtr const log_sink = std::make_shared<FtxuiLogSink>(12000);
-  ReplaceStdoutColorSinkWith(log_sink);
+  BindFirelandsLoggerToFtxuiSink(log_sink);
 
   FtxuiLogViewLayout log_layout{};
   log_layout.banner_screen_rows = 11;
@@ -44,14 +44,58 @@ void RunAuthFtxuiConsoleImpl(
     fn(runtime);
   });
 
-  auto key_sink = Container::Vertical({});
+  Color const kShellBg = FtxuiServerPalette::ShellBg();
 
-  key_sink |= CatchEvent([&](Event e) {
-    int const log_h =
-        ComputeFtxuiLogViewportHeight(kAuthBottomChromeRows);
-    if (log_view.HandleEvent(e, log_h,
-                             [&] { screen.RequestAnimationFrame(); })) {
-      return true;
+  auto refresh_log_layout = [&]() {
+    log_view.SetLayout(log_layout);
+    return ComputeFtxuiLogViewportHeight(kAuthBottomChromeRows, log_layout);
+  };
+
+  auto request_frame = [&] { screen.RequestAnimationFrame(); };
+
+  auto top_chrome = Renderer([&] {
+    return vbox({
+               FirelandsTuiBanner("AUTH SERVER") | notflex,
+               separator() | color(FtxuiServerPalette::Separator()),
+           }) |
+           bgcolor(kShellBg);
+  });
+
+  auto log_area = Renderer([&] {
+    int const log_h = refresh_log_layout();
+    return log_view.Window(log_h);
+  });
+  log_area |= CatchEvent([&](Event e) {
+    int const log_h = refresh_log_layout();
+    return log_view.HandleEvent(e, log_h, request_frame);
+  });
+
+  auto footer = Renderer([&] {
+  Element const footer_bar = hbox({
+        text(" ") | bgcolor(FtxuiServerPalette::Accent()),
+        text("  Q  quit  ") | bold | color(Color::RGB(248, 242, 232)),
+        text("  ·  Ctrl+C  stop  ") | dim | color(Color::RGB(180, 170, 160)),
+        filler() | bgcolor(Color::RGB(36, 34, 32)),
+    });
+    return vbox({
+               separator() | color(FtxuiServerPalette::Separator()),
+               footer_bar,
+           }) |
+           bgcolor(kShellBg);
+  });
+
+  auto shell = Container::Vertical({top_chrome, log_area, footer});
+
+  shell |= CatchEvent([&](Event e) {
+    int const log_h = refresh_log_layout();
+    if (e == Event::PageUp || e == Event::PageDown) {
+      return log_view.HandleEvent(e, log_h, request_frame);
+    }
+    if (e.is_mouse()) {
+      Mouse const &m = e.mouse();
+      if (m.button == Mouse::WheelUp || m.button == Mouse::WheelDown) {
+        return log_view.HandleEvent(e, log_h, request_frame);
+      }
     }
     if (!e.is_character() || e.character().size() != 1) {
       return false;
@@ -64,29 +108,7 @@ void RunAuthFtxuiConsoleImpl(
     return false;
   });
 
-  Color const kShellBg = FtxuiServerPalette::ShellBg();
-
-  auto root = Renderer(key_sink, [&] {
-    int const log_h =
-        ComputeFtxuiLogViewportHeight(kAuthBottomChromeRows);
-
-    Element const footer = hbox({
-        text(" ") | bgcolor(FtxuiServerPalette::Accent()),
-        text("  Q  quit  ") | bold | color(Color::RGB(248, 242, 232)),
-        text("  ·  Ctrl+C  stop  ") | dim | color(Color::RGB(180, 170, 160)),
-        filler() | bgcolor(Color::RGB(36, 34, 32)),
-    });
-
-    return vbox({
-               FirelandsTuiBanner("AUTH SERVER") | notflex,
-               separator() | color(FtxuiServerPalette::Separator()),
-               log_view.Window(log_h),
-               filler() | flex,
-               separator() | color(FtxuiServerPalette::Separator()),
-               footer,
-           }) |
-           bgcolor(kShellBg);
-  });
+  auto root = Renderer(shell, [&] { return shell->Render(); });
 
   std::atomic<bool> run_ticks{true};
   std::thread ticker([&, runtime] {

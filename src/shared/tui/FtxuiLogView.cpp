@@ -164,14 +164,17 @@ constexpr std::size_t kLogRenderBufferLines = 4000;
 } // namespace
 
 int FtxuiLogViewLayout::LogBodyFirstScreenY() const {
-  return banner_screen_rows + separator_below_banner_rows +
-         log_window_title_rows;
+  return banner_screen_rows + separator_below_banner_rows + middle_top_rows +
+         log_window_border_top_rows + log_window_title_rows;
 }
 
-int ComputeFtxuiLogViewportHeight(int bottom_chrome_rows, int banner_budget) {
+int ComputeFtxuiLogViewportHeight(int bottom_chrome_rows,
+                                  FtxuiLogViewLayout const &layout) {
   Dimensions const term = Terminal::Size();
   int const term_h = (term.dimy > 2) ? term.dimy : 25;
-  return std::max(6, term_h - banner_budget - 1 - bottom_chrome_rows);
+  int const top = layout.banner_screen_rows + layout.separator_below_banner_rows +
+                  layout.middle_top_rows;
+  return std::max(6, term_h - top - bottom_chrome_rows);
 }
 
 FtxuiLogView::FtxuiLogView(FtxuiLogViewLayout layout, FtxuiLogSinkPtr sink)
@@ -192,10 +195,11 @@ int FtxuiLogView::LogBodyViewportWidth() const {
 }
 
 void FtxuiLogView::ClampViewCol(int log_viewport_height) const {
+  int const body_rows = LogBodyRowCount(log_viewport_height);
   std::vector<std::string> lines = sink_->CopyRecentLines(kLogRenderBufferLines);
   int const n = static_cast<int>(lines.size());
-  int const display_start = DisplayStart(log_viewport_height, lines);
-  int const visible = std::min(log_viewport_height, n - display_start);
+  int const display_start = DisplayStart(body_rows, lines);
+  int const visible = std::min(body_rows, n - display_start);
   int const max_col =
       MaxViewCol(lines, display_start, visible, LogBodyViewportWidth());
   view_col_ = std::clamp(view_col_, 0, max_col);
@@ -203,10 +207,11 @@ void FtxuiLogView::ClampViewCol(int log_viewport_height) const {
 
 bool FtxuiLogView::ApplyHorizontalScrollDelta(int delta,
                                               int log_viewport_height) {
+  int const body_rows = LogBodyRowCount(log_viewport_height);
   std::vector<std::string> lines = sink_->CopyRecentLines(kLogRenderBufferLines);
   int const n = static_cast<int>(lines.size());
-  int const display_start = DisplayStart(log_viewport_height, lines);
-  int const visible = std::min(log_viewport_height, n - display_start);
+  int const display_start = DisplayStart(body_rows, lines);
+  int const visible = std::min(body_rows, n - display_start);
   int const max_col =
       MaxViewCol(lines, display_start, visible, LogBodyViewportWidth());
   int const next = std::clamp(view_col_ + delta, 0, max_col);
@@ -218,8 +223,9 @@ bool FtxuiLogView::ApplyHorizontalScrollDelta(int delta,
 }
 
 bool FtxuiLogView::ApplyScrollDelta(int delta, int log_viewport_height) {
+  int const body_rows = LogBodyRowCount(log_viewport_height);
   int const n = static_cast<int>(sink_->LineCount());
-  int const max_s = std::max(0, n - log_viewport_height);
+  int const max_s = std::max(0, n - body_rows);
   if (n == 0) {
     return false;
   }
@@ -244,10 +250,11 @@ bool FtxuiLogView::ApplyScrollDelta(int delta, int log_viewport_height) {
 bool FtxuiLogView::HandleEvent(ftxui::Event &event,
                                int log_viewport_height,
                                std::function<void()> request_animation_frame) {
+  int const body_rows = LogBodyRowCount(log_viewport_height);
   std::vector<std::string> lines = sink_->CopyRecentLines(kLogRenderBufferLines);
   int const n = static_cast<int>(lines.size());
-  int const display_start = DisplayStart(log_viewport_height, lines);
-  int const visible = std::min(log_viewport_height, n - display_start);
+  int const display_start = DisplayStart(body_rows, lines);
+  int const visible = std::min(body_rows, n - display_start);
   ClampViewCol(log_viewport_height);
 
   if (event.is_mouse()) {
@@ -320,16 +327,14 @@ bool FtxuiLogView::HandleEvent(ftxui::Event &event,
     }
   }
   if (event == Event::PageUp) {
-    if (ApplyScrollDelta(-std::max(1, log_viewport_height - 1),
-                         log_viewport_height)) {
+    if (ApplyScrollDelta(-std::max(1, body_rows - 1), log_viewport_height)) {
       request_animation_frame();
       return true;
     }
     return false;
   }
   if (event == Event::PageDown) {
-    if (ApplyScrollDelta(std::max(1, log_viewport_height - 1),
-                         log_viewport_height)) {
+    if (ApplyScrollDelta(std::max(1, body_rows - 1), log_viewport_height)) {
       request_animation_frame();
       return true;
     }
@@ -352,6 +357,12 @@ bool FtxuiLogView::HandleEvent(ftxui::Event &event,
   return false;
 }
 
+int FtxuiLogView::LogBodyRowCount(int log_viewport_height) const {
+  return std::max(1, log_viewport_height - layout_.log_window_title_rows -
+                           layout_.log_window_border_top_rows -
+                           layout_.log_window_border_bottom_rows);
+}
+
 ftxui::Elements FtxuiLogView::BuildRows(int log_viewport_height) const {
   using namespace ftxui;
 
@@ -359,12 +370,14 @@ ftxui::Elements FtxuiLogView::BuildRows(int log_viewport_height) const {
   Color const kLogSelectBg = FtxuiServerPalette::LogSelectBg();
   Color const kLogSelectFg = FtxuiServerPalette::LogSelectFg();
 
+  int const body_rows = LogBodyRowCount(log_viewport_height);
+
   std::vector<std::string> lines = sink_->CopyRecentLines(kLogRenderBufferLines);
   int const n = static_cast<int>(lines.size());
-  int const display_start = DisplayStart(log_viewport_height, lines);
+  int const display_start = DisplayStart(body_rows, lines);
 
   Elements rows;
-  int const visible = std::min(log_viewport_height, n - display_start);
+  int const visible = std::min(body_rows, n - display_start);
   rows.reserve(static_cast<std::size_t>(std::max(0, visible)));
   for (int i = 0; i < visible; ++i) {
     int const li = display_start + i;
@@ -402,12 +415,13 @@ ftxui::Elements FtxuiLogView::BuildRows(int log_viewport_height) const {
 ftxui::Element FtxuiLogView::Window(int log_viewport_height) const {
   using namespace ftxui;
 
+  int const body_rows = LogBodyRowCount(log_viewport_height);
   ClampViewCol(log_viewport_height);
 
   Color const kAccent = FtxuiServerPalette::Accent();
   Color const kLogBg = FtxuiServerPalette::LogBg();
 
-  Element const log_body = vbox(BuildRows(log_viewport_height)) |
+  Element const log_body = vbox(BuildRows(log_viewport_height)) | size(HEIGHT, EQUAL, body_rows) |
                          focusPosition(view_col_, 0) | xframe | bgcolor(kLogBg);
   Element const log_title = hbox({
       text(" ") | bgcolor(kAccent),

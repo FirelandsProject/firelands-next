@@ -13,6 +13,7 @@ add_executable(FirelandsUnitTests
     unit/shared/UpdateDataTests.cpp
     unit/shared/AuthPacketsTests.cpp
     unit/shared/LoggerTests.cpp
+    unit/shared/FtxuiLoggerBindingTests.cpp
     unit/shared/ConfigTests.cpp
     unit/shared/ItemDb2Wdb2Tests.cpp
     unit/shared/FactionTemplateDbcTests.cpp
@@ -122,6 +123,7 @@ add_executable(FirelandsUnitTests
 target_link_libraries(FirelandsUnitTests
     GTest::gtest_main
     GTest::gmock
+    FirelandsTui
     FirelandsInfrastructure
     FirelandsExtractCommon
     FirelandsMapExtractorLib

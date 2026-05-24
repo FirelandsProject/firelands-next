@@ -1,6 +1,9 @@
 #include <shared/tui/FtxuiLogSpdlog.h>
 
 #include <shared/Logger.h>
+#include <shared/tui/FtxuiLogSink.h>
+
+#include <stdexcept>
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/stdout_sinks.h>
@@ -22,6 +25,18 @@ bool IsTerminalStdoutSink(spdlog::sink_ptr const &s) {
 }
 
 } // namespace
+
+void BindFirelandsLoggerToFtxuiSink(FtxuiLogSinkPtr const &sink) {
+  if (!sink) {
+    throw std::invalid_argument("BindFirelandsLoggerToFtxuiSink: sink is null");
+  }
+  if (!Logger::IsInitialized()) {
+    throw std::runtime_error(
+        "BindFirelandsLoggerToFtxuiSink: Logger::Init() required first");
+  }
+  sink->set_pattern(Logger::Get().GetConsolePattern());
+  ReplaceStdoutColorSinkWith(sink);
+}
 
 void ReplaceStdoutColorSinkWith(spdlog::sink_ptr replacement) {
   auto lg = Logger::Get().GetSpdLogger();
@@ -51,7 +66,11 @@ void RestoreStdoutColorSink(spdlog::sink_ptr ftxui_sink) {
   }
   auto console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
   console->set_level(ftxui_sink->level());
-  console->set_pattern("%^[%H:%M:%S] [%l]%$  %v");
+  if (Logger::IsInitialized()) {
+    console->set_pattern(Logger::Get().GetConsolePattern());
+  } else {
+    console->set_pattern("%^[%H:%M:%S] [%l]%$  %v");
+  }
   sinks.insert(sinks.begin(), console);
 }
 

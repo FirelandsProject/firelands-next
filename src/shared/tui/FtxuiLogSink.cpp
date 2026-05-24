@@ -5,7 +5,8 @@
 namespace Firelands {
 
 FtxuiLogSink::FtxuiLogSink(std::size_t maxLines) : max_lines_(maxLines) {
-  set_pattern("[%H:%M:%S] [%l]  %v");
+  // Pattern is set from Firelands Logger via BindFirelandsLoggerToFtxuiSink().
+  set_pattern("%^[%H:%M:%S] [%l]%$  %v");
 }
 
 bool FtxuiLogSink::ConsumeRenderDirty() {

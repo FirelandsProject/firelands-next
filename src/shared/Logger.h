@@ -300,8 +300,14 @@ public:
     return spdlogger_;
   }
 
+  /// Console sink pattern from the active `LoggerConfig` (for TUI mirroring).
+  [[nodiscard]] const std::string &GetConsolePattern() const noexcept {
+    return console_pattern_;
+  }
+
 private:
-  explicit Logger(const LoggerConfig &config) {
+  explicit Logger(const LoggerConfig &config)
+      : console_pattern_(config.consolePattern) {
     std::vector<spdlog::sink_ptr> sinks;
 
     if (config.enableConsole) {
@@ -340,6 +346,7 @@ private:
   }
 
   std::shared_ptr<spdlog::logger> spdlogger_;
+  std::string console_pattern_;
   static std::unique_ptr<Logger> instance_;
 };
 
