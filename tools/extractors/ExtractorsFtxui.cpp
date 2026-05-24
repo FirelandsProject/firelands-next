@@ -3,6 +3,7 @@
 #include "ExtractorTasks.h"
 
 #include <shared/system/SystemClipboard.h>
+#include <shared/tui/FtxuiTextClipboard.h>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
@@ -405,12 +406,21 @@ int RunExtractorsFtxuiImpl() {
 
   std::string data_path_input;
   std::string out_path_input;
+  int data_path_cursor = 0;
+  int out_path_cursor = 0;
 
   auto radiobox = Radiobox(&operation_labels, &operation);
 
-  Component data_field = Input(&data_path_input, "WoW client Data folder (contains .MPQ)");
-  Component out_field =
-      Input(&out_path_input, "Output folder (created if missing)");
+  InputOption path_input_opts = InputOption::Default();
+  path_input_opts.multiline() = false;
+  path_input_opts.cursor_position = &data_path_cursor;
+  Component data_field = Firelands::AttachInputClipboard(
+      Input(&data_path_input, "WoW client Data folder (contains .MPQ)", path_input_opts),
+      data_path_input, data_path_cursor, {.multiline = false});
+  path_input_opts.cursor_position = &out_path_cursor;
+  Component out_field = Firelands::AttachInputClipboard(
+      Input(&out_path_input, "Output folder (created if missing)", path_input_opts),
+      out_path_input, out_path_cursor, {.multiline = false});
 
   int log_view_first = -1;
   bool log_select_drag = false;

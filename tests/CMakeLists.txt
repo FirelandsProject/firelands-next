@@ -14,6 +14,7 @@ add_executable(FirelandsUnitTests
     unit/shared/AuthPacketsTests.cpp
     unit/shared/LoggerTests.cpp
     unit/shared/FtxuiLoggerBindingTests.cpp
+    unit/shared/FtxuiTextClipboardTests.cpp
     unit/shared/ConfigTests.cpp
     unit/shared/ItemDb2Wdb2Tests.cpp
     unit/shared/FactionTemplateDbcTests.cpp

@@ -21,6 +21,7 @@
 #include <shared/tui/FtxuiLogView.h>
 #include <shared/tui/FtxuiPalette.h>
 #include <shared/tui/FtxuiSigInt.h>
+#include <shared/tui/FtxuiTextClipboard.h>
 
 #include <algorithm>
 #include <atomic>
@@ -194,12 +195,14 @@ void RunWorldFtxuiConsoleImpl(
   });
 
   std::string command;
+  int command_cursor = 0;
   Color const kInputBg = FtxuiServerPalette::InputBg();
   Color const kInputBgHover = FtxuiServerPalette::InputBgHover();
   Color const kInputBgFocus = FtxuiServerPalette::InputBgFocus();
   Color const kInputFg = FtxuiServerPalette::InputFg();
   InputOption input_opts = InputOption::Default();
   input_opts.multiline() = false;
+  input_opts.cursor_position = &command_cursor;
   input_opts.transform = [=](InputState state) {
     Element e = std::move(state.element);
     Color bg = kInputBg;
@@ -216,6 +219,8 @@ void RunWorldFtxuiConsoleImpl(
     return e;
   };
   auto input = Input(&command, " .help   .exit / quit ", input_opts);
+  input = AttachInputClipboard(std::move(input), command, command_cursor,
+                               {.multiline = false});
   input |= CatchEvent([&, runtime](Event e) {
     if (e != Event::Return) {
       return false;

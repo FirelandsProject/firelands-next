@@ -7,6 +7,7 @@ set_source_files_properties(ConfigEditorFtxui.cpp
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 target_link_libraries(firelands-config PRIVATE
+    FirelandsTui
     yaml-cpp
     ftxui::component
 )

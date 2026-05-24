@@ -8,6 +8,8 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/terminal.hpp>
 
+#include <shared/tui/FtxuiTextClipboard.h>
+
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
@@ -613,7 +615,14 @@ int RunConfigEditorFtxui(int argc, char **argv) {
   auto auth_menu =
       Menu(&auth_section_labels, &auth_section, MenuOption::Vertical());
 
-  auto in = [](std::string *s, char const *ph) { return Input(s, ph); };
+  auto in = [](std::string *s, char const *ph) {
+    auto cursor = std::make_shared<int>(0);
+    InputOption opts = InputOption::Default();
+    opts.multiline() = false;
+    opts.cursor_position = cursor.get();
+    return Firelands::AttachInputClipboard(Input(s, ph, opts), *s, *cursor,
+                                           {.multiline = false});
+  };
   int constexpr kFieldGap = 2;
 
   Component auth_net = JoinVerticalSpaced(
@@ -883,15 +892,18 @@ int RunConfigEditorFtxui(int argc, char **argv) {
       },
       kFieldGap);
 
+  int motd_cursor = 0;
   InputOption motd_opt = InputOption::Default();
   motd_opt.content = &world.motd;
   motd_opt.placeholder = "One line per row (multiline MOTD)";
+  motd_opt.cursor_position = &motd_cursor;
   Component world_motd = JoinVerticalSpaced(
       {
           NestedField(
               "Motd", "Message of the day (sequence)",
               "Each non-empty line becomes one YAML list entry sent to clients.",
-              Input(motd_opt)),
+              Firelands::AttachInputClipboard(Input(motd_opt), world.motd, motd_cursor,
+                                              {.multiline = true})),
       },
       kFieldGap);
 

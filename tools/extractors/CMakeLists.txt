@@ -26,7 +26,7 @@ set_source_files_properties(ExtractorsFtxui.cpp
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_link_libraries(firelands-extractors PRIVATE
     FirelandsExtractCommon
-    FirelandsShared
+    FirelandsTui
     ftxui::component
 )
 set(_firelands_collision_bin "${CMAKE_BINARY_DIR}/bin")
