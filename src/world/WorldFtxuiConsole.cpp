@@ -278,7 +278,7 @@ void RunWorldFtxuiConsoleImpl(
     return log_view.HandleEvent(e, log_h, request_frame);
   });
 
-  auto bottom_chrome = Renderer([&, runtime] {
+  auto bottom_chrome = Renderer(input, [&, runtime] {
     std::shared_ptr<WorldInteractiveConsole> ic;
     {
       std::lock_guard<std::mutex> lock(runtime->mutex);
@@ -305,7 +305,7 @@ void RunWorldFtxuiConsoleImpl(
            bgcolor(kShellBg);
   });
 
-  auto shell = Container::Vertical({top_chrome, log_area, bottom_chrome, input});
+  auto shell = Container::Vertical({top_chrome, log_area, bottom_chrome});
 
   shell |= CatchEvent([&](Event e) {
     int const log_h = refresh_log_layout();
