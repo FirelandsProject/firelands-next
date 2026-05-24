@@ -11,13 +11,18 @@ CREATE TABLE IF NOT EXISTS `firelands_auth`.`schema_migrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT IGNORE INTO `firelands_auth`.`schema_migrations` (`migration`) VALUES
-  ('creature_ref_import.sql'),
   ('firelands_auth.sql'),
   ('firelands_characters.sql'),
   ('firelands_world.sql'),
+  ('firelands_world_creature_ref_import.sql'),
   ('auth_schema.sql'),
   ('characters_schema.sql'),
   ('world_schema.sql'),
+  ('world_schema_core.sql'),
+  ('24_world_creature_tables.sql'),
+  ('25_world_creature_classlevelstats.sql'),
+  ('26_world_instance_tables.sql'),
+  ('29_world_creature_template_modelids.sql'),
   ('31_world_creature_template_gossip_menu_id.sql'),
   ('32_world_gossip_tables.sql'),
   ('33_world_npc_text.sql'),

@@ -86,14 +86,24 @@ def detect_database(path: Path, content: str) -> str | None:
     return None
 
 
+def init_files_for_db(db: str) -> list[Path]:
+    """Init SQL files for a database, in execution order."""
+    if db == "firelands_auth":
+        return [INIT_DIR / "auth_schema.sql"]
+    if db == "firelands_characters":
+        return [INIT_DIR / "characters_schema.sql"]
+    if db == "firelands_world":
+        files = [
+            INIT_DIR / "world_schema.sql",
+            INIT_DIR / "world_schema_core.sql",
+        ]
+        return [p for p in files if p.is_file()]
+    return []
+
+
 def init_path_for_db(db: str) -> Path | None:
-    mapping = {
-        "firelands_auth": INIT_DIR / "auth_schema.sql",
-        "firelands_characters": INIT_DIR / "characters_schema.sql",
-        "firelands_world": INIT_DIR / "world_schema.sql",
-    }
-    p = mapping.get(db)
-    return p if p and p.is_file() else None
+    files = init_files_for_db(db)
+    return files[0] if files else None
 
 
 def write_seed_only() -> None:
@@ -154,9 +164,9 @@ def write_merged() -> None:
         )
 
     for db in KNOWN_DBS:
-        init_p = init_path_for_db(db)
+        init_files = init_files_for_db(db)
         chunks: list[str] = [HEADER]
-        if init_p:
+        for init_p in init_files:
             chunks.append(
                 f"-- === source: init/{init_p.name} ===\n{init_p.read_text(encoding='utf-8').rstrip()}\n"
             )

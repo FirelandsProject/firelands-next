@@ -14,7 +14,7 @@ Default paths assume `firelands-cata-ref` next to this repo (gitignored clone).
 Usage:
   python3 tools/sql/import_ref_creature_data.py
   python3 tools/sql/import_ref_creature_data.py --ref /path/to/firelands-cata-ref \\
-      --out sql/bundled/creature_ref_import.sql
+      --out sql/bundled/firelands_world_creature_ref_import.sql
 """
 
 from __future__ import annotations
@@ -546,7 +546,7 @@ def main() -> None:
     ap.add_argument(
         "--out",
         type=Path,
-        default=root / "sql" / "bundled" / "creature_ref_import.sql",
+        default=root / "sql" / "bundled" / "firelands_world_creature_ref_import.sql",
         help="Output migration SQL path (full export or patch target)",
     )
     ap.add_argument(

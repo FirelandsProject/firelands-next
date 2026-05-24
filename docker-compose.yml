@@ -3,7 +3,7 @@ services:
     image: mysql:8.0
     container_name: firelands_db
     restart: always
-    command: ["mysqld", "--default-authentication-plugin=mysql_native_password", "--require-secure-transport=OFF", "--ssl=0"]
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password", "--require-secure-transport=OFF", "--ssl=0", "--max-allowed-packet=512M"]
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: firelands
@@ -17,6 +17,7 @@ services:
       - ./sql/bundled/firelands_auth.sql:/docker-entrypoint-initdb.d/01-auth.sql
       - ./sql/bundled/firelands_characters.sql:/docker-entrypoint-initdb.d/02-characters.sql
       - ./sql/bundled/firelands_world.sql:/docker-entrypoint-initdb.d/03-world.sql
+      - ./sql/bundled/firelands_world_creature_ref_import.sql:/docker-entrypoint-initdb.d/04-creature-import.sql
       - ./sql/bundled/zz_seed_schema_migrations.sql:/docker-entrypoint-initdb.d/99-seed-schema-migrations.sql
 
 volumes:

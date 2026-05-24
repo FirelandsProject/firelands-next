@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS `account` (
   `joindate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_ip` varchar(15) NOT NULL DEFAULT '127.0.0.1',
   `expansion` tinyint(3) unsigned NOT NULL DEFAULT '3', -- 3 for Cataclysm
+  `access_level` tinyint unsigned NOT NULL DEFAULT '0', -- GM tier 0–3; see shared/game/AccessLevel.h
   `locked` tinyint unsigned NOT NULL DEFAULT '0', -- 1 = banned (auth rejects login); see migration 16
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_username` (`username`)

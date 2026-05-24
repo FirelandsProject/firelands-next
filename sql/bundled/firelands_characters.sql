@@ -248,21 +248,47 @@ CREATE TABLE IF NOT EXISTS `character_action` (
 -- === source: migrations/53_characters_action_bar_toggles.sql ===
 -- Migration: persist which action bars are visible (PLAYER_FIELD_BYTES toggles byte)
 -- Target: `firelands_characters`
+-- JDBC-safe: skip ADD when init schema already includes the column.
 
 CREATE DATABASE IF NOT EXISTS `firelands_characters`;
 USE `firelands_characters`;
 
-ALTER TABLE `characters`
-  ADD COLUMN `actionBarToggles` tinyint unsigned NOT NULL DEFAULT '255'
-  AFTER `tutorial7`;
+SET @exist_action_bar_toggles :=
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'characters'
+     AND COLUMN_NAME = 'actionBarToggles');
+
+SET @fl_sql := IF(@exist_action_bar_toggles = 0,
+  'ALTER TABLE `characters`
+     ADD COLUMN `actionBarToggles` tinyint unsigned NOT NULL DEFAULT ''255''
+     AFTER `tutorial7`',
+  'SELECT 1');
+
+PREPARE _fl_m53_p FROM @fl_sql;
+EXECUTE _fl_m53_p;
+DEALLOCATE PREPARE _fl_m53_p;
 
 
 -- === source: migrations/54_characters_rest_bonus.sql ===
 -- Rested XP pool (Cataclysm `PLAYER_REST_STATE_EXPERIENCE` / rest indicator).
+-- JDBC-safe: skip ADD when init schema already includes the column.
 USE `firelands_characters`;
 
-ALTER TABLE `characters`
-  ADD COLUMN `rest_bonus` float NOT NULL DEFAULT 0 AFTER `xp`;
+SET @exist_rest_bonus :=
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'characters'
+     AND COLUMN_NAME = 'rest_bonus');
+
+SET @fl_sql := IF(@exist_rest_bonus = 0,
+  'ALTER TABLE `characters`
+     ADD COLUMN `rest_bonus` float NOT NULL DEFAULT 0 AFTER `xp`',
+  'SELECT 1');
+
+PREPARE _fl_m54_p FROM @fl_sql;
+EXECUTE _fl_m54_p;
+DEALLOCATE PREPARE _fl_m54_p;
 
 
 -- === source: migrations/58_characters_queststatus.sql ===
