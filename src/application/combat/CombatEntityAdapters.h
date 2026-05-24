@@ -41,7 +41,7 @@ public:
     return _creature && _creature->GetLiveHealth() > 0;
   }
   void TakeDamage(float amount) override {
-    if (!_creature || amount <= 0.f)
+    if (!_creature || amount <= 0.f || _creature->IsEvading())
       return;
     Firelands::int32 const dmg = static_cast<Firelands::int32>(amount);
     if (dmg > 0)

@@ -98,6 +98,7 @@ add_executable(FirelandsUnitTests
     unit/domain/MapTests.cpp
     unit/domain/CreatureCombatTests.cpp
     unit/domain/CreatureEvadeTests.cpp
+    unit/domain/CreatureCombatStateTests.cpp
     unit/domain/CreatureUnitFlagsTests.cpp
     unit/domain/PlayerCombatTests.cpp
     unit/combat/CombatEngineTest.cpp

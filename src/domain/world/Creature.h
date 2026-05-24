@@ -5,6 +5,7 @@
 #include <domain/world/WorldObject.h>
 #include <shared/game/PhaseShift.h>
 #include <shared/game/UnitCombatStats.h>
+#include <shared/game/UnitFieldFlags.h>
 #include <chrono>
 #include <optional>
 #include <vector>
@@ -33,6 +34,14 @@ public:
   /// `creature_template.unit_flags` → `UNIT_FIELD_FLAGS` on create/update.
   uint32 GetUnitFieldFlags() const { return m_unitFieldFlags; }
   uint32 GetUnitFieldFlags2() const { return m_unitFieldFlags2; }
+  uint32 GetUnitDynamicFlags() const { return m_unitDynamicFlags; }
+  void SetUnitDynamicFlags(uint32 dynamicFlags) { m_unitDynamicFlags = dynamicFlags; }
+  bool IsDead() const { return m_liveHealth == 0; }
+  bool IsInCombat() const { return (m_unitFieldFlags & kUnitFlagInCombat) != 0; }
+  void MarkInCombat() { m_unitFieldFlags |= kUnitFlagInCombat; }
+  void ClearInCombat() { m_unitFieldFlags &= ~kUnitFlagInCombat; }
+  /// Clears combat and marks corpse lootable for the killing player.
+  void MarkDeadAndLootable();
   /// `creature_template.flags_extra` (server-only template metadata).
   uint32 GetExtraFlags() const { return m_extraFlags; }
   /// Script/quest proxy units: no `UNIT_NPC_FLAGS`, not selectable, trigger extra flag.
@@ -63,6 +72,8 @@ public:
   bool IsEvading() const { return m_isEvading; }
   void SetEvading(bool evading) { m_isEvading = evading; }
   void RestoreHealthToFull();
+  /// Full reset when a creature finishes evading back at its home point.
+  void CompleteEvadeAtHome();
   /// Heals toward max while evading (called from return-home movement tick).
   void TickEvadeHealthRegen(std::chrono::milliseconds interval);
 
@@ -82,6 +93,7 @@ private:
   uint32 m_npcFlags = 0;
   uint32 m_unitFieldFlags = 0;
   uint32 m_unitFieldFlags2 = 0;
+  uint32 m_unitDynamicFlags = 0;
   uint32 m_extraFlags = 0;
   uint32 m_factionTemplate = kDefaultFactionTemplate;
   uint8 m_level = 1;

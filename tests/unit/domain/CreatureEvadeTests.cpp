@@ -12,6 +12,18 @@ TEST(CreatureEvadeTests, EvadeRegenHealsTowardMax) {
   EXPECT_GT(creature.GetLiveHealth(), 500u);
 }
 
+TEST(CreatureEvadeTests, CompleteEvadeAtHomeRestoresHealthAndClearsEvade) {
+  Creature creature(1, 100, 200, 1000, 10);
+  creature.SetEvading(true);
+  creature.MarkInCombat();
+  creature.ApplyHealthDelta(-600);
+  creature.CompleteEvadeAtHome();
+  EXPECT_FALSE(creature.IsEvading());
+  EXPECT_FALSE(creature.IsInCombat());
+  EXPECT_EQ(creature.GetLiveHealth(), creature.GetLiveMaxHealth());
+  EXPECT_EQ(creature.GetUnitDynamicFlags(), 0u);
+}
+
 TEST(CreatureEvadeTests, RestoreHealthToFullAtHome) {
   Creature creature(1, 100, 200, 1000, 10);
   creature.SetEvading(true);

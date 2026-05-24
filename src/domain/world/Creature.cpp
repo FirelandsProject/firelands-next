@@ -38,9 +38,22 @@ void Creature::SetFactionTemplate(uint32 factionTemplate) {
       factionTemplate == 0 ? kDefaultFactionTemplate : factionTemplate;
 }
 
+void Creature::MarkDeadAndLootable() {
+  ClearInCombat();
+  m_unitDynamicFlags = kUnitDynflagLootable | kUnitDynflagTappedByPlayer;
+}
+
 void Creature::SetCombatStats(UnitCombatStats stats) { m_combatStats = stats; }
 
 void Creature::RestoreHealthToFull() { m_liveHealth = m_liveMaxHealth; }
+
+void Creature::CompleteEvadeAtHome() {
+  RestoreHealthToFull();
+  SetEvading(false);
+  SetChaseTargetPlayerGuid(0);
+  ClearInCombat();
+  m_unitDynamicFlags = 0;
+}
 
 void Creature::TickEvadeHealthRegen(std::chrono::milliseconds interval) {
   if (!m_isEvading || m_liveHealth >= m_liveMaxHealth)
