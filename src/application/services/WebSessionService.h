@@ -44,9 +44,9 @@ private:
     std::vector<uint8_t> randomBytes(32);
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint8_t> dis(0, 255);
+    std::uniform_int_distribution<uint32_t> dis(0, 255);
     std::generate(randomBytes.begin(), randomBytes.end(),
-                  [&]() { return dis(gen); });
+                  [&]() { return static_cast<uint8_t>(dis(gen)); });
 
     return Crypto::ToHexString(Crypto::CalculateSHA1(randomBytes));
   }
