@@ -1,5 +1,6 @@
 #pragma once
 
+#include <domain/world/MapSnapshot.h>
 #include <domain/world/Player.h>
 #include <domain/world/WorldObject.h>
 #include <functional>
@@ -16,6 +17,8 @@ class Creature;
 class Map {
 public:
   explicit Map(uint32 id) : m_id(id) {}
+
+  uint32 GetMapId() const { return m_id; }
 
   void AddObject(std::shared_ptr<WorldObject> obj);
   void RemoveObject(uint64 guid);
@@ -45,6 +48,15 @@ public:
   /// Returns the creature on this map, or nullptr if missing or not a creature.
   std::shared_ptr<Creature> TryGetCreature(uint64 guid);
 
+  /// Updates rolling average tick duration (exponential moving average, alpha=0.1).
+  void RecordTickTime(double ms);
+
+  /// Thread-safe snapshot of occupancy and tick timing.
+  MapSnapshot CreateSnapshot() const;
+
+  /// True when the map has no players and no creatures (game objects ignored).
+  bool IsEmpty() const;
+
   /// Invokes `fn` for each `Creature` in grid cells within `cellRadius` of (x,y).
   void ForEachCreatureNear(
       float x, float y, int cellRadius,
@@ -68,7 +80,10 @@ private:
   std::unordered_map<uint64, std::shared_ptr<WorldObject>> m_objects;
   std::unordered_map<uint64, GridCoord> m_objectCoords;
   Cell m_grid[64][64];
-  std::mutex m_mapMutex;
+  mutable std::mutex m_mapMutex;
+  double m_avgTickTimeMs = 0.0;
+  double m_lastTickTimeMs = 0.0;
+  bool m_hasTickSample = false;
 };
 
 } // namespace Firelands

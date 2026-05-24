@@ -190,3 +190,42 @@ TEST_F(MapTests, ForEachPlayer_CallbackCanBroadcastWithoutDeadlock) {
     map->BroadcastPacket(1, packet, false);
   });
 }
+
+TEST_F(MapTests, CreateSnapshot_CountsPlayersCreaturesAndGridCells) {
+  auto map = std::make_shared<Map>(42);
+  auto notifier = std::make_shared<MockNotifier>();
+  map->AddObject(std::make_shared<Player>(1u, notifier));
+  map->AddObject(std::make_shared<Creature>(2u, 1u, 1u));
+
+  MapSnapshot const snap = map->CreateSnapshot();
+  EXPECT_EQ(snap.mapId, 42u);
+  EXPECT_EQ(snap.playerCount, 1);
+  EXPECT_EQ(snap.creatureCount, 1);
+  EXPECT_GE(snap.loadedGridCells, 1);
+  EXPECT_FALSE(snap.isEmpty);
+}
+
+TEST_F(MapTests, CreateSnapshot_EmptyMap) {
+  auto map = std::make_shared<Map>(7);
+  MapSnapshot const snap = map->CreateSnapshot();
+  EXPECT_EQ(snap.mapId, 7u);
+  EXPECT_TRUE(snap.isEmpty);
+  EXPECT_EQ(snap.loadedGridCells, 0);
+}
+
+TEST_F(MapTests, IsEmpty_IgnoresGameObjectsOnly) {
+  auto map = std::make_shared<Map>(1);
+  EXPECT_TRUE(map->IsEmpty());
+  map->AddObject(std::make_shared<Creature>(2u, 1u, 1u));
+  EXPECT_FALSE(map->IsEmpty());
+}
+
+TEST_F(MapTests, RecordTickTime_UpdatesRollingAverage) {
+  auto map = std::make_shared<Map>(1);
+  map->RecordTickTime(10.0);
+  map->RecordTickTime(20.0);
+  MapSnapshot const snap = map->CreateSnapshot();
+  EXPECT_DOUBLE_EQ(snap.lastTickTimeMs, 20.0);
+  EXPECT_GT(snap.avgTickTimeMs, 10.0);
+  EXPECT_LT(snap.avgTickTimeMs, 20.0);
+}

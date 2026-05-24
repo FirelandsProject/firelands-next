@@ -163,6 +163,53 @@ void Map::BroadcastPacket(uint64 senderGuid, WorldPacket &packet,
   }
 }
 
+void Map::RecordTickTime(double ms) {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  m_lastTickTimeMs = ms;
+  if (!m_hasTickSample) {
+    m_avgTickTimeMs = ms;
+    m_hasTickSample = true;
+    return;
+  }
+  constexpr double kAlpha = 0.1;
+  m_avgTickTimeMs = kAlpha * ms + (1.0 - kAlpha) * m_avgTickTimeMs;
+}
+
+bool Map::IsEmpty() const {
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  for (auto const &[id, obj] : m_objects) {
+    (void)id;
+    if (std::dynamic_pointer_cast<Player>(obj) ||
+        std::dynamic_pointer_cast<Creature>(obj)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+MapSnapshot Map::CreateSnapshot() const {
+  MapSnapshot snap;
+  snap.mapId = m_id;
+  std::lock_guard<std::mutex> lock(m_mapMutex);
+  snap.avgTickTimeMs = m_avgTickTimeMs;
+  snap.lastTickTimeMs = m_lastTickTimeMs;
+  for (auto const &[id, obj] : m_objects) {
+    (void)id;
+    if (std::dynamic_pointer_cast<Player>(obj))
+      ++snap.playerCount;
+    else if (std::dynamic_pointer_cast<Creature>(obj))
+      ++snap.creatureCount;
+  }
+  for (int x = 0; x < 64; ++x) {
+    for (int y = 0; y < 64; ++y) {
+      if (!m_grid[x][y].objects.empty())
+        ++snap.loadedGridCells;
+    }
+  }
+  snap.isEmpty = snap.playerCount == 0 && snap.creatureCount == 0;
+  return snap;
+}
+
 void Map::BroadcastPacketToNearby(uint64 senderGuid, WorldPacket &packet,
                                   bool includeSelf) {
   std::lock_guard<std::mutex> lock(m_mapMutex);

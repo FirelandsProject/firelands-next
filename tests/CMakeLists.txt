@@ -87,6 +87,7 @@ add_executable(FirelandsUnitTests
     unit/infrastructure/GossipPacketTests.cpp
     unit/infrastructure/VendorPacketTests.cpp
     unit/infrastructure/GmTicketGossipUiTests.cpp
+    unit/domain/MapSnapshotTests.cpp
     unit/domain/MapTests.cpp
     unit/domain/CreatureCombatTests.cpp
     unit/domain/CreatureEvadeTests.cpp
