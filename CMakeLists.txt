@@ -61,13 +61,27 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 include(FetchContent)
+add_subdirectory(deps)
 
 # --- Dependencies ---
 
 # OpenSSL & ZLIB (Crítico para BigInt y MariaDB)
 find_package(OpenSSL REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(BZip2 REQUIRED)
+if(WIN32)
+    # Use the bundled zlib from deps/zlib — no system zlib on Windows.
+    # CACHE + FORCE ensures MariaDB's internal find_package(ZLIB) respects
+    # these values instead of overwriting them with ZLIB_LIBRARY-NOTFOUND.
+    set(ZLIB_FOUND        TRUE                              CACHE BOOL   "" FORCE)
+    set(ZLIB_INCLUDE_DIR  "${CMAKE_SOURCE_DIR}/deps/zlib"  CACHE PATH   "" FORCE)
+    set(ZLIB_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/deps/zlib"  CACHE PATH   "" FORCE)
+    set(ZLIB_LIBRARY      zlib                              CACHE STRING "" FORCE)
+    set(ZLIB_LIBRARIES    zlib                              CACHE STRING "" FORCE)
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB ALIAS zlib)
+    endif()
+else()
+    find_package(ZLIB REQUIRED)
+endif()
 
 # Boost
 find_package(Boost REQUIRED COMPONENTS thread)
