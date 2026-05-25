@@ -30,6 +30,7 @@
 #include <shared/game/PlayerGmAppearance.h>
 #include <domain/models/Character.h>
 #include <domain/models/GossipMenu.h>
+#include <domain/models/QuestGossip.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <domain/models/NpcText.h>
 #include <domain/models/GmTicket.h>
@@ -274,6 +275,10 @@ public:
   void SendVendorInventory(uint64_t vendorGuid);
   void HandleQuestGiverHello(WorldPacket &packet);
   void HandleQuestGiverQueryQuest(WorldPacket &packet);
+  void HandleQuestQuery(WorldPacket &packet);
+  void HandleQuestLogRemoveQuest(WorldPacket &packet);
+  void HandleQuestGiverAcceptQuest(WorldPacket &packet);
+  void HandleQuestGiverCompleteQuest(WorldPacket &packet);
   void HandleQuestGiverStatusQuery(WorldPacket &packet);
   void HandleTaxiNodeStatusQuery(WorldPacket &packet);
   void HandleQuestGiverStatusMultipleQuery(WorldPacket &packet);
@@ -442,6 +447,14 @@ public:
       Creature const &creature) const;
   void SendQuestGiverStatusForGuid(uint64_t npcGuid, uint32_t creatureEntry);
   void SendQuestGiverStatusMultipleNearby();
+  /// Marks meet-NPC quests complete when the player opens the turn-in creature.
+  void TryProgressMeetQuestsAtCreature(uint32_t creatureEntry);
+  /// Adds quest to log and sends `PLAYER_QUEST_LOG_*` update (ref `AddQuest` / `SetQuestSlot`).
+  bool TryGrantQuestFromGiver(uint64_t npcGuid, uint32_t creatureEntry,
+                            QuestGossipSummary const &summary);
+
+  /// `SMSG_UPDATE_OBJECT` for one `PLAYER_QUEST_LOG_*` slot (ref `SetQuestSlot`).
+  bool SendPlayerQuestLogSlotWire(uint32_t questId);
 
   void SendGmTicketMainMenu();
   void SendGmTicketListMenu();
@@ -498,6 +511,8 @@ public:
   bool IsCreatureVisibleToPlayer(Creature const &creature) const;
   void LoginFinalizeWorldEntry(uint64 guid);
   void LoadQuestProgressForCharacter(uint32 characterGuid);
+  void PersistQuestProgressForCharacter();
+  void SendRestoredQuestLogToClient();
   void TrySendFirstLoginOpeningCinematic(Character const &character);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
   /// Persists position, `player_logout`, removes from map and online registry, clears

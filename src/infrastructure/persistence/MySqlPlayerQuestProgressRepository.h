@@ -13,6 +13,9 @@ public:
 
   PlayerQuestProgressSnapshot LoadForCharacter(uint32 characterGuid) const override;
 
+  bool SaveForCharacter(uint32 characterGuid,
+                        PlayerQuestProgressSnapshot const &snapshot) const override;
+
 private:
   std::shared_ptr<sql::Connection> m_connection;
 };

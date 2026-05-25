@@ -13,6 +13,11 @@ public:
   std::vector<QuestGossipSummary>
   GetStarterQuestsForCreature(uint32_t creatureEntry) const override;
 
+  std::vector<QuestGossipSummary>
+  GetEnderQuestsForCreature(uint32_t creatureEntry) const override;
+
+  std::optional<QuestGossipSummary> TryGetQuestTemplate(uint32_t questId) const override;
+
 private:
   std::shared_ptr<sql::Connection> _connection;
 };

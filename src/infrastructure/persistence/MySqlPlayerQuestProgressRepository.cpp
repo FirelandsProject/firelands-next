@@ -19,6 +19,19 @@ QuestStatus MapQuestStatus(uint8 raw) {
   }
 }
 
+uint8_t MapQuestStatusToDb(QuestStatus status) {
+  switch (status) {
+  case QuestStatus::Complete:
+    return 1;
+  case QuestStatus::Incomplete:
+    return 3;
+  case QuestStatus::Failed:
+    return 5;
+  default:
+    return 0;
+  }
+}
+
 } // namespace
 
 MySqlPlayerQuestProgressRepository::MySqlPlayerQuestProgressRepository(
@@ -61,6 +74,58 @@ MySqlPlayerQuestProgressRepository::LoadForCharacter(uint32 characterGuid) const
   }
 
   return snapshot;
+}
+
+bool MySqlPlayerQuestProgressRepository::SaveForCharacter(
+    uint32 characterGuid, PlayerQuestProgressSnapshot const &snapshot) const {
+  if (!m_connection || characterGuid == 0)
+    return false;
+
+  try {
+    std::unique_ptr<sql::PreparedStatement> clearActive(
+        m_connection->prepareStatement(
+            "DELETE FROM `character_queststatus` WHERE `guid` = ?"));
+    clearActive->setUInt(1, characterGuid);
+    clearActive->executeUpdate();
+
+    std::unique_ptr<sql::PreparedStatement> insertActive(
+        m_connection->prepareStatement(
+            "INSERT INTO `character_queststatus` (`guid`, `quest`, `status`) "
+            "VALUES (?, ?, ?)"));
+    for (auto const &[questId, status] : snapshot.activeQuests) {
+      uint8_t const wire = MapQuestStatusToDb(status);
+      if (questId == 0 || wire == 0)
+        continue;
+      insertActive->setUInt(1, characterGuid);
+      insertActive->setUInt(2, questId);
+      insertActive->setUInt(3, wire);
+      insertActive->executeUpdate();
+    }
+
+    std::unique_ptr<sql::PreparedStatement> clearRewarded(
+        m_connection->prepareStatement(
+            "DELETE FROM `character_queststatus_rewarded` WHERE `guid` = ?"));
+    clearRewarded->setUInt(1, characterGuid);
+    clearRewarded->executeUpdate();
+
+    std::unique_ptr<sql::PreparedStatement> insertRewarded(
+        m_connection->prepareStatement(
+            "INSERT INTO `character_queststatus_rewarded` (`guid`, `quest`) "
+            "VALUES (?, ?)"));
+    for (uint32 const questId : snapshot.rewardedQuests) {
+      if (questId == 0)
+        continue;
+      insertRewarded->setUInt(1, characterGuid);
+      insertRewarded->setUInt(2, questId);
+      insertRewarded->executeUpdate();
+    }
+
+    return true;
+  } catch (sql::SQLException const &e) {
+    LOG_ERROR("SaveForCharacter quest progress failed for guid {}: {}", characterGuid,
+              e.what());
+    return false;
+  }
 }
 
 } // namespace Firelands

@@ -20,6 +20,10 @@ public:
   virtual ~IPlayerQuestProgressRepository() = default;
 
   virtual PlayerQuestProgressSnapshot LoadForCharacter(uint32 characterGuid) const = 0;
+
+  /// Replaces persisted rows for `characterGuid` (logout and after quest changes).
+  virtual bool SaveForCharacter(uint32 characterGuid,
+                                PlayerQuestProgressSnapshot const &snapshot) const = 0;
 };
 
 } // namespace Firelands

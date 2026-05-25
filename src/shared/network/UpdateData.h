@@ -179,28 +179,25 @@ public:
 private:
   static void AppendUpdateFieldValues(ByteBuffer &buf,
                        std::map<uint16, uint32> const &fields) {
-    uint32 maxField = 0;
-    if (!fields.empty())
-      maxField = fields.rbegin()->first + 1;
-
-    uint32 maskSize = (maxField + 31) / 32;
-    buf.Append<uint8>(static_cast<uint8>(maskSize));
-
-    if (maskSize == 0)
+    if (fields.empty())
       return;
 
-    std::vector<uint32> mask(maskSize, 0);
+    uint16 const lastIndex = fields.rbegin()->first;
+    uint8 const blockCount =
+        static_cast<uint8>((static_cast<uint32>(lastIndex) + 1u + 31u) / 32u);
+    buf.Append<uint8>(blockCount);
+
+    std::vector<uint32> mask(blockCount, 0);
     for (auto const &[index, value] : fields) {
+      (void)value;
       mask[index / 32] |= (1u << (index % 32));
-  }
+    }
 
     for (uint32 m : mask)
       buf.Append<uint32>(m);
 
-    for (uint32 i = 0; i < maxField; ++i) {
-      if (mask[i / 32] & (1u << (i % 32)))
-        buf.Append<uint32>(fields.at(i));
-  }
+    for (auto const &[index, value] : fields)
+      buf.Append<uint32>(value);
   }
 
   void AppendUpdateFieldValues(std::map<uint16, uint32> const &fields) {

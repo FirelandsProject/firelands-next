@@ -1,4 +1,5 @@
 #include <application/logic/GossipLogic.h>
+#include <application/logic/QuestProgressLogic.h>
 #include <application/services/WorldService.h>
 #include <domain/repositories/IGossipRepository.h>
 #include <domain/repositories/INpcTextRepository.h>
@@ -17,7 +18,6 @@
 #include <shared/network/UpdateData.h>
 #include <shared/network/packets/server/NpcTextPackets.h>
 #include <shared/network/packets/server/VendorPackets.h>
-#include <application/logic/GossipLogic.h>
 #include <domain/repositories/IQuestGossipRepository.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -579,11 +579,9 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
         std::vector<GossipQuestItem> quests;
         if (_questGossipRepo) {
           if (auto const entry = TryResolveCreatureTemplateEntry(npcGuid)) {
-            auto summaries =
-                _questGossipRepo->GetStarterQuestsForCreature(*entry);
-            summaries = FilterQuestGossipForPlayer(std::move(summaries),
-                                                   _playerClass, _playerRace);
-            quests = BuildGossipQuestItems(summaries);
+            quests = BuildAllGossipQuestItemsForPlayer(
+                _questGossipRepo.get(), *entry, _playerClass, _playerRace,
+                _questProgress);
           }
         }
         SendGossipMessage(npcGuid, item->actionMenuId, textId.value_or(0),

@@ -1,6 +1,8 @@
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <application/combat/PlayerCombatStats.h>
+#include <application/world/PlayerQuestProgressStore.h>
 #include <domain/models/PlayerCreateInfo.h>
+#include <shared/game/PlayerQuestLog.h>
 #include <shared/network/UpdateData.h>
 #include <shared/network/UpdateFields.h>
 #include <shared/game/ChatLanguages.h>
@@ -598,6 +600,31 @@ void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
   update.Build(outPacket);
 }
 
+void MergeQuestLogIntoPlayerFields(std::map<uint16, uint32> &fields,
+                                   PlayerQuestProgressStore const &progress) {
+  for (uint8_t slot = 0; slot < kMaxQuestLogSlots; ++slot) {
+    uint32_t const questId = progress.GetQuestLogSlotQuestId(slot);
+    if (questId == 0)
+      continue;
+    uint32_t stateFlags = 0;
+    if (progress.GetQuestStatus(questId) == QuestStatus::Complete)
+      stateFlags = kPlayerQuestLogStateComplete;
+    WriteQuestLogSlotFields(fields, slot, questId, stateFlags, 0u);
+  }
+}
+
+void BuildPlayerQuestLogSlotValuesUpdate(uint16 mapId, uint64 playerGuid, uint8 slot,
+                                         uint32 questId, uint32 questStateFlags,
+                                         uint32 timerMs, WorldPacket &outPacket) {
+  if (slot >= kMaxQuestLogSlots)
+    return;
+  std::map<uint16, uint32> fields;
+  WriteQuestLogSlotFields(fields, slot, questId, questStateFlags, timerMs);
+  UpdateData update(mapId);
+  update.AddValuesUpdate(playerGuid, fields);
+  update.Build(outPacket);
+}
+
 void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
                                      PlayerAuraStatBonus const &bonus,
                                      WorldPacket &outPacket,
@@ -725,6 +752,11 @@ uint64 ReadClientQuestGiverGuid(WorldPacket &packet) {
   // opcode 0x4407, payload 8). CMSG_QUESTGIVER_HELLO may use packed form — same rule as
   // gossip hello: uint64 when 8 bytes remain, else packed.
   return ReadClientTargetGuid(packet);
+}
+
+void ReadQuestGiverClientTail(WorldPacket &packet) {
+  if (packet.GetReadPos() + sizeof(uint32_t) <= packet.Size())
+    (void)packet.Read<uint32_t>();
 }
 
 void SendPlayerCreateToNotifier(

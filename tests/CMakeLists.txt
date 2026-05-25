@@ -10,6 +10,7 @@ add_executable(FirelandsUnitTests
     unit/infrastructure/MySqlRealmRepositoryTests.cpp
     unit/infrastructure/RealmLiveRegistryTests.cpp
     unit/infrastructure/SqlStatementSplitterTests.cpp
+    unit/infrastructure/DatabaseMigrationCatalogTests.cpp
     unit/shared/ByteBufferTests.cpp
     unit/shared/UpdateDataTests.cpp
     unit/shared/AuthPacketsTests.cpp
@@ -83,6 +84,9 @@ add_executable(FirelandsUnitTests
     unit/application/CreatureProximityAggroTests.cpp
     unit/application/GossipLogicTests.cpp
     unit/application/QuestGiverLogicTests.cpp
+    unit/application/QuestProgressLogicTests.cpp
+    unit/application/QuestGossipFlagsTests.cpp
+    unit/application/PlayerQuestProgressStoreTests.cpp
     unit/application/QuestGossipFilterTests.cpp
     unit/shared/WowGuidTests.cpp
     unit/shared/AreaTableDbcTests.cpp

@@ -21,6 +21,8 @@ bool CanMeleeAttack(Firelands::Player const &attacker, Firelands::Player const &
 bool CanMeleeAttack(Firelands::Player const &attacker, Firelands::Creature const &target,
                     Firelands::FactionTemplateDbc const *factionTemplates) {
   (void)attacker;
+  if (target.IsEvading())
+    return false;
   if (!factionTemplates || !factionTemplates->IsLoaded())
     return true;
 

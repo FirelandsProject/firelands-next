@@ -2,6 +2,7 @@
 #include <application/world/PhaseGroupCatalog.h>
 #include <application/world/PlayerPhaseShift.h>
 #include <application/world/PlayerQuestProgressStore.h>
+#include <shared/game/PlayerQuestLog.h>
 #include <shared/dbc/AreaTableDbc.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
@@ -50,6 +51,24 @@ void WorldSession::LoadQuestProgressForCharacter(uint32 characterGuid) {
   if (!_questProgressRepo || characterGuid == 0)
     return;
   _questProgress.LoadSnapshot(_questProgressRepo->LoadForCharacter(characterGuid));
+}
+
+void WorldSession::PersistQuestProgressForCharacter() {
+  if (!_questProgressRepo || _playerGuid == 0)
+    return;
+  uint32_t const characterGuid = static_cast<uint32_t>(_playerGuid);
+  if (!_questProgressRepo->SaveForCharacter(characterGuid,
+                                            _questProgress.ExportSnapshot())) {
+    LOG_WARN("Quest progress save failed for guid {}", characterGuid);
+  }
+}
+
+void WorldSession::SendRestoredQuestLogToClient() {
+  for (uint8_t slot = 0; slot < kMaxQuestLogSlots; ++slot) {
+    uint32_t const questId = _questProgress.GetQuestLogSlotQuestId(slot);
+    if (questId != 0)
+      (void)SendPlayerQuestLogSlotWire(questId);
+  }
 }
 
 void WorldSession::RefreshPlayerPhaseVisibilityFromAuras() {

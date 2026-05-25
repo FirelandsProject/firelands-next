@@ -1,5 +1,6 @@
 #include <shared/network/packets/server/GossipPackets.h>
 #include <shared/network/packets/server/NpcTextPackets.h>
+#include <shared/network/packets/server/QuestPackets.h>
 #include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <domain/models/QuestGossip.h>
 #include <shared/game/WowGuid.h>
@@ -107,6 +108,53 @@ TEST(GossipPacketTests, BuildNpcTextUpdate_Fallback_IncludesTextIdAndGreeting) {
   EXPECT_EQ(line, "Greetings $N");
 }
 
+TEST(GossipPacketTests, BuildQuestGiverQuestDetails_WritesBodyAndObjectives) {
+  QuestGossipSummary summary;
+  summary.title = "Quest Title";
+  summary.questDescription = "Story body";
+  summary.logDescription = "Kill 10 wolves";
+  summary.flags = kQuestFlagAutoAccept;
+
+  WorldPacket pkt = quest::BuildQuestGiverQuestDetails(0x1234, 42, summary);
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_QUESTGIVER_QUEST_DETAILS));
+
+  WorldPacket copy = pkt;
+  copy.SetReadPos(0);
+  copy.Read<uint64_t>();
+  copy.Read<uint64_t>();
+  EXPECT_EQ(copy.Read<uint32_t>(), 42u);
+  auto readCString = [&copy]() {
+    std::string s;
+    char c = 0;
+    while (copy.GetReadPos() < copy.Size() &&
+           (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
+      s += c;
+    return s;
+  };
+  EXPECT_EQ(readCString(), "Quest Title");
+  EXPECT_EQ(readCString(), "Story body");
+  EXPECT_EQ(readCString(), "Kill 10 wolves");
+
+  copy.SetReadPos(0);
+  copy.Read<uint64_t>();
+  copy.Read<uint64_t>();
+  copy.Read<uint32_t>();
+  for (int i = 0; i < 3; ++i) {
+    while (copy.GetReadPos() < copy.Size() &&
+           static_cast<char>(copy.Read<uint8_t>()) != 0) {
+    }
+  }
+  for (int i = 0; i < 4; ++i) {
+    while (copy.GetReadPos() < copy.Size() &&
+           static_cast<char>(copy.Read<uint8_t>()) != 0) {
+    }
+  }
+  copy.Read<uint32_t>();
+  copy.Read<uint32_t>();
+  copy.Read<uint8_t>();
+  EXPECT_EQ(copy.Read<uint32_t>(), 0u);
+}
+
 TEST(GossipPacketTests, BuildNpcTextUpdate_FromDomainRow_WritesCustomGreeting) {
   NpcText text;
   text.id = 99;
@@ -125,6 +173,34 @@ TEST(GossipPacketTests, BuildNpcTextUpdate_FromDomainRow_WritesCustomGreeting) {
          (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
     line += c;
   EXPECT_EQ(line, "Custom line");
+}
+
+TEST(GossipPacketTests, BuildQuestQueryResponse_EncodesQuestHeader) {
+  QuestGossipSummary summary;
+  summary.questId = 24607u;
+  summary.title = "The Rise of the Darkspear";
+  summary.questLevel = 1;
+  summary.questSortId = 368;
+  summary.flags = 0x00080000u;
+
+  WorldPacket pkt = quest::BuildQuestQueryResponse(summary);
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_QUEST_QUERY_RESPONSE));
+
+  WorldPacket copy = pkt;
+  copy.SetReadPos(0);
+  EXPECT_EQ(copy.Read<uint32_t>(), 24607u);
+  EXPECT_EQ(copy.Read<int32_t>(), 0); // autocomplete wire type
+  EXPECT_EQ(copy.Read<int32_t>(), 1); // level
+  EXPECT_EQ(copy.Read<int32_t>(), 0); // QuestMinLevel
+  EXPECT_EQ(copy.Read<int32_t>(), 368); // QuestSortID (Echo Isles)
+}
+
+TEST(GossipPacketTests, BuildPlaySound_EncodesOpcodeAndKit) {
+  WorldPacket pkt = quest::BuildPlaySound(0x42, 890u);
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_PLAY_SOUND));
+  pkt.SetReadPos(0);
+  EXPECT_EQ(pkt.Read<uint32_t>(), 890u);
+  EXPECT_EQ(pkt.Read<uint64_t>(), 0x42u);
 }
 
 } // namespace Firelands

@@ -1,4 +1,6 @@
 #include <application/logic/GossipLogic.h>
+#include <application/logic/QuestProgressLogic.h>
+#include <application/world/PlayerQuestProgressStore.h>
 #include <domain/models/QuestGossip.h>
 #include <shared/game/UnitNpcFlags.h>
 #include <gtest/gtest.h>
@@ -74,7 +76,8 @@ TEST(GossipLogicTests, BuildGossipQuestItems_MapsSummaryToWireFields) {
   summary.questLevel = 3;
   summary.flags = kQuestFlagAutoComplete;
 
-  auto items = BuildGossipQuestItems({summary});
+  PlayerQuestProgressStore progress;
+  auto items = BuildStarterGossipQuestItemsForPlayer({summary}, progress);
   ASSERT_EQ(items.size(), 1u);
   EXPECT_EQ(items[0].questId, 42u);
   EXPECT_EQ(items[0].questTitle, "Kill rats");

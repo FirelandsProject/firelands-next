@@ -7,7 +7,7 @@ Reads reference mysqldump INSERTs and emits a JDBC-safe world migration:
   DELETE FROM `creature_queststarter`;
   DELETE FROM `quest_template`;
   batched REPLACE INTO `quest_template`
-    (ID, QuestLevel, LogTitle, Flags, AllowableClasses, AllowableRaces) for quests
+    (ID, QuestLevel, LogTitle, QuestDescription, LogDescription, Flags, AllowableClasses, AllowableRaces)
     referenced by starters (`Allowable*` from `quest_template_addon`);
   batched REPLACE INTO `creature_queststarter` (id, quest)
 
@@ -29,15 +29,16 @@ _TOOLS_SQL = Path(__file__).resolve().parent
 if str(_TOOLS_SQL) not in sys.path:
     sys.path.insert(0, str(_TOOLS_SQL))
 
-    from import_ref_creature_data import ( # noqa: E402
+from import_ref_creature_data import (  # noqa: E402
     extract_insert_rows,
     sql_escape_literal,
     strip_sql_string,
     write_batched,
-    )
+)
 
 QUEST_TEMPLATE_COLUMNS = (
-    "`ID`, `QuestLevel`, `LogTitle`, `Flags`, `AllowableClasses`, `AllowableRaces`"
+    "`ID`, `QuestLevel`, `LogTitle`, `QuestDescription`, `LogDescription`, "
+    "`Flags`, `AllowableClasses`, `AllowableRaces`"
     )
 CREATURE_QUESTSTARTER_COLUMNS = "`id`, `quest`"
 
@@ -124,6 +125,8 @@ def map_quest_template_row(
 
     idx_level = col_index["QuestLevel"]
     idx_title = col_index["LogTitle"]
+    idx_details = col_index["QuestDescription"]
+    idx_objectives = col_index["LogDescription"]
     idx_flags = col_index["Flags"]
 
     level_tok = fields[idx_level].strip()
@@ -133,6 +136,8 @@ def map_quest_template_row(
         level_sql = level_tok
 
     title_sql = sql_text_column(fields[idx_title])
+    details_sql = sql_text_column(fields[idx_details])
+    objectives_sql = sql_text_column(fields[idx_objectives])
     flags_sql = fields[idx_flags].strip()
     if flags_sql.upper() == "NULL":
         flags_sql = "0"
@@ -140,12 +145,14 @@ def map_quest_template_row(
     allowable_classes, allowable_races = addon_masks.get(quest_id, (0, 0))
 
     return (
-        f"({quest_id},{level_sql},{title_sql},{flags_sql},"
-        f"{allowable_classes},{allowable_races})"
+        f"({quest_id},{level_sql},{title_sql},{details_sql},{objectives_sql},"
+        f"{flags_sql},{allowable_classes},{allowable_races})"
     )
 
 
-def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
+def write_quest_gossip_data_migration(
+    ref_dir: Path, out_path: Path, *, backfill_text_only: bool = False
+) -> None:
     starter_sql = ref_dir / "creature_queststarter.sql"
     quest_sql = ref_dir / "quest_template.sql"
 
@@ -167,7 +174,14 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
     print(f"Parsing quest_template ({len(wanted_ids)} quest ids referenced)...")
     quest_cols = extract_create_table_columns(quest_sql, "quest_template")
     col_index = {name: i for i, name in enumerate(quest_cols)}
-    for required in ("ID", "QuestLevel", "LogTitle", "Flags"):
+    for required in (
+        "ID",
+        "QuestLevel",
+        "LogTitle",
+        "QuestDescription",
+        "LogDescription",
+        "Flags",
+    ):
         if required not in col_index:
             raise SystemExit(
                 f"quest_template in reference missing column {required!r}; "
@@ -181,19 +195,30 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
         if mapped:
             quest_rows.append(mapped)
 
-    header = (
-        "-- Quest gossip data from firelands-cata-ref (creature_queststarter + quest_template).\n"
-        "-- Used by IQuestGossipRepository / SMSG_GOSSIP_MESSAGE quest block.\n"
-        "-- JDBC-safe: DELETE + batched REPLACE (re-runnable).\n"
-        "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py\n"
-        "-- Requires migration 36_world_quest_gossip_tables.sql (DDL).\n"
-        "\n"
-        "USE `firelands_world`;\n"
-        "\n"
-        "DELETE FROM `creature_queststarter`;\n"
-        "DELETE FROM `quest_template`;\n"
-        "\n"
-    )
+    if backfill_text_only:
+        header = (
+            "-- Backfill quest_template dialog text (QuestDescription, LogDescription).\n"
+            "-- Run after migration 63_world_quest_template_text.sql.\n"
+            "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py "
+            "--out sql/migrations/64_world_quest_gossip_text_data.sql --backfill-text-only\n"
+            "\n"
+            "USE `firelands_world`;\n"
+            "\n"
+        )
+    else:
+        header = (
+            "-- Quest gossip data from firelands-cata-ref (creature_queststarter + quest_template).\n"
+            "-- Used by IQuestGossipRepository / SMSG_GOSSIP_MESSAGE quest block.\n"
+            "-- JDBC-safe: DELETE + batched REPLACE (re-runnable).\n"
+            "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py\n"
+            "-- Requires migration 36_world_quest_gossip_tables.sql (DDL).\n"
+            "\n"
+            "USE `firelands_world`;\n"
+            "\n"
+            "DELETE FROM `creature_queststarter`;\n"
+            "DELETE FROM `quest_template`;\n"
+            "\n"
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as out:
@@ -203,13 +228,14 @@ def write_quest_gossip_data_migration(ref_dir: Path, out_path: Path) -> None:
             f"REPLACE INTO `quest_template` ({QUEST_TEMPLATE_COLUMNS}) VALUES",
             quest_rows,
             400,
-    )
-        write_batched(
-            out,
-            f"REPLACE INTO `creature_queststarter` ({CREATURE_QUESTSTARTER_COLUMNS}) VALUES",
-            starter_rows,
-            500,
-    )
+        )
+        if not backfill_text_only:
+            write_batched(
+                out,
+                f"REPLACE INTO `creature_queststarter` ({CREATURE_QUESTSTARTER_COLUMNS}) VALUES",
+                starter_rows,
+                500,
+            )
 
     mask_out = out_path.parent / "40_world_quest_gossip_allowable_masks.sql"
     mask_updates = []
@@ -249,6 +275,11 @@ def main() -> None:
         default=_REPO_ROOT / "sql" / "migrations" / "38_world_quest_gossip_data.sql",
         help="Output migration SQL path",
     )
+    ap.add_argument(
+        "--backfill-text-only",
+        action="store_true",
+        help="Emit only quest_template REPLACE (no DELETE / creature_queststarter)",
+    )
     args = ap.parse_args()
 
     ref_db_world = args.ref / "data" / "sql" / "base" / "db_world"
@@ -258,7 +289,9 @@ def main() -> None:
             "Clone firelands-cata-ref next to this repo, then re-run."
     )
 
-    write_quest_gossip_data_migration(ref_db_world, args.out)
+    write_quest_gossip_data_migration(
+        ref_db_world, args.out, backfill_text_only=args.backfill_text_only
+    )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <application/logic/GossipLogic.h>
+#include <application/logic/QuestProgressLogic.h>
 #include <domain/models/QuestGiverStatus.h>
+#include <domain/ports/IPlayerQuestProgress.h>
 #include <domain/repositories/IQuestGossipRepository.h>
 #include <shared/game/UnitNpcFlags.h>
 #include <cstdint>
@@ -22,14 +24,14 @@ inline bool CreatureHasStarterQuests(IQuestGossipRepository const *repo,
   return false;
 }
 
-/// Until per-character quest status exists, any starter row ⇒ yellow available marker.
+/// Aggregates per-quest dialog markers for this player (available / incomplete / reward).
 inline QuestGiverDialogStatus
 ResolveQuestGiverDialogStatus(IQuestGossipRepository const *repo,
                               uint32_t creatureEntry, uint8_t playerClass,
-                              uint8_t playerRace) {
-  return CreatureHasStarterQuests(repo, creatureEntry, playerClass, playerRace)
-             ? QuestGiverDialogStatus::Available
-             : QuestGiverDialogStatus::None;
+                              uint8_t playerRace,
+                              IPlayerQuestProgress const &progress) {
+  return ResolveQuestGiverDialogStatusForPlayer(repo, creatureEntry, playerClass,
+                                              playerRace, progress);
 }
 
 /// Wire `UNIT_NPC_FLAGS` for starter NPCs: keep template gossip (cata uses gossip menus for

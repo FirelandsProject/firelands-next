@@ -115,8 +115,8 @@ bool SessionPlayerInMeleeRangeOf(WorldSession const &session, float targetX, flo
 
 bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const &creature) {
   MovementInfo const &pos = session.GetPosition();
-  return IsWithinMeleeRange3d(pos.x, pos.y, pos.z, creature.GetX(), creature.GetY(),
-                              creature.GetZ());
+  return IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, creature.GetX(), creature.GetY(),
+                                      creature.GetZ());
 }
 
 void BroadcastCreatureChaseMove(std::shared_ptr<Map> const &map, uint64 creatureGuid,
@@ -212,7 +212,8 @@ bool IsCreatureInMeleeRangeOfPlayer(Creature const &creature, WorldSession const
                                     std::chrono::steady_clock::time_point now) {
   MovementInfo const &playerPos = session.GetPosition();
   MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  return IsWithinMeleeRange3d(playerPos.x, playerPos.y, playerPos.z, vis.x, vis.y, vis.z);
+  return IsWithinMeleeRangeAgainstNpc(playerPos.x, playerPos.y, playerPos.z, vis.x, vis.y,
+                                      vis.z);
 }
 
 bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const &creature,
@@ -220,7 +221,7 @@ bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const 
                                     std::chrono::steady_clock::time_point now) {
   MovementInfo const &pos = session.GetPosition();
   MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  return IsWithinMeleeRange3d(pos.x, pos.y, pos.z, vis.x, vis.y, vis.z);
+  return IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, vis.x, vis.y, vis.z);
 }
 
 /// Advances server position along the client-aligned spline timeline.
@@ -1196,6 +1197,8 @@ void WorldSession::FinalizeCreatureDeath(uint64 creatureGuid, uint32 hpBefore) {
   creature->MarkDeadAndLootable();
   creature->SetChaseTargetPlayerGuid(0);
   BroadcastUnitTargetOnMap(_mapId, map, creatureGuid, 0);
+  BroadcastUnitHealthAfterDelta(_mapId, map, creatureGuid, creature->GetLiveHealth(),
+                                creature->GetLiveMaxHealth(), this);
   BroadcastCreatureUnitWireState(_mapId, map, *creature);
 
   if (_creatureAggroed.find(creatureGuid) != _creatureAggroed.end())

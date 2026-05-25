@@ -123,6 +123,7 @@ void WorldSession::HandlePlayerLogin(WorldPacket &packet) {
   LoginSpawnInWorld(guid, character, move);
   LoadQuestProgressForCharacter(static_cast<uint32>(guid));
   LoginSendCreateUpdatesAndMutualVisibility(guid, character, move);
+  SendRestoredQuestLogToClient();
   LoginFinalizeWorldEntry(guid);
 
   LOG_INFO("Player entered world: Account={} GUID={} Name='{}' Map={} Pos=({},{:.2},{:.2})",
@@ -440,6 +441,7 @@ void WorldSession::LoginSendCreateUpdatesAndMutualVisibility(
   auto selfFields = ws_obj::BuildPlayerUpdateFields(
       guid, character, statGt, selfNextXp, TryLivePlayerHealth(_mapId, guid),
       TryLivePlayerPower1(_mapId, guid), _knownSkills);
+  ws_obj::MergeQuestLogIntoPlayerFields(selfFields, _questProgress);
   MergeGmAppearanceIntoPlayerFields(selfFields, GetGmAppearanceForPlayerUpdates());
   ws_obj::ApplyMovementHintsToPlayerCreateFields(selfFields, move);
   update.AddCreateObject(guid, TYPEID_PLAYER, move, selfFields);

@@ -41,3 +41,12 @@ TEST(CombatHostilityTests, PlayerCanMeleeCreatureWithoutDbc) {
   Creature target(9ull, 1u, 1u, 100u, 1u, 7u);
   EXPECT_TRUE(application::CanMeleeAttack(attacker, target, nullptr));
 }
+
+TEST(CombatHostilityTests, EvadingCreatureCannotBeMeleeAttacked) {
+  auto n = std::make_shared<NullNotifier>();
+  Player attacker(1ull, n);
+  attacker.SetRaceAndFaction(1, 1);
+  Creature target(9ull, 1u, 1u, 100u, 1u, 7u);
+  target.SetEvading(true);
+  EXPECT_FALSE(application::CanMeleeAttack(attacker, target, nullptr));
+}

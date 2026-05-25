@@ -162,8 +162,20 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_QUESTGIVER_HELLO:
     HandleQuestGiverHello(packet);
     break;
+  case CMSG_QUERY_QUEST_INFO:
+    HandleQuestQuery(packet);
+    break;
+  case CMSG_QUEST_LOG_REMOVE_QUEST:
+    HandleQuestLogRemoveQuest(packet);
+    break;
   case CMSG_QUESTGIVER_QUERY_QUEST:
     HandleQuestGiverQueryQuest(packet);
+    break;
+  case CMSG_QUESTGIVER_ACCEPT_QUEST:
+    HandleQuestGiverAcceptQuest(packet);
+    break;
+  case CMSG_QUESTGIVER_COMPLETE_QUEST:
+    HandleQuestGiverCompleteQuest(packet);
     break;
   case CMSG_TAXI_NODE_STATUS_QUERY:
     HandleTaxiNodeStatusQuery(packet);

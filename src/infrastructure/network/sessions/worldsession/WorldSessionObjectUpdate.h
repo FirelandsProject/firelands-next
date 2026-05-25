@@ -10,6 +10,7 @@
 #include <shared/network/WorldPacket.h>
 
 #include <application/spell/PlayerAuraStatEffects.h>
+#include <application/world/PlayerQuestProgressStore.h>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -75,6 +76,15 @@ void BuildPlayerActionBarTogglesValuesUpdate(uint16 mapId, uint64 playerGuid,
                                              uint8 actionBarToggles,
                                              WorldPacket &outPacket);
 
+/// Fills `PLAYER_QUEST_LOG_*` on player create/update fields from session quest log.
+void MergeQuestLogIntoPlayerFields(std::map<uint16, uint32> &fields,
+                                   PlayerQuestProgressStore const &progress);
+
+/// Updates one quest log slot (`PLAYER_QUEST_LOG_*`) after accept.
+void BuildPlayerQuestLogSlotValuesUpdate(uint16 mapId, uint64 playerGuid, uint8 slot,
+                                         uint32 questId, uint32 questStateFlags,
+                                         uint32 timerMs, WorldPacket &outPacket);
+
 /// Aura-driven stat/rating/resistance/damage fields. When `baseline` is set, spell damage
 /// and resistance buff mods include template values (login zeros those until this runs).
 void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
@@ -111,6 +121,9 @@ uint64 ReadClientTargetGuid(WorldPacket &packet);
 
 /// Packed `ObjectGuid` (quest giver status query/hello); not the 8-byte gossip target form.
 uint64 ReadClientQuestGiverGuid(WorldPacket &packet);
+
+/// After `ObjectGuid` + `QuestID`, Cataclysm 4.3.4 sends `uint32` (`StartCheat` / `RespondToGiver`).
+void ReadQuestGiverClientTail(WorldPacket &packet);
 
 void SendPlayerCreateToNotifier(
     std::shared_ptr<IMapNotifier> target, uint32 mapId, uint64 objectGuid,

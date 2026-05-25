@@ -46,3 +46,30 @@ TEST(UpdateDataTest, BuildCreateObjectPacketForPlayer) {
     // let's verify that UPDATETYPE_CREATE_OBJECT2 is indeed 2 (Cata 15595).
     EXPECT_EQ(UPDATETYPE_CREATE_OBJECT2, 2);
 }
+
+TEST(UpdateDataTest, ValuesUpdateMaskUsesLastSetBitBlockCount) {
+  UpdateData data(1);
+  std::map<uint16, uint32> fields;
+  uint16 const field = static_cast<uint16>(PLAYER_QUEST_LOG_1_1);
+  fields[field] = 24607u;
+
+  data.AddValuesUpdate(0x0A, fields);
+
+  WorldPacket packet(SMSG_UPDATE_OBJECT);
+  data.Build(packet);
+
+  packet.SetReadPos(0);
+  (void)packet.Read<uint16>();
+  (void)packet.Read<uint32>();
+  EXPECT_EQ(packet.Read<uint8>(), static_cast<uint8>(UPDATETYPE_VALUES));
+  (void)packet.ReadPackedGuid();
+
+  uint8 const blockCount = packet.Read<uint8>();
+  EXPECT_EQ(blockCount, static_cast<uint8>((field + 1u + 31u) / 32u));
+
+  std::vector<uint32> mask(blockCount);
+  for (uint8 i = 0; i < blockCount; ++i)
+    mask[i] = packet.Read<uint32>();
+  EXPECT_NE(mask[field / 32] & (1u << (field % 32)), 0u);
+  EXPECT_EQ(packet.Read<uint32>(), 24607u);
+}
