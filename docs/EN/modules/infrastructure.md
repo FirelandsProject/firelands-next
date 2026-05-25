@@ -6,7 +6,7 @@
 
 ## Persistence (`infrastructure/persistence/`)
 
-- **`DatabaseMigrator`** — runs ordered `.sql` files from the repo’s `sql/` directory, tracks applied migrations in `schema_migrations`, splits statements safely.
+- **`DatabaseMigrator`** — on startup, **auth** applies init + migrations for `firelands_auth` only; **world** applies init + migrations for `firelands_characters` and `firelands_world` only. Fresh DBs get `sql/init/` first; existing DBs get pending `sql/migrations/` only. `sql/bundled/` is for Docker first boot, not runtime. Tracks applied files in `firelands_auth.schema_migrations`.
 - **`DatabaseService`** — connection/helper patterns as used by tooling or servers.
 - **`MySqlAccountRepository`** — `IAccountRepository` against the auth DB (accounts, session keys, account_data).
 - **`MySqlRealmRepository`** — `IRealmRepository` for `realmlist` (and related) rows.

@@ -231,7 +231,7 @@ ls -la compile_commands.json  # Symlink to build/
    sql/migrations/001_my_feature.sql
    ```
 
-2. The `DatabaseMigrator` runs files in lexicographic order on server startup.
+2. The `DatabaseMigrator` runs init (fresh DB) and pending `sql/migrations/` per server role on startup (auth vs world); see `docs/EN/modules/infrastructure.md`.
 
 3. Rebuild: `ninja`
 

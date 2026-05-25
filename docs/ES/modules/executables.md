@@ -5,7 +5,7 @@
 Servidor de **autenticación**:
 
 1. Logger + **`authserver.yaml`** (se soporta override con `FIRELANDS_AUTH_CONFIG`).
-2. Ejecuta **`DatabaseMigrator::MigrateDirectory`** sobre el folder **`sql/`** usando el URI JDBC de auth.
+2. Ejecuta **`DatabaseMigrator::MigrateAuthServerStartup`** — solo `firelands_auth` (init si la BD es nueva, luego migraciones pendientes).
 3. Conecta a MariaDB y crea **`MySqlAccountRepository`** y **`MySqlRealmRepository`**.
 4. Inicializa **`AuthService`** y **`RealmListService`** (opcionalmente con **`RealmLiveRegistry`** si `RealmLink.Token` y el puerto están configurados).
 5. Inicia **`AsyncNetworkServer`** para clientes auth clásicos (`AuthSession`).

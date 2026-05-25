@@ -111,7 +111,16 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         {"Database", "Auth", "URI"},
         "jdbc:mariadb://localhost:3306/firelands_auth");
 
-    DatabaseMigrator::MigrateDirectory(authUrl, dbUser, dbPass, "sql");
+    std::string charUrl = config.GetNested<std::string>(
+        {"Database", "Characters", "URI"},
+        "jdbc:mariadb://localhost:3306/firelands_characters");
+
+    std::string worldUrl = config.GetNested<std::string>(
+        {"Database", "World", "URI"},
+        "jdbc:mariadb://localhost:3306/firelands_world");
+
+    DatabaseMigrator::MigrateWorldServerStartup(authUrl, charUrl, worldUrl, dbUser,
+                                                dbPass, "sql");
 
     sql::Driver *driver = sql::mariadb::get_driver_instance();
     sql::Properties properties({{"user", dbUser}, {"password", dbPass}});
@@ -119,16 +128,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     std::shared_ptr<sql::Connection> authConn(
         driver->connect(authUrl, properties));
 
-    std::string charUrl = config.GetNested<std::string>(
-        {"Database", "Characters", "URI"},
-        "jdbc:mariadb://localhost:3306/firelands_characters");
-
     std::shared_ptr<sql::Connection> charConn(
         driver->connect(charUrl, properties));
 
-    std::string worldUrl = config.GetNested<std::string>(
-        {"Database", "World", "URI"},
-        "jdbc:mariadb://localhost:3306/firelands_world");
     std::shared_ptr<sql::Connection> worldConn(
         driver->connect(worldUrl, properties));
 

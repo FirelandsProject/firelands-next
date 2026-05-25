@@ -59,7 +59,7 @@ int AuthRunGameStack(std::shared_ptr<AuthFtxuiRuntime> tui_runtime) {
         {"Database", "Auth", "URI"},
         "jdbc:mariadb://localhost:3306/firelands_auth");
 
-    DatabaseMigrator::MigrateDirectory(authUrl, dbUser, dbPass, "sql");
+    DatabaseMigrator::MigrateAuthServerStartup(authUrl, dbUser, dbPass, "sql");
 
     sql::Driver *driver = sql::mariadb::get_driver_instance();
     sql::Properties properties({{"user", dbUser}, {"password", dbPass}});

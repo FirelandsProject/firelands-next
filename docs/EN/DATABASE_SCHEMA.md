@@ -268,7 +268,7 @@ DDL: migrations `32` (gossip), `33` (`npc_text`), `36` (quest gossip). Data: `38
    ALTER TABLE account ADD COLUMN new_column INT DEFAULT 0;
 ```
 
-3. The `DatabaseMigrator` runs files in lexicographic order and tracks applied migrations in `schema_migrations` table.
+3. The `DatabaseMigrator` applies role-scoped init/migrations at server startup (auth: auth DB only; world: characters + world) and tracks applied files in `schema_migrations`.
 
 ### Migration Best Practices
 

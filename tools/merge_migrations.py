@@ -41,7 +41,7 @@ def migration_sort_key(path: Path) -> tuple[int, str]:
 
 
 def migrator_sql_files() -> list[Path]:
-    """Match DatabaseMigrator::MigrateDirectory order: bundled, init, migrations."""
+    """SQL filenames tracked in schema_migrations (bundled + init + migrations)."""
     files: list[Path] = []
     if BUNDLED_DIR.is_dir():
         bundled = [
@@ -110,7 +110,7 @@ def write_seed_only() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     seed_lines = [
         HEADER.rstrip(),
-        "-- Marks sql/bundled (except zz_*.sql), sql/init, sql/migrations as applied.",
+        "-- Marks sql/bundled (except zz_*.sql) and sql/init as applied.",
         "",
         "CREATE DATABASE IF NOT EXISTS `firelands_auth`;",
         "",

@@ -20,6 +20,7 @@ add_library(FirelandsInfrastructure STATIC
     persistence/MySqlPhaseAreaCatalogRepository.cpp
     persistence/MySqlPhaseConditionRepository.cpp
     persistence/MySqlPlayerQuestProgressRepository.cpp
+    persistence/DatabaseMigrator.cpp
     world/DbCreatureSpawnBootstrap.cpp
     network/sessions/AuthSession.cpp
     network/sessions/WorldSession.cpp

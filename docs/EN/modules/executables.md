@@ -5,7 +5,7 @@
 The **authentication server** executable:
 
 1. Initializes logging, loads **`authserver.yaml`** (`FIRELANDS_AUTH_CONFIG` override supported).
-2. Runs **`DatabaseMigrator::MigrateDirectory`** against the **`sql/`** folder using the auth JDBC URI (same migration set as world today—ensure DB URIs point at the correct logical databases).
+2. Runs **`DatabaseMigrator::MigrateAuthServerStartup`** — `sql/init/auth_schema.sql` on a fresh `firelands_auth`, then pending `sql/migrations/*_auth_*.sql` only (bundled SQL is Docker-only).
 3. Opens a MariaDB connection and constructs **`MySqlAccountRepository`**, **`MySqlRealmRepository`**.
 4. Builds **`AuthService`**, **`RealmListService`** (optionally with **`RealmLiveRegistry`** when `RealmLink.Token` + port are set).
 5. Starts **`AsyncNetworkServer`** for classic auth clients (`AuthSession` factory).
@@ -23,7 +23,7 @@ The **world server** executable:
 3. Optionally starts **`RunRealmLinkOutbound`** on a background thread when `RealmLink.Enabled` is true—connects to auth’s realm-link port and sends heartbeat/state using shared **`RealmLinkProtocol`**.
 4. Initializes **`LuaGameScriptHost`** and assigns it to **`WorldService`**; fires `world_startup`.
 5. Sets **`MapCollisionQueriesStub`** from `Collision.DataRoot`.
-6. Migrates DB (`sql/`), then connects **three** logical databases: **auth** (account validation), **characters**, **world** (e.g. player create info).
+6. Runs **`DatabaseMigrator::MigrateWorldServerStartup`** for **characters** and **world** (init on fresh DBs, then pending world/characters migrations; uses auth URI only for `schema_migrations` bookkeeping), then connects **three** logical databases: **auth**, **characters**, **world**.
 7. Wires **`AuthService`**, **`CharacterService`**, **`CommandService`** + **`OnlineCharacterSessionRegistry`**, **`PlayerCreateInfoService`**, and **`WorldSession`** factory on **`AsyncNetworkServer`** (`Network.Port`, default world listener distinct from auth).
 
 Main loop: `worldServer.Update()` polling.
