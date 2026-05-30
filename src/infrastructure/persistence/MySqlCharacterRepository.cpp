@@ -447,6 +447,7 @@ std::optional<ItemProtoRow> FetchItemProto(
     std::shared_ptr<sql::Connection> conn, uint32_t itemEntry,
     CharStartOutfitDbc const *charStartOutfitDbc,
     ItemDb2Wdb2 const *itemDb2) {
+  std::optional<ItemProtoRow> sqlRow;
   try {
     std::shared_ptr<sql::PreparedStatement> ps(conn->prepareStatement(
         "SELECT InventoryType AS ity, BuyCount AS bct, displayid AS did "
@@ -459,7 +460,17 @@ std::optional<ItemProtoRow> FetchItemProto(
       row.buyCount =
           std::max(1u, static_cast<uint32_t>(rs->getInt("bct")));
       row.displayId = rs->getUInt("did");
-      return row;
+      // Only return immediately if displayId is usable. A row with
+      // displayId == 0 means item_template is incomplete for this entry
+      // (common with custom DBs that didn't import displayid columns); in
+      // that case fall through to the DBC/DB2 lookup and merge the visual
+      // from there. The world stays clothed because the client resolves
+      // visuals from its own ItemSparse.db2 using the item entry, but
+      // SMSG_CHAR_ENUM sends the resolved displayId straight to the screen,
+      // so a zero here shows the character naked on the select screen.
+      if (row.displayId != 0)
+        return row;
+      sqlRow = row;
     }
   } catch (sql::SQLException const &e) {
     LOG_WARN("FetchItemProto failed for entry {}: {}", itemEntry, e.what());
@@ -467,8 +478,9 @@ std::optional<ItemProtoRow> FetchItemProto(
   if (itemDb2 && itemDb2->IsLoaded()) {
     if (auto client = itemDb2->Lookup(itemEntry)) {
       ItemProtoRow row;
-      row.inventoryType = client->inventoryType;
-      row.buyCount = 1u;
+      row.inventoryType =
+          sqlRow ? sqlRow->inventoryType : client->inventoryType;
+      row.buyCount = sqlRow ? sqlRow->buyCount : 1u;
       row.displayId = client->displayId;
       return row;
     }
@@ -476,13 +488,13 @@ std::optional<ItemProtoRow> FetchItemProto(
   if (charStartOutfitDbc) {
     if (auto visual = charStartOutfitDbc->GetItemVisualByEntry(itemEntry)) {
       ItemProtoRow row;
-      row.inventoryType = visual->invType;
-      row.buyCount = 1;
+      row.inventoryType = sqlRow ? sqlRow->inventoryType : visual->invType;
+      row.buyCount = sqlRow ? sqlRow->buyCount : 1u;
       row.displayId = visual->displayId;
       return row;
     }
   }
-  return std::nullopt;
+  return sqlRow;
 }
 
 std::optional<uint8_t> PrimaryEquipSlotForInventoryType(uint8_t inventoryType) {
