@@ -630,6 +630,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   (void)origin;
   auto collision = WorldService::Instance().GetCollisionQueries();
   if (!collision) {
+    LOG_ERROR("MMAP: collision service is not configured.");
     session->SendNotification("MMAP: collision service is not configured.");
     return true;
   }
@@ -637,6 +638,9 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   MovementInfo const &playerPos = session->GetPosition();
   uint32_t mapId = session->GetMapId();
   uint64_t const playerGuid = session->GetActiveCharacterObjectGuid();
+
+  LOG_DEBUG("MMAP request: playerGuid={} mapId={} args={}", playerGuid, mapId,
+            args.empty() ? std::string("<target>") : JoinArgs(args.begin(), args.end()));
 
   // Auto-remove expired markers (older than 9s)
   {
@@ -661,6 +665,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
 
   // .mmap clear — remove visual markers
   if (!args.empty() && args[0] == "clear") {
+    LOG_DEBUG("MMAP clear: playerGuid={} mapId={}", playerGuid, mapId);
     ClearMmapMarkers(session, playerGuid, mapId);
     session->SendNotification("MMAP: visual markers removed.");
     return true;
@@ -675,6 +680,8 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   try {
     if (!args.empty()) {
       if (args.size() < 3) {
+        LOG_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
+                 playerGuid, mapId, args.size());
         session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap (with target)  |  .mmap clear");
         return false;
       }
@@ -699,18 +706,27 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
             pathLabel = std::string("creature(") + std::to_string(creature->GetEntry()) +
                         ") -> you";
             checkPath = true;
+            LOG_DEBUG("MMAP target creature resolved: playerGuid={} targetGuid={} entry={} mapId={}",
+                      playerGuid, targetGuid, creature->GetEntry(), mapId);
           }
         }
-        if (!checkPath)
+        if (!checkPath) {
+          LOG_WARN("MMAP target is not a creature or not on current map: playerGuid={} targetGuid={} mapId={}",
+                   playerGuid, targetGuid, mapId);
           session->SendNotification("MMAP: targeted object is not a creature.");
+        }
       }
     }
   } catch (std::exception const &) {
+    LOG_ERROR("MMAP invalid coordinates parse error: playerGuid={} mapId={} args={}",
+              playerGuid, mapId,
+              args.empty() ? std::string("<target>") : JoinArgs(args.begin(), args.end()));
     session->SendNotification("MMAP: invalid coordinates.");
     return false;
   }
 
   bool const available = collision->IsNavMeshDataAvailable(mapId);
+  LOG_DEBUG("MMAP navmesh availability: mapId={} available={}", mapId, available);
   float const height = collision->GetHeight(mapId, playerPos.x, playerPos.y, playerPos.z);
   std::ostringstream head;
   head << "MMAP map=" << mapId << " navmesh=" << (available ? "loaded" : "missing")
@@ -733,6 +749,8 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   req.allowPartialPath = true;
 
   FindPathResult result = collision->FindPath(req);
+  LOG_DEBUG("MMAP path result: mapId={} status={} waypoints={}", mapId,
+            FindPathStatusName(result.status), result.waypoints.size());
   std::ostringstream path;
   path << "MMAP path " << FormatVec3(startPos) << " -> "
        << FormatVec3(endPos) << "  (" << pathLabel << ")"
@@ -771,6 +789,8 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
       SendMmapMarkerCreate(session, mapId, markerGuid,
                            Vec3{wp.x, wp.y, z}, kMarkerEntry,
                            kMarkerDisplayId, Creature::kDefaultFactionTemplate);
+      LOG_TRACE("MMAP marker spawn: mapId={} guid={} wpIndex={} pos=({}, {}, {})",
+                mapId, markerGuid, i, wp.x, wp.y, z);
       markers.emplace_back(markerGuid, now);
     }
     _mmapMarkers[playerGuid] = std::move(markers);

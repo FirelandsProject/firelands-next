@@ -1,5 +1,7 @@
 #include <infrastructure/collision/MapCollisionQueriesReal.h>
 
+#include <shared/Logger.h>
+
 namespace Firelands {
 
 MapCollisionQueriesReal::MapCollisionQueriesReal(std::string dataRoot)
@@ -25,6 +27,9 @@ FindPathResult MapCollisionQueriesReal::FindPath(
     FindPathRequest const& req) const {
   if (!_navMeshManager.IsNavMeshLoaded(req.mapId)) {
     if (!_navMeshManager.LoadMapNavMesh(req.mapId)) {
+      LOG_WARN("MMAP path request could not load navmesh: mapId={} start=({}, {}, {}) end=({}, {}, {})",
+               req.mapId, req.startX, req.startY, req.startZ, req.endX, req.endY,
+               req.endZ);
       FindPathResult result;
       result.status = FindPathStatus::NavMeshMissing;
       return result;
