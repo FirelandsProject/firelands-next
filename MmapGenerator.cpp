@@ -5,7 +5,6 @@
 #include <DetourNavMeshBuilder.h>
 #include <DetourCommon.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -63,17 +62,6 @@ void SaveNavMeshTile(dtNavMesh const* navMesh, uint32_t mapId,
   fwrite(&header, sizeof(header), 1, file);
   fwrite(tile->data, tile->dataSize, 1, file);
   fclose(file);
-}
-
-void PrintTileProgress(uint32_t tileX, uint32_t tileY, int percent,
-                       char const* stage) {
-  printf("\r  tile (%02u,%02u) [%3d%%] %-28s", tileX, tileY, percent, stage);
-  fflush(stdout);
-}
-
-void PrintTileFailure(uint32_t tileX, uint32_t tileY, char const* stage) {
-  printf("\r  tile (%02u,%02u) [FAIL] %s\n", tileX, tileY, stage);
-  fflush(stdout);
 }
 
 } // namespace
@@ -175,117 +163,86 @@ bool MmapGenerator::BuildTileNavMesh(TileTerrainData const& terrain,
   rcContext ctx;
 
   rcHeightfield* solid = rcAllocHeightfield();
-  if (!solid) {
-    PrintTileFailure(tileX, tileY, "could not allocate heightfield");
-    return false;
-  }
+  if (!solid) { printf("A"); return false; }
   if (!rcCreateHeightfield(&ctx, *solid, tileW, tileH, bmin, bmax, cellSize, cellHeight)) {
-    PrintTileFailure(tileX, tileY, "could not create heightfield");
-    rcFreeHeightField(solid);
-    return false;
+    printf("B"); rcFreeHeightField(solid); return false;
   }
-  PrintTileProgress(tileX, tileY, 15, "heightfield ready");
+
+  // Downsample terrain
+  std::vector<float> hfVerts((tileW + 1) * (tileH + 1) * 3);
+  std::vector<int> hfTris(tileW * tileH * 6);
+  std::vector<unsigned char> triAreas(tileW * tileH * 2, 0);
+
+  int vi = 0;
+  for (int ty = 0; ty <= tileH; ++ty) {
+    for (int tx = 0; tx <= tileW; ++tx) {
+      float wx = terrain.minX + static_cast<float>(tx) * cellSize;
+      float wy = terrain.minY + static_cast<float>(ty) * cellSize;
+      int sx = std::min(static_cast<int>(tx * cellSize / terrain.cellWidth), terrain.width - 1);
+      int sy = std::min(static_cast<int>(ty * cellSize / terrain.cellHeight), terrain.height - 1);
+      hfVerts[vi++] = wx;
+      hfVerts[vi++] = wy;
+      hfVerts[vi++] = terrain.heights[sy * terrain.width + sx];
+    }
+  }
+
+  int ti = 0;
+  for (int ty = 0; ty < tileH; ++ty) {
+    for (int tx = 0; tx < tileW; ++tx) {
+      int a = ty * (tileW + 1) + tx;
+      int b = a + 1;
+      int c = a + tileW + 1;
+      int d = c + 1;
+      hfTris[ti++] = a; hfTris[ti++] = c; hfTris[ti++] = b;
+      hfTris[ti++] = b; hfTris[ti++] = c; hfTris[ti++] = d;
+    }
+  }
+
+  rcRasterizeTriangles(&ctx, hfVerts.data(), (tileW + 1) * (tileH + 1),
+                       hfTris.data(), triAreas.data(), tileW * tileH * 2, *solid, 0);
 
   int const walkableClimb = std::max(1, static_cast<int>(_config.agentMaxClimb / cellHeight));
   int const walkableHeight = std::max(1, static_cast<int>(_config.agentHeight / cellHeight));
 
-  // Seed a walkable plane so Recast has spans to compact into polygons.
-  int spanCount = 0;
-  for (int y = 0; y < solid->height; ++y) {
-    for (int x = 0; x < solid->width; ++x) {
-      if (rcAddSpan(&ctx, *solid, x, y, 0, static_cast<unsigned short>(walkableHeight),
-                RC_WALKABLE_AREA, 1))
-        spanCount++;
-    }
-  }
-  PrintTileProgress(tileX, tileY, 30, "walkable spans added");
-
   rcCompactHeightfield* chf = rcAllocCompactHeightfield();
-  if (!chf) {
-    PrintTileFailure(tileX, tileY, "could not allocate compact heightfield");
-    rcFreeHeightField(solid);
-    return false;
-  }
+  if (!chf) { printf("C"); rcFreeHeightField(solid); return false; }
   if (!rcBuildCompactHeightfield(&ctx, walkableClimb, walkableHeight, *solid, *chf)) {
-    PrintTileFailure(tileX, tileY, "could not compact heightfield");
-    rcFreeCompactHeightfield(chf);
-    rcFreeHeightField(solid);
-    return false;
+    printf("D"); rcFreeCompactHeightfield(chf); rcFreeHeightField(solid); return false;
   }
   rcFreeHeightField(solid);
 
-  if (chf->spanCount == 0) {
-    PrintTileFailure(tileX, tileY, "no compact spans generated");
-    rcFreeCompactHeightfield(chf);
-    return false;
-  }
-  PrintTileProgress(tileX, tileY, 45, "compact heightfield ready");
+  printf(" spans=%d ", chf->spanCount); fflush(stdout);
+  if (chf->spanCount == 0) { printf("Q"); rcFreeCompactHeightfield(chf); return false; }
 
   int const erosionRadius = std::max(0, static_cast<int>(_config.agentRadius / cellSize));
   if (!rcErodeWalkableArea(&ctx, erosionRadius, *chf)) {
-    PrintTileFailure(tileX, tileY, "could not erode walkable area");
-    rcFreeCompactHeightfield(chf);
-    return false;
+    printf("E"); rcFreeCompactHeightfield(chf); return false;
   }
-  PrintTileProgress(tileX, tileY, 55, "agent radius applied");
 
   if (!rcBuildRegionsMonotone(&ctx, *chf, 0, _config.minRegionArea, _config.mergeRegionArea)) {
-    PrintTileFailure(tileX, tileY, "could not build regions");
-    rcFreeCompactHeightfield(chf);
-    return false;
+    printf("F"); rcFreeCompactHeightfield(chf); return false;
   }
-  PrintTileProgress(tileX, tileY, 65, "regions built");
 
   rcContourSet* cset = rcAllocContourSet();
-  if (!cset) {
-    PrintTileFailure(tileX, tileY, "could not allocate contours");
-    rcFreeCompactHeightfield(chf);
-    return false;
-  }
+  if (!cset) { printf("G"); rcFreeCompactHeightfield(chf); return false; }
   if (!rcBuildContours(&ctx, *chf, _config.maxSimplificationError, _config.maxEdgeLen, *cset)) {
-    PrintTileFailure(tileX, tileY, "could not build contours");
-    rcFreeContourSet(cset);
-    rcFreeCompactHeightfield(chf);
-    return false;
+    printf("H"); rcFreeContourSet(cset); rcFreeCompactHeightfield(chf); return false;
   }
-  PrintTileProgress(tileX, tileY, 75, "contours built");
 
   rcPolyMesh* pmesh = rcAllocPolyMesh();
-  if (!pmesh) {
-    PrintTileFailure(tileX, tileY, "could not allocate poly mesh");
-    rcFreeContourSet(cset);
-    rcFreeCompactHeightfield(chf);
-    return false;
-  }
+  if (!pmesh) { printf("I"); rcFreeContourSet(cset); rcFreeCompactHeightfield(chf); return false; }
   if (!rcBuildPolyMesh(&ctx, *cset, _config.maxVertsPerPoly, *pmesh)) {
-    PrintTileFailure(tileX, tileY, "could not build poly mesh");
-    rcFreePolyMesh(pmesh);
-    rcFreeContourSet(cset);
-    rcFreeCompactHeightfield(chf);
-    return false;
+    printf("J"); rcFreePolyMesh(pmesh); rcFreeContourSet(cset); rcFreeCompactHeightfield(chf); return false;
   }
-  PrintTileProgress(tileX, tileY, 85, "poly mesh built");
 
   rcPolyMeshDetail* dmesh = rcAllocPolyMeshDetail();
-  if (!dmesh) {
-    PrintTileFailure(tileX, tileY, "could not allocate detail mesh");
-    rcFreePolyMesh(pmesh);
-    rcFreeContourSet(cset);
-    rcFreeCompactHeightfield(chf);
-    return false;
-  }
+  if (!dmesh) { printf("K"); rcFreePolyMesh(pmesh); rcFreeContourSet(cset); rcFreeCompactHeightfield(chf); return false; }
   if (!rcBuildPolyMeshDetail(&ctx, *pmesh, *chf, _config.detailSampleDist,
                               _config.detailSampleMaxError, *dmesh)) {
-    PrintTileFailure(tileX, tileY, "could not build detail mesh");
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    rcFreeContourSet(cset);
-    rcFreeCompactHeightfield(chf);
-    return false;
+    printf("L"); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); rcFreeContourSet(cset); rcFreeCompactHeightfield(chf); return false;
   }
   rcFreeCompactHeightfield(chf);
   rcFreeContourSet(cset);
-  PrintTileProgress(tileX, tileY, 92, "detail mesh built");
 
   for (int i = 0; i < pmesh->npolys; ++i) {
     if (pmesh->areas[i] == RC_WALKABLE_AREA)
@@ -293,10 +250,7 @@ bool MmapGenerator::BuildTileNavMesh(TileTerrainData const& terrain,
   }
 
   if (pmesh->npolys == 0) {
-    PrintTileFailure(tileX, tileY, "no polygons generated");
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    return false;
+    printf("Z"); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); return false;
   }
 
   dtNavMeshCreateParams params{};
@@ -325,19 +279,12 @@ bool MmapGenerator::BuildTileNavMesh(TileTerrainData const& terrain,
   unsigned char* navData = nullptr;
   int navDataSize = 0;
   if (!dtCreateNavMeshData(&params, &navData, &navDataSize)) {
-    PrintTileFailure(tileX, tileY, "could not create Detour nav data");
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    return false;
+    printf("M"); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); return false;
   }
 
   dtNavMesh* tileNavMesh = dtAllocNavMesh();
   if (!tileNavMesh) {
-    PrintTileFailure(tileX, tileY, "could not allocate Detour nav mesh");
-    dtFree(navData);
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    return false;
+    printf("N"); dtFree(navData); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); return false;
   }
 
   dtNavMeshParams navParams{};
@@ -349,27 +296,15 @@ bool MmapGenerator::BuildTileNavMesh(TileTerrainData const& terrain,
 
   dtStatus dtStatusFlags = tileNavMesh->init(&navParams);
   if (dtStatusFailed(dtStatusFlags)) {
-    PrintTileFailure(tileX, tileY, "could not initialize Detour nav mesh");
-    dtFreeNavMesh(tileNavMesh);
-    dtFree(navData);
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    return false;
+    printf("O"); dtFreeNavMesh(tileNavMesh); dtFree(navData); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); return false;
   }
 
   dtStatusFlags = tileNavMesh->addTile(navData, navDataSize, DT_TILE_FREE_DATA, 0, nullptr);
   if (dtStatusFailed(dtStatusFlags)) {
-    PrintTileFailure(tileX, tileY, "could not add Detour tile");
-    dtFreeNavMesh(tileNavMesh);
-    rcFreePolyMeshDetail(dmesh);
-    rcFreePolyMesh(pmesh);
-    return false;
+    printf("P"); dtFreeNavMesh(tileNavMesh); rcFreePolyMeshDetail(dmesh); rcFreePolyMesh(pmesh); return false;
   }
-  PrintTileProgress(tileX, tileY, 98, "Detour tile ready");
 
   SaveNavMeshTile(tileNavMesh, _config.mapId, tileX, tileY, outputPath);
-  PrintTileProgress(tileX, tileY, 100, "saved");
-  printf("\n");
 
   dtFreeNavMesh(tileNavMesh);
   rcFreePolyMeshDetail(dmesh);
@@ -396,23 +331,15 @@ bool MmapGenerator::Generate(uint32_t tileX, uint32_t tileY) {
 
 bool MmapGenerator::GenerateAllTiles() {
   bool anySuccess = false;
-  uint32_t processed = 0;
-  uint32_t succeeded = 0;
-  constexpr uint32_t kTotalTiles = 64u * 64u;
-
   for (uint32_t tileY = 0; tileY < 64; ++tileY) {
     for (uint32_t tileX = 0; tileX < 64; ++tileX) {
-      ++processed;
-      int const percent = static_cast<int>((processed * 100u) / kTotalTiles);
-      printf("\n[%3d%%] tile %4u/%u map %u (%02u,%02u)\n",
-             percent, processed, kTotalTiles, _config.mapId, tileX, tileY);
       if (Generate(tileX, tileY)) {
         anySuccess = true;
-        ++succeeded;
+        printf("."); fflush(stdout);
       }
     }
   }
-  printf("\nDone: %u/%u tiles generated.\n", succeeded, kTotalTiles);
+  if (anySuccess) printf("\n");
   return anySuccess;
 }
 

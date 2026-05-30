@@ -6,7 +6,7 @@
 #include <filesystem>
 
 void PrintUsage() {
-  printf("firelands-mmap-generator — Build navmesh tiles from server .map data\n");
+  printf("firelands-mmap-generator - Build navmesh tiles from server .map data\n");
   printf("Usage: firelands-mmap-generator -m <mapId> -i <mapsDir> -o <mmapsDir> [-v <vmapsDir>]\n");
   printf("\n");
   printf("  -m <mapId>   Map ID to generate navmesh for (e.g. 0 for Eastern Kingdoms)\n");
@@ -59,24 +59,30 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  uint32_t const mapId = config.mapId;
   Firelands::MmapGenerator generator(std::move(config));
 
+  printf("\nFirelands mmap generator\n");
+  printf("========================\n");
+  printf("Map: %u\n", mapId);
+
   if (singleTile) {
-    printf("Generating navmesh for map %u tile (%u,%u)...\n",
-           config.mapId, tileX, tileY);
+    printf("Tile: (%u,%u)\n\n", tileX, tileY);
+    printf("Generating navmesh...\n");
     if (!generator.Generate(tileX, tileY)) {
       fprintf(stderr, "Failed to generate tile (%u,%u).\n", tileX, tileY);
       return 1;
     }
-    printf("Tile (%u,%u) generated successfully.\n", tileX, tileY);
+    printf("\nTile (%u,%u) generated successfully.\n", tileX, tileY);
   } else {
-    printf("Generating navmesh for map %u (all tiles)...\n", config.mapId);
+    printf("Tiles: all 64x64\n\n");
+    printf("Generating navmesh...\n");
     if (!generator.GenerateAllTiles()) {
       fprintf(stderr, "No tiles were generated. Check that .map files exist "
                       "in the input directory.\n");
       return 1;
     }
-    printf("Navmesh generation complete.\n");
+    printf("\nNavmesh generation complete.\n");
   }
 
   return 0;
