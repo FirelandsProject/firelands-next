@@ -317,6 +317,13 @@ bool TryFinalizeCreatureChaseStand(std::shared_ptr<Map> const &map,
   float const standDistSq =
       DistanceSquared2d(from.x, from.y, stand.x, stand.y);
 
+  LOG_MMAP_DEBUG(
+      "CHASE finalize stand: mapId={} creatureGuid={} from=({}, {}, {}) "
+      "target=({}, {}, {}) stand=({}, {}, {}) standDist2d={}",
+      map ? map->GetMapId() : 0u, creature ? creature->GetGuid() : 0ULL, from.x,
+      from.y, from.z, targetX, targetY, targetZ, stand.x, stand.y, stand.z,
+      std::sqrt(standDistSq));
+
   if (IsCreatureSplineInFlight(runtime, now, true))
     return false;
 
@@ -365,9 +372,15 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   // stored grounded Z and the new grounded Z compare consistently across
   // ticks (otherwise an airborne player would trigger a replan every tick).
   // Home splines already track a grounded point.
+  float const targetZRaw = targetZ;
   if (collisionQueries && !returnHomeSpline) {
     targetZ = collisionQueries->GetHeight(map->GetMapId(), targetX, targetY,
                                           from.z);
+    LOG_MMAP_DEBUG(
+        "CHASE ground-project target: mapId={} creatureGuid={} from=({}, {}, {}) "
+        "targetXY=({}, {}) targetZ_raw={} targetZ_grounded={} delta={}",
+        map->GetMapId(), creature->GetGuid(), from.x, from.y, from.z, targetX,
+        targetY, targetZRaw, targetZ, targetZ - targetZRaw);
   }
 
   bool const chaseTargetMoved =
@@ -399,9 +412,17 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   // Belt-and-suspenders: even when the step skipped Z motion (stop-range case
   // or 2D-only waypoint), keep the broadcast position on the navmesh floor.
   if (collisionQueries && !returnHomeSpline) {
+    float const preClampZ = projected.position.z;
     projected.position.z = collisionQueries->GetHeight(
         map->GetMapId(), projected.position.x, projected.position.y,
         projected.position.z);
+    LOG_MMAP_DEBUG(
+        "CHASE ground-clamp step: mapId={} creatureGuid={} step=({}, {}, {}) "
+        "preClampZ={} clampedZ={} delta={} moved={} inStopRange={}",
+        map->GetMapId(), creature->GetGuid(), projected.position.x,
+        projected.position.y, projected.position.z, preClampZ,
+        projected.position.z, projected.position.z - preClampZ, projected.moved,
+        projected.inStopRange);
   }
 
   if (!returnHomeSpline) {
@@ -436,6 +457,11 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   int32_t const splineId = static_cast<int32_t>(++moveCounter);
   uint32_t const durationMs = monster_move_wire::MonsterMoveDurationMs(
       from.x, from.y, from.z, to.x, to.y, to.z, kCreatureRunSpeedYardsPerSec);
+  LOG_MMAP_DEBUG(
+      "CHASE broadcast: mapId={} creatureGuid={} returnHome={} from=({}, {}, {}) "
+      "to=({}, {}, {}) duration={}ms splineId={}",
+      map->GetMapId(), creature->GetGuid(), returnHomeSpline, from.x, from.y,
+      from.z, to.x, to.y, to.z, durationMs, splineId);
   if (returnHomeSpline)
     BroadcastCreatureReturnMove(map, creature->GetGuid(), from, to, splineId);
   else
