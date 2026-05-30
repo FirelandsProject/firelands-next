@@ -3,7 +3,10 @@
 #include <application/services/GmTicketService.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
 #include <application/services/CharacterService.h>
+#include <application/services/WorldService.h>
 #include <domain/models/Character.h>
+#include <domain/world/Creature.h>
+#include <domain/world/Map.h>
 #include <application/services/SRPService.h>
 #include <domain/repositories/IAccountRepository.h>
 #include <shared/Common.h>
@@ -238,6 +241,26 @@ static std::string StripWowChatColorTokens(std::string const &in) {
 
 static constexpr uint64_t kMaxRestartDelaySeconds = 7ULL * 24 * 3600;
 
+static char const *FindPathStatusName(FindPathStatus status) {
+  switch (status) {
+  case FindPathStatus::Complete:
+    return "Complete";
+  case FindPathStatus::Partial:
+    return "Partial";
+  case FindPathStatus::NoPath:
+    return "NoPath";
+  case FindPathStatus::NavMeshMissing:
+    return "NavMeshMissing";
+  }
+  return "Unknown";
+}
+
+static std::string FormatVec3(Vec3 const &v) {
+  std::ostringstream ss;
+  ss << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+  return ss.str();
+}
+
 static bool ParseRestartDelayToken(std::string const &token,
                                     std::chrono::seconds &out) {
   if (token.size() < 2)
@@ -311,6 +334,9 @@ CommandService::CommandService(
   RegisterCommand("gps", {[this](auto s, auto a, auto o) { return HandleGps(s, a, o); },
                           ToMask(Permission::CommandGps), CommandAvailability::Both,
                           ConsoleArgLayout::TargetOnlineCharacterFirst});
+  RegisterCommand("mmap", {[this](auto s, auto a, auto o) { return HandleMmap(s, a, o); },
+                           ToMask(Permission::CommandGps), CommandAvailability::Both,
+                           ConsoleArgLayout::TargetOnlineCharacterFirst});
   RegisterCommand("tele", {[this](auto s, auto a, auto o) { return HandleTele(s, a, o); },
                            ToMask(Permission::CommandTeleport), CommandAvailability::Both,
                            ConsoleArgLayout::TargetOnlineCharacterFirst});
@@ -560,6 +586,193 @@ bool CommandService::HandleGps(std::shared_ptr<ICommandSession> session,
   return true;
 }
 
+bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
+                                const std::vector<std::string> &args,
+                                PrivilegeOrigin origin) {
+  (void)origin;
+  auto collision = WorldService::Instance().GetCollisionQueries();
+  if (!collision) {
+    session->SendNotification("MMAP: collision service is not configured.");
+    return true;
+  }
+
+  MovementInfo const &playerPos = session->GetPosition();
+  uint32_t mapId = session->GetMapId();
+  uint64_t const playerGuid = session->GetActiveCharacterObjectGuid();
+
+  // Auto-remove expired markers (older than 9s)
+  {
+    auto mit = _mmapMarkers.find(playerGuid);
+    if (mit != _mmapMarkers.end()) {
+      auto const now = std::chrono::steady_clock::now();
+      auto map = WorldService::Instance().GetMap(mapId);
+      auto &markers = mit->second;
+      markers.erase(
+          std::remove_if(markers.begin(), markers.end(),
+                         [&](auto const &p) {
+                           if (now - p.second > std::chrono::seconds(9)) {
+                             if (map) map->RemoveObject(p.first);
+                             return true;
+                           }
+                           return false;
+                         }),
+          markers.end());
+      if (markers.empty())
+        _mmapMarkers.erase(mit);
+    }
+  }
+
+  // .mmap clear — remove visual markers
+  if (!args.empty() && args[0] == "clear") {
+    ClearMmapMarkers(playerGuid, mapId);
+    session->SendNotification("MMAP: visual markers removed.");
+    return true;
+  }
+
+  // Determine start/end positions for pathfinding
+  Vec3 startPos{playerPos.x, playerPos.y, playerPos.z};
+  Vec3 endPos{playerPos.x, playerPos.y, playerPos.z};
+  bool checkPath = false;
+  std::string pathLabel;
+
+  try {
+    if (!args.empty()) {
+      if (args.size() < 3) {
+        session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap (with target)  |  .mmap clear");
+        return false;
+      }
+      endPos.x = std::stof(args[0]);
+      endPos.y = std::stof(args[1]);
+      endPos.z = std::stof(args[2]);
+      if (args.size() > 3)
+        mapId = static_cast<uint32_t>(std::stoul(args[3]));
+      pathLabel = "you -> " + FormatVec3(endPos);
+      checkPath = true;
+    } else {
+      // Check if a creature is targeted: path from creature to player
+      uint64_t const targetGuid = session->GetClientSelectionGuid();
+      if (targetGuid != 0) {
+        auto map = WorldService::Instance().GetMap(mapId);
+        if (map) {
+          auto creature = map->TryGetCreature(targetGuid);
+          if (creature) {
+            MovementInfo const &crPos = creature->GetPosition();
+            startPos = Vec3{crPos.x, crPos.y, crPos.z};
+            endPos = Vec3{playerPos.x, playerPos.y, playerPos.z};
+            pathLabel = std::string("creature(") + std::to_string(creature->GetEntry()) +
+                        ") -> you";
+            checkPath = true;
+          }
+        }
+        if (!checkPath)
+          session->SendNotification("MMAP: targeted object is not a creature.");
+      }
+    }
+  } catch (std::exception const &) {
+    session->SendNotification("MMAP: invalid coordinates.");
+    return false;
+  }
+
+  bool const available = collision->IsNavMeshDataAvailable(mapId);
+  float const height = collision->GetHeight(mapId, playerPos.x, playerPos.y, playerPos.z);
+  std::ostringstream head;
+  head << "MMAP map=" << mapId << " navmesh=" << (available ? "loaded" : "missing")
+       << " player=" << FormatVec3(Vec3{playerPos.x, playerPos.y, playerPos.z})
+       << " height=" << height;
+  session->SendNotification(head.str());
+
+  if (!checkPath)
+    return true;
+
+  FindPathRequest req;
+  req.mapId = mapId;
+  req.startX = startPos.x;
+  req.startY = startPos.y;
+  req.startZ = startPos.z;
+  req.endX = endPos.x;
+  req.endY = endPos.y;
+  req.endZ = endPos.z;
+  req.smoothPath = true;
+  req.allowPartialPath = true;
+
+  FindPathResult result = collision->FindPath(req);
+  std::ostringstream path;
+  path << "MMAP path " << FormatVec3(startPos) << " -> "
+       << FormatVec3(endPos) << "  (" << pathLabel << ")"
+       << " status=" << FindPathStatusName(result.status)
+       << " waypoints=" << result.waypoints.size();
+  session->SendNotification(path.str());
+
+  constexpr size_t kMaxPrintedWaypoints = 8;
+  for (size_t i = 0; i < result.waypoints.size() && i < kMaxPrintedWaypoints; ++i) {
+    session->SendNotification("  wp[" + std::to_string(i) + "] " +
+                              FormatVec3(result.waypoints[i]));
+  }
+  if (result.waypoints.size() > kMaxPrintedWaypoints) {
+    session->SendNotification("  ... " +
+                              std::to_string(result.waypoints.size() -
+                                             kMaxPrintedWaypoints) +
+                              " more waypoint(s)");
+  }
+
+  // Spawn visual markers at each waypoint (auto-despawn after 9s)
+  ClearMmapMarkers(playerGuid, mapId);
+
+  if (!result.waypoints.empty()) {
+    auto map = WorldService::Instance().GetMap(mapId);
+    if (map) {
+      constexpr uint32_t kMarkerDisplayId = 11686u;
+      constexpr uint32_t kMarkerEntry = 99999u;
+      uint64_t baseGuid = static_cast<uint64_t>(0xF100000000000000ull) +
+                          (static_cast<uint64_t>(playerGuid & 0xFFFFu) << 32);
+      auto const now = std::chrono::steady_clock::now();
+      std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>> markers;
+      markers.reserve(result.waypoints.size());
+
+      for (size_t i = 0; i < result.waypoints.size(); ++i) {
+        auto const &wp = result.waypoints[i];
+        float const z = wp.z + 1.0f;
+
+        auto marker = std::make_shared<Creature>(
+            baseGuid + i, kMarkerEntry, kMarkerDisplayId, 1u, 1u,
+            Creature::kDefaultFactionTemplate, 0u, 0x01000000u, 0u, 0u, 0.0f);
+        MovementInfo pos{};
+        pos.x = wp.x;
+        pos.y = wp.y;
+        pos.z = z;
+        pos.orientation = 0.0f;
+        marker->SetPosition(pos);
+        WorldService::Instance().AddCreatureToMap(mapId, marker);
+        markers.emplace_back(marker->GetGuid(), now);
+      }
+      _mmapMarkers[playerGuid] = std::move(markers);
+      session->SendNotification("MMAP: " +
+                                std::to_string(result.waypoints.size()) +
+                                " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
+    }
+  }
+  return true;
+}
+
+void CommandService::ClearMmapMarkers(uint64_t playerGuid, uint32_t mapId) {
+  auto it = _mmapMarkers.find(playerGuid);
+  if (it == _mmapMarkers.end())
+    return;
+
+  auto map = WorldService::Instance().GetMap(mapId);
+  auto const now = std::chrono::steady_clock::now();
+
+  // Remove expired + all markers
+  auto &markers = it->second;
+  auto end = markers.end();
+  for (auto &[guid, spawnTime] : markers) {
+    if (map)
+      map->RemoveObject(guid);
+  }
+  markers.clear();
+  _mmapMarkers.erase(it);
+}
+
 bool CommandService::HandleTele(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &args,
                                 PrivilegeOrigin origin) {
@@ -673,13 +886,20 @@ Mailbox  (Moderator+ in-game)
      "|cffFFD200· Position|r\n"
      "|cffCCCCCC.gps|r |cff888888—|r Print X, Y, Z, facing.  |cff666666e.g.|r "
      "|cffffffff.gps|r\n"
-     "|cff666666Console (online character first):|r |cffffffff.gps Annabell|r",
+     "|cff666666Console (online character first):|r |cffffffff.gps Annabell|r\n"
+     "|cffCCCCCC.mmap|r |cff888888—|r Check navmesh and path waypoints.  "
+     "|cff666666e.g.|r |cffffffff.mmap -8759 544 97|r",
      R"H3(--------------------------------------------------------------------------------
 Position
 --------------------------------------------------------------------------------
 
   .gps   [.gps <OnlineCharName>]
       Print X, Y, Z, and facing. From console, prefix an online character name.
+
+  .mmap [x y z [mapId]]
+  .mmap <OnlineCharName> [x y z [mapId]]   (console)
+      Check whether navmesh data is loaded for the current map. With coordinates,
+      calculate a path and print the status plus the first waypoints.
 )H3"},
     {HelpChunkAudience::Both, ToMask(Permission::CommandTeleport),
      "|cffFFD200· Teleport|r\n"

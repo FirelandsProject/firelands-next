@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Firelands {
@@ -67,6 +68,9 @@ private:
 
   bool HandleGps(std::shared_ptr<ICommandSession> session,
                  const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleMmap(std::shared_ptr<ICommandSession> session,
+                  const std::vector<std::string> &args, PrivilegeOrigin origin);
+  void ClearMmapMarkers(uint64_t playerGuid, uint32_t mapId);
   bool HandleTele(std::shared_ptr<ICommandSession> session,
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleHelp(std::shared_ptr<ICommandSession> session,
@@ -133,6 +137,7 @@ private:
   std::shared_ptr<CharacterService> _characterService;
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::map<std::string, CommandEntry> _commands;
+  std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>>> _mmapMarkers;
 
   std::function<void()> _shutdownRequestHandler;
   std::optional<std::chrono::steady_clock::time_point> _restartDeadline;
