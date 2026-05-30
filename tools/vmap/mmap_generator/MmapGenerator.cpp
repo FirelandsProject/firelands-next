@@ -2,6 +2,7 @@
 
 #include <Recast.h>
 #include <DetourNavMesh.h>
+#include <DetourNavMeshBuilder.h>
 #include <DetourCommon.h>
 
 #include <cmath>
@@ -67,10 +68,10 @@ MmapGenerator::MmapGenerator(MmapGeneratorConfig config)
 bool MmapGenerator::LoadTerrainData(uint32_t tileX, uint32_t tileY,
                                      TileTerrainData& out) const {
   std::string const fileName =
-      std::filesystem::path(_config.mapsDir) /
-      (std::to_string(_config.mapId) +
-       std::to_string(tileY) +
-       std::to_string(tileX) + ".map");
+      (std::filesystem::path(_config.mapsDir) /
+       (std::to_string(_config.mapId) +
+        std::to_string(tileY) +
+        std::to_string(tileX) + ".map")).string();
 
   FILE* file = fopen(fileName.c_str(), "rb");
   if (!file)

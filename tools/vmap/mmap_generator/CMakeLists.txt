@@ -12,4 +12,4 @@ target_link_libraries(firelands-mmap-generator
     PRIVATE Detour
 )
 
-target_precompile_headers(firelands-mmap-generator PRIVATE ${PROJECT_PCH_HEADERS})
+set_target_properties(firelands-mmap-generator PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
