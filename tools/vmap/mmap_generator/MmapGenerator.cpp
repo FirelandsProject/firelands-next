@@ -471,6 +471,9 @@ bool MmapGenerator::GenerateAllTiles() {
     return false;
   }
 
+  printf("Found %u existing terrain tiles for map %u; skipping %u empty tiles.\n",
+         totalTiles, _config.mapId, (64u * 64u) - totalTiles);
+
   for (uint32_t tileY = 0; tileY < 64; ++tileY) {
     for (uint32_t tileX = 0; tileX < 64; ++tileX) {
       if (!std::filesystem::exists(
