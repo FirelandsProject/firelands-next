@@ -3,8 +3,11 @@
 #include <DetourNavMesh.h>
 #include <DetourNavMeshQuery.h>
 #include <DetourCommon.h>
+#include <DetourAlloc.h>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <vector>
 
@@ -12,22 +15,26 @@ namespace Firelands {
 
 namespace {
 constexpr float kTileSize = 533.33333f;
+constexpr float kMapOrigin = -17066.66656f;
 constexpr uint32_t kTileCountPerAxis = 64;
+constexpr uint32_t kMmapMagic = 'M' | ('M' << 8) | ('A' << 16) | ('P' << 24);
 
-uint32_t WorldToTileX(float x) {
-  return static_cast<uint32_t>(std::floor(32.0f - (x / kTileSize)));
+struct MmapTileHeader {
+  uint32_t mmapMagic;
+  uint32_t dtVersion;
+  uint32_t mmapSize;
+  unsigned char usesLiquids;
+  unsigned char padding[3];
+};
+
+void WowToDetour(float x, float y, float z, float out[3]) {
+  out[0] = x;
+  out[1] = z;
+  out[2] = y;
 }
 
-uint32_t WorldToTileY(float y) {
-  return static_cast<uint32_t>(std::floor(32.0f - (y / kTileSize)));
-}
-
-float TileToWorldX(uint32_t tx) {
-  return (32.0f - static_cast<float>(tx) - 0.5f) * kTileSize;
-}
-
-float TileToWorldY(uint32_t ty) {
-  return (32.0f - static_cast<float>(ty) - 0.5f) * kTileSize;
+Vec3 DetourToWow(float const* pos) {
+  return Vec3{pos[0], pos[2], pos[1]};
 }
 
 } // namespace
@@ -66,7 +73,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   long fileSize = ftell(file);
   fseek(file, 0, SEEK_SET);
 
-  if (fileSize < 20) {
+  if (fileSize < static_cast<long>(sizeof(MmapTileHeader) + sizeof(dtMeshHeader))) {
     fclose(file);
     return false;
   }
@@ -78,13 +85,31 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   if (readSize != static_cast<size_t>(fileSize))
     return false;
 
+  MmapTileHeader const* mmapHeader =
+      reinterpret_cast<MmapTileHeader const*>(data.data());
+  if (mmapHeader->mmapMagic != kMmapMagic ||
+      mmapHeader->dtVersion != DT_NAVMESH_VERSION ||
+      mmapHeader->mmapSize == 0 ||
+      sizeof(MmapTileHeader) + mmapHeader->mmapSize > data.size()) {
+    return false;
+  }
+
+  unsigned char const* tilePayload = data.data() + sizeof(MmapTileHeader);
   dtMeshHeader const* header =
-      reinterpret_cast<dtMeshHeader const*>(data.data());
+      reinterpret_cast<dtMeshHeader const*>(tilePayload);
   if (header->magic != DT_NAVMESH_MAGIC || header->version != DT_NAVMESH_VERSION)
     return false;
 
-  dtStatus status = navMesh->addTile(data.data(), static_cast<int>(fileSize),
+  auto* tileData =
+      static_cast<unsigned char*>(dtAlloc(mmapHeader->mmapSize, DT_ALLOC_PERM));
+  if (!tileData)
+    return false;
+  std::memcpy(tileData, tilePayload, mmapHeader->mmapSize);
+
+  dtStatus status = navMesh->addTile(tileData, static_cast<int>(mmapHeader->mmapSize),
                                      DT_TILE_FREE_DATA, 0, nullptr);
+  if (dtStatusFailed(status))
+    dtFree(tileData);
   return dtStatusSucceed(status);
 }
 
@@ -93,8 +118,7 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
     return true;
 
   dtNavMeshParams params{};
-  float const navOrigin[3] = {-kTileSize * kTileCountPerAxis / 2.0f,
-                               -kTileSize * kTileCountPerAxis / 2.0f, 0.0f};
+  float const navOrigin[3] = {kMapOrigin, 0.0f, kMapOrigin};
   dtVcopy(params.orig, navOrigin);
   params.tileWidth = kTileSize;
   params.tileHeight = kTileSize;
@@ -229,8 +253,10 @@ FindPathResult DetourNavMeshManager::FindPath(
   dtPolyRef endRef = 0;
   float startNearest[3]{};
   float endNearest[3]{};
-  float const startPos[3] = {req.startX, req.startY, req.startZ};
-  float const endPos[3] = {req.endX, req.endY, req.endZ};
+  float startPos[3]{};
+  float endPos[3]{};
+  WowToDetour(req.startX, req.startY, req.startZ, startPos);
+  WowToDetour(req.endX, req.endY, req.endZ, endPos);
 
   dtQueryFilter filter;
   filter.setIncludeFlags(0xFFFF);
@@ -257,9 +283,10 @@ FindPathResult DetourNavMeshManager::FindPath(
   dtPolyRef straightPathPolys[256];
   int straightPathCount = 0;
 
+  int const maxPathPolys = std::clamp(_config.maxPathPolys, 1, 256);
   status = navQuery->findPath(startRef, endRef, startNearest, endNearest,
                               &filter, pathPolys, &pathCount,
-                              _config.maxPathPolys);
+                              maxPathPolys);
   if (dtStatusFailed(status) || pathCount == 0) {
     result.status = FindPathStatus::NoPath;
     return result;
@@ -268,7 +295,7 @@ FindPathResult DetourNavMeshManager::FindPath(
   status = navQuery->findStraightPath(
       startNearest, endNearest, pathPolys, pathCount, straightPath,
       straightPathFlags, straightPathPolys, &straightPathCount,
-      _config.maxPathPolys, 0);
+      maxPathPolys, 0);
   if (dtStatusFailed(status) || straightPathCount == 0) {
     result.status = FindPathStatus::NoPath;
     return result;
@@ -276,9 +303,7 @@ FindPathResult DetourNavMeshManager::FindPath(
 
   result.waypoints.reserve(straightPathCount);
   for (int i = 0; i < straightPathCount; ++i) {
-    result.waypoints.push_back(
-        Vec3{straightPath[i * 3], straightPath[i * 3 + 1],
-             straightPath[i * 3 + 2]});
+    result.waypoints.push_back(DetourToWow(&straightPath[i * 3]));
   }
 
   RemoveDuplicateWaypoints(result.waypoints);

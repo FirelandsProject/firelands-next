@@ -14,7 +14,7 @@ namespace Firelands {
 
 struct DetourNavMeshConfig {
   float maxSearchRadius = 100.0f;
-  float maxPathPolys = 256;
+  int maxPathPolys = 256;
   int maxNavMeshNodes = 4096;
 };
 

@@ -44,8 +44,9 @@ private:
     int height = 0;
     float minX = 0.0f;
     float minY = 0.0f;
-    float cellWidth = 0.0f;
-    float cellHeight = 0.0f;
+    float minZ = 0.0f;
+    float maxZ = 0.0f;
+    float cellSize = 0.0f;
   };
 
   bool LoadTerrainData(uint32_t tileX, uint32_t tileY, TileTerrainData& out) const;
