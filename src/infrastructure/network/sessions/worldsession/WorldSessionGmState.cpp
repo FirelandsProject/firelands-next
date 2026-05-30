@@ -34,6 +34,13 @@ void WorldSession::SetGmTagEnabled(bool on) {
   PublishGmVisualPatchIfInWorld();
   if (_playerGuid == 0 || wasOn == on)
     return;
+
+  // Sync GM mode flag on the Player for creature aggro immunity
+  if (auto map = runtime().GetMap(_mapId)) {
+    if (auto player = map->TryGetPlayer(_playerGuid))
+      player->SetGmModeEnabled(on);
+  }
+
   RefreshNearbyCreaturePhaseVisibility(_position.x, _position.y);
   RefreshNearbyCreatureGmWireFlags();
 }

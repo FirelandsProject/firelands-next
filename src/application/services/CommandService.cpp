@@ -15,6 +15,9 @@
 #include <shared/game/Permissions.h>
 #include <shared/Logger.h>
 #include <shared/network/MovementInfo.h>
+#include <shared/network/UpdateData.h>
+#include <shared/network/WorldPacket.h>
+#include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
 #include <cmath>
 #include <cctype>
 #include <chrono>
@@ -44,6 +47,11 @@ public:
   void SendNotification(const std::string &message) override {
     if (_operatorSession)
       _operatorSession->SendNotification(message);
+  }
+
+  void SendPacket(WorldPacket &packet) override {
+    if (_operatorSession)
+      _operatorSession->SendPacket(packet);
   }
 
   const MovementInfo &GetPosition() const override {
@@ -259,6 +267,36 @@ static std::string FormatVec3(Vec3 const &v) {
   std::ostringstream ss;
   ss << "(" << v.x << ", " << v.y << ", " << v.z << ")";
   return ss.str();
+}
+
+static void SendMmapMarkerCreate(std::shared_ptr<ICommandSession> const &session,
+                                 uint32_t mapId, uint64_t markerGuid,
+                                 Vec3 const &pos, uint32_t entry,
+                                 uint32_t displayId,
+                                 uint32_t factionTemplate) {
+  MovementInfo move{};
+  move.x = pos.x;
+  move.y = pos.y;
+  move.z = pos.z;
+  move.orientation = 0.0f;
+
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddCreateObject(
+      markerGuid, TYPEID_UNIT, move,
+      WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
+          markerGuid, entry, displayId, 1u, 1u, 1u, 0u, factionTemplate));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  session->SendPacket(pkt);
+}
+
+static void SendMmapMarkerDespawn(std::shared_ptr<ICommandSession> const &session,
+                                  uint32_t mapId, uint64_t markerGuid) {
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddOutOfRangeObjects({markerGuid});
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  session->SendPacket(pkt);
 }
 
 static bool ParseRestartDelayToken(std::string const &token,
@@ -605,13 +643,12 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
     auto mit = _mmapMarkers.find(playerGuid);
     if (mit != _mmapMarkers.end()) {
       auto const now = std::chrono::steady_clock::now();
-      auto map = WorldService::Instance().GetMap(mapId);
       auto &markers = mit->second;
       markers.erase(
           std::remove_if(markers.begin(), markers.end(),
                          [&](auto const &p) {
                            if (now - p.second > std::chrono::seconds(9)) {
-                             if (map) map->RemoveObject(p.first);
+                             SendMmapMarkerDespawn(session, mapId, p.first);
                              return true;
                            }
                            return false;
@@ -624,7 +661,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
 
   // .mmap clear — remove visual markers
   if (!args.empty() && args[0] == "clear") {
-    ClearMmapMarkers(playerGuid, mapId);
+    ClearMmapMarkers(session, playerGuid, mapId);
     session->SendNotification("MMAP: visual markers removed.");
     return true;
   }
@@ -716,58 +753,45 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   }
 
   // Spawn visual markers at each waypoint (auto-despawn after 9s)
-  ClearMmapMarkers(playerGuid, mapId);
+  ClearMmapMarkers(session, playerGuid, mapId);
 
   if (!result.waypoints.empty()) {
-    auto map = WorldService::Instance().GetMap(mapId);
-    if (map) {
-      constexpr uint32_t kMarkerDisplayId = 11686u;
-      constexpr uint32_t kMarkerEntry = 99999u;
-      uint64_t baseGuid = static_cast<uint64_t>(0xF100000000000000ull) +
-                          (static_cast<uint64_t>(playerGuid & 0xFFFFu) << 32);
-      auto const now = std::chrono::steady_clock::now();
-      std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>> markers;
-      markers.reserve(result.waypoints.size());
+    constexpr uint32_t kMarkerDisplayId = 11686u;
+    constexpr uint32_t kMarkerEntry = 99999u;
+    uint64_t baseGuid = static_cast<uint64_t>(0xF100000000000000ull) +
+                        (static_cast<uint64_t>(playerGuid & 0xFFFFu) << 32);
+    auto const now = std::chrono::steady_clock::now();
+    std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>> markers;
+    markers.reserve(result.waypoints.size());
 
-      for (size_t i = 0; i < result.waypoints.size(); ++i) {
-        auto const &wp = result.waypoints[i];
-        float const z = wp.z + 1.0f;
-
-        auto marker = std::make_shared<Creature>(
-            baseGuid + i, kMarkerEntry, kMarkerDisplayId, 1u, 1u,
-            Creature::kDefaultFactionTemplate, 0u, 0x01000000u, 0u, 0u, 0.0f);
-        MovementInfo pos{};
-        pos.x = wp.x;
-        pos.y = wp.y;
-        pos.z = z;
-        pos.orientation = 0.0f;
-        marker->SetPosition(pos);
-        WorldService::Instance().AddCreatureToMap(mapId, marker);
-        markers.emplace_back(marker->GetGuid(), now);
-      }
-      _mmapMarkers[playerGuid] = std::move(markers);
-      session->SendNotification("MMAP: " +
-                                std::to_string(result.waypoints.size()) +
-                                " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
+    for (size_t i = 0; i < result.waypoints.size(); ++i) {
+      auto const &wp = result.waypoints[i];
+      float const z = wp.z + 1.0f;
+      uint64_t const markerGuid = baseGuid + i;
+      SendMmapMarkerCreate(session, mapId, markerGuid,
+                           Vec3{wp.x, wp.y, z}, kMarkerEntry,
+                           kMarkerDisplayId, Creature::kDefaultFactionTemplate);
+      markers.emplace_back(markerGuid, now);
     }
+    _mmapMarkers[playerGuid] = std::move(markers);
+    session->SendNotification("MMAP: " +
+                              std::to_string(result.waypoints.size()) +
+                              " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
   }
   return true;
 }
 
-void CommandService::ClearMmapMarkers(uint64_t playerGuid, uint32_t mapId) {
+void CommandService::ClearMmapMarkers(std::shared_ptr<ICommandSession> session,
+                                     uint64_t playerGuid, uint32_t mapId) {
   auto it = _mmapMarkers.find(playerGuid);
   if (it == _mmapMarkers.end())
     return;
 
-  auto map = WorldService::Instance().GetMap(mapId);
-  auto const now = std::chrono::steady_clock::now();
-
   // Remove expired + all markers
   auto &markers = it->second;
-  auto end = markers.end();
   for (auto &[guid, spawnTime] : markers) {
-    if (map)
-      map->RemoveObject(guid);
+    (void)spawnTime;
+    SendMmapMarkerDespawn(session, mapId, guid);
   }
   markers.clear();
   _mmapMarkers.erase(it);

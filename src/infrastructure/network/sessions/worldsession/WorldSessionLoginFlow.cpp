@@ -352,6 +352,7 @@ void WorldSession::LoginSpawnInWorld(uint64 guid, Character const &character,
       static_cast<uint8>(GetDefaultPlayerPowerType(character.GetClass())),
       character.GetPrimaryStat(4), character.GetLevel());
   runtime().AddPlayerToMap(_mapId, player);
+  player->SetGmModeEnabled(_gmAppearance.gmTagOn);
 
   if (auto map = runtime().GetMap(_mapId)) {
     auto const now = std::chrono::steady_clock::now();

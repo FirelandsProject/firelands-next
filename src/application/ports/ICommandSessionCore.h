@@ -8,6 +8,7 @@
 namespace Firelands {
 
 struct MovementInfo;
+class WorldPacket;
 
 /// Session surface shared by console and world client (non-GM).
 class ICommandSessionCore {
@@ -31,6 +32,7 @@ public:
                           float orientation = 0.0f) = 0;
   virtual AccessLevel GetAccountAccessLevel() const = 0;
   virtual void RequestDisconnect(std::string const &reason) { (void)reason; }
+  virtual void SendPacket(WorldPacket &packet) { (void)packet; }
   virtual uint64_t GetClientSelectionGuid() const { return 0; }
   virtual uint64_t GetActiveCharacterObjectGuid() const { return 0; }
 };

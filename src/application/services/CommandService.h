@@ -70,7 +70,8 @@ private:
                  const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleMmap(std::shared_ptr<ICommandSession> session,
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
-  void ClearMmapMarkers(uint64_t playerGuid, uint32_t mapId);
+  void ClearMmapMarkers(std::shared_ptr<ICommandSession> session,
+                        uint64_t playerGuid, uint32_t mapId);
   bool HandleTele(std::shared_ptr<ICommandSession> session,
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleHelp(std::shared_ptr<ICommandSession> session,

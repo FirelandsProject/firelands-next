@@ -45,6 +45,8 @@ public:
     LOG_DEBUG("[console] RequestDisconnect (no world character): {}", reason);
   }
 
+  void SendPacket(WorldPacket &packet) override { (void)packet; }
+
   bool GmLearnSpell(uint32 /*spellId*/) override { return false; }
 
   bool GmUnlearnSpell(uint32 /*spellId*/) override { return false; }
