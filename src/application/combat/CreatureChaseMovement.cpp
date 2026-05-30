@@ -201,6 +201,10 @@ CreatureChaseStepResult StepCreatureAlongNavMeshPath(
                                     deltaSeconds, config);
   }
 
+  float const directDx = targetX - current.x;
+  float const directDy = targetY - current.y;
+  float const directDistSq = directDx * directDx + directDy * directDy;
+
   while (state.currentWaypoint < state.waypoints.size()) {
     Vec3 const &wp = state.waypoints[state.currentWaypoint];
     float const dx = current.x - wp.x;
@@ -211,6 +215,28 @@ CreatureChaseStepResult StepCreatureAlongNavMeshPath(
       ++state.currentWaypoint;
       LOG_TRACE("CHASE waypoint reached: mapId={} waypointIndex={} pos=({}, {}, {})",
                 mapId, state.currentWaypoint - 1, wp.x, wp.y, wp.z);
+      continue;
+    }
+
+    // Skip a waypoint that goes the wrong way. Detour's findStraightPath can
+    // emit a start-projection point far from the actual creature when
+    // findNearestPoly picks a stale/corrupted poly; following it sends the NPC
+    // *away* from the player. "Wrong way" = the vector from current to wp
+    // points away from the target, AND wp is farther from the target than
+    // current already is.
+    float const wpToTargetX = targetX - wp.x;
+    float const wpToTargetY = targetY - wp.y;
+    float const wpToTargetDistSq =
+        wpToTargetX * wpToTargetX + wpToTargetY * wpToTargetY;
+    float const wpFromCurrentDot =
+        (wp.x - current.x) * directDx + (wp.y - current.y) * directDy;
+    if (wpFromCurrentDot < 0.f && wpToTargetDistSq > directDistSq) {
+      LOG_DEBUG(
+          "CHASE skipping wrong-way waypoint: mapId={} waypointIndex={} "
+          "wp=({}, {}, {}) current=({}, {}, {}) target=({}, {})",
+          mapId, state.currentWaypoint, wp.x, wp.y, wp.z, current.x, current.y,
+          current.z, targetX, targetY);
+      ++state.currentWaypoint;
       continue;
     }
 
