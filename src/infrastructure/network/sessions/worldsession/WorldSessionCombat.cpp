@@ -120,8 +120,14 @@ bool HasClearMeleeLineOfSight(uint32 mapId, float fromX, float fromY, float from
     return true;
   bool const clear = collision->LineOfSight(mapId, fromX, fromY, fromZ, toX, toY, toZ);
   if (!clear) {
-    LOG_DEBUG("MELEE LoS blocked: mapId={} from=({}, {}, {}) to=({}, {}, {})",
-              mapId, fromX, fromY, fromZ, toX, toY, toZ);
+    static thread_local std::chrono::steady_clock::time_point lastLog{};
+    auto const now = std::chrono::steady_clock::now();
+    if (lastLog.time_since_epoch().count() == 0 ||
+        now - lastLog >= std::chrono::seconds(2)) {
+      lastLog = now;
+      LOG_DEBUG("MELEE LoS blocked: mapId={} from=({}, {}, {}) to=({}, {}, {})",
+                mapId, fromX, fromY, fromZ, toX, toY, toZ);
+    }
   }
   return clear;
 }
@@ -228,21 +234,23 @@ bool IsCreatureInMeleeRangeOfPlayer(Creature const &creature, WorldSession const
                                     WorldSession::CreatureCombatRuntime const &runtime,
                                     std::chrono::steady_clock::time_point now) {
   MovementInfo const &playerPos = session.GetPosition();
-  MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  if (!IsWithinMeleeRangeAgainstNpc(playerPos.x, playerPos.y, playerPos.z, vis.x, vis.y,
-                                      vis.z)) {
+  (void)runtime;
+  (void)now;
+  MovementInfo const &creaturePos = creature.GetPosition();
+  if (!IsWithinMeleeRangeAgainstNpc(playerPos.x, playerPos.y, playerPos.z, creaturePos.x,
+                                    creaturePos.y, creaturePos.z)) {
     return false;
   }
-  return HasClearMeleeLineOfSight(session.GetMapId(), vis.x, vis.y, vis.z, playerPos.x,
-                                  playerPos.y, playerPos.z);
+  return HasClearMeleeLineOfSight(session.GetMapId(), creaturePos.x, creaturePos.y,
+                                  creaturePos.z, playerPos.x, playerPos.y, playerPos.z);
 }
 
 bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const &creature,
                                     WorldSession::CreatureCombatRuntime const &runtime,
                                     std::chrono::steady_clock::time_point now) {
-  MovementInfo const &pos = session.GetPosition();
-  MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  return IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, vis.x, vis.y, vis.z);
+  (void)runtime;
+  (void)now;
+  return SessionPlayerInMeleeRangeOfNpc(session, creature);
 }
 
 /// Advances server position along the client-aligned spline timeline.

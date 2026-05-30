@@ -794,7 +794,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   (void)origin;
   auto collision = WorldService::Instance().GetCollisionQueries();
   if (!collision) {
-    LOG_ERROR("MMAP: collision service is not configured.");
+    LOG_MMAP_ERROR("MMAP: collision service is not configured.");
     session->SendNotification("MMAP: collision service is not configured.");
     return true;
   }
@@ -804,7 +804,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   uint64_t const playerGuid = session->GetActiveCharacterObjectGuid();
   auto map = WorldService::Instance().GetMap(mapId);
 
-  LOG_DEBUG("MMAP request: playerGuid={} mapId={} args={}", playerGuid, mapId,
+  LOG_MMAP_DEBUG("MMAP request: playerGuid={} mapId={} args={}", playerGuid, mapId,
             args.empty() ? std::string("<target>") : JoinArgs(args.begin(), args.end()));
 
   if (!args.empty()) {
@@ -841,7 +841,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
 
   // .mmap clear — remove visual markers
   if (!args.empty() && args[0] == "clear") {
-    LOG_DEBUG("MMAP clear: playerGuid={} mapId={}", playerGuid, mapId);
+    LOG_MMAP_DEBUG("MMAP clear: playerGuid={} mapId={}", playerGuid, mapId);
     ClearMmapMarkers(session, playerGuid, mapId);
     session->SendNotification("MMAP: visual markers removed.");
     return true;
@@ -863,7 +863,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
                                IsAllDigitAscii(pathArgs[0].empty() ? std::string() : pathArgs[0]);
       if (pathArgs.size() < 3) {
         if (!IsMmapSubcommand(args[0], "path")) {
-          LOG_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
+          LOG_MMAP_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
                    playerGuid, mapId, pathArgs.size());
           session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap path  |  .mmap loc  |  .mmap stats  |  .mmap loadedtiles  |  .mmap testarea  |  .mmap clear");
           return false;
@@ -888,7 +888,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
             pathLabel = std::string("creature(") + std::to_string(creature->GetEntry()) +
                         ") -> you";
             checkPath = true;
-            LOG_DEBUG("MMAP target creature resolved: playerGuid={} targetGuid={} entry={} mapId={}",
+            LOG_MMAP_DEBUG("MMAP target creature resolved: playerGuid={} targetGuid={} entry={} mapId={}",
                       playerGuid, targetGuid, creature->GetEntry(), mapId);
           }
         }
@@ -897,14 +897,14 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
         }
       }
       if (!checkPath && pathArgs.size() >= 3 && !numericArgs) {
-        LOG_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
+        LOG_MMAP_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
                  playerGuid, mapId, pathArgs.size());
         session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap path  |  .mmap loc  |  .mmap stats  |  .mmap loadedtiles  |  .mmap testarea  |  .mmap clear");
         return false;
       }
     }
   } catch (std::exception const &) {
-    LOG_ERROR("MMAP invalid coordinates parse error: playerGuid={} mapId={} args={}",
+    LOG_MMAP_ERROR("MMAP invalid coordinates parse error: playerGuid={} mapId={} args={}",
               playerGuid, mapId,
               pathArgs.empty() ? std::string("<target>") : JoinArgs(pathArgs.begin(), pathArgs.end()));
     session->SendNotification("MMAP: invalid coordinates.");
@@ -912,7 +912,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   }
 
   bool const available = collision->IsNavMeshDataAvailable(mapId);
-  LOG_DEBUG("MMAP navmesh availability: mapId={} available={}", mapId, available);
+  LOG_MMAP_DEBUG("MMAP navmesh availability: mapId={} available={}", mapId, available);
   float const height = collision->GetHeight(mapId, playerPos.x, playerPos.y, playerPos.z);
   std::ostringstream head;
   head << "MMAP map=" << mapId << " navmesh=" << (available ? "loaded" : "missing")
@@ -935,7 +935,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   req.allowPartialPath = true;
 
   FindPathResult result = collision->FindPath(req);
-  LOG_DEBUG("MMAP path result: mapId={} status={} waypoints={}", mapId,
+  LOG_MMAP_DEBUG("MMAP path result: mapId={} status={} waypoints={}", mapId,
             FindPathStatusName(result.status), result.waypoints.size());
   std::ostringstream path;
   path << "MMAP path " << FormatVec3(startPos) << " -> "
@@ -975,7 +975,7 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
       SendMmapMarkerCreate(session, mapId, markerGuid,
                            Vec3{wp.x, wp.y, z}, kMarkerEntry,
                            kMarkerDisplayId, Creature::kDefaultFactionTemplate);
-      LOG_TRACE("MMAP marker spawn: mapId={} guid={} wpIndex={} pos=({}, {}, {})",
+      LOG_MMAP_TRACE("MMAP marker spawn: mapId={} guid={} wpIndex={} pos=({}, {}, {})",
                 mapId, markerGuid, i, wp.x, wp.y, z);
       markers.emplace_back(markerGuid, now);
     }

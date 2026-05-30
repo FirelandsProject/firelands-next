@@ -46,23 +46,23 @@ inline bool IsWithinMeleeRange3d(float ax, float ay, float az, float bx, float b
   return std::fabs(az - bz) <= kMeleeMaxVerticalSlopYards;
 }
 
-/// Melee vs a creature: same Cataclysm reach formula plus NPC position-sync tolerance.
+/// Melee vs a creature: strict contact range, tuned to avoid long-distance hits.
 inline bool IsWithinMeleeRangeAgainstNpc(float playerX, float playerY, float playerZ,
-                                         float creatureX, float creatureY,
-                                         float creatureZ,
-                                         float attackerCombatReachYards =
-                                             kDefaultUnitCombatReachYards,
-                                         float victimCombatReachYards =
-                                             kDefaultUnitCombatReachYards) {
-  float const maxYards =
-      MeleeRangeMaxYards(attackerCombatReachYards, victimCombatReachYards) +
-      kNpcMeleePositionSyncToleranceYards;
+                     float creatureX, float creatureY,
+                     float creatureZ,
+                     float attackerCombatReachYards =
+                       kDefaultUnitCombatReachYards,
+                     float victimCombatReachYards =
+                       kDefaultUnitCombatReachYards) {
+  (void)attackerCombatReachYards;
+  (void)victimCombatReachYards;
+  float const maxYards = kBaseMeleeRangeYards + kMeleeRangeSlopYards;
   float const maxSq = maxYards * maxYards;
   float const dx = playerX - creatureX;
   float const dy = playerY - creatureY;
   if ((dx * dx + dy * dy) > maxSq)
     return false;
-  return std::fabs(playerZ - creatureZ) <= kNpcMeleeMaxVerticalSlopYards;
+  return std::fabs(playerZ - creatureZ) <= kMeleeMaxVerticalSlopYards;
 }
 
 } // namespace Firelands

@@ -31,6 +31,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -74,10 +75,12 @@ struct LoggerConfig {
   bool enableConsole = true;
   bool enableFile = false;
   std::string filePath = "firelands.log";
+  std::string mmapFilePath;
   std::size_t maxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
   std::size_t maxFiles = 5;
   LogLevel consoleLevel = LogLevel::Info;
   LogLevel fileLevel = LogLevel::Debug;
+  LogLevel mmapFileLevel = LogLevel::Debug;
 
   // Console: compact + colored level emoji, time only (no date noise)
   // Example: [23:18:34] [💬]  Starting Authentication Server...
@@ -279,6 +282,36 @@ public:
     spdlogger_->critical(fmt, std::forward<Args>(args)...);
   }
 
+  template <typename... Args>
+  void MmapTrace(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->trace(fmt, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  void MmapDebug(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->debug(fmt, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  void MmapInfo(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->info(fmt, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  void MmapWarn(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->warn(fmt, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  void MmapError(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->error(fmt, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  void MmapCritical(spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    mmapSpdlogger_->critical(fmt, std::forward<Args>(args)...);
+  }
+
   // ── Runtime configuration ─────────────────────────────────────────────
 
   /**
@@ -298,6 +331,11 @@ public:
    */
   [[nodiscard]] std::shared_ptr<spdlog::logger> GetSpdLogger() const noexcept {
     return spdlogger_;
+  }
+
+  [[nodiscard]] std::shared_ptr<spdlog::logger> GetMmapSpdLogger() const
+      noexcept {
+    return mmapSpdlogger_;
   }
 
   /// Console sink pattern from the active `LoggerConfig` (for TUI mirroring).
@@ -343,9 +381,35 @@ private:
     spdlogger_->flush_on(spdlog::level::err);
 
     spdlog::register_logger(spdlogger_);
+
+    std::string mmapFilePath = config.mmapFilePath;
+    if (mmapFilePath.empty()) {
+      std::filesystem::path basePath(config.filePath);
+      if (basePath.has_filename()) {
+        std::filesystem::path mmapPath = basePath;
+        mmapPath.replace_filename(basePath.stem().string() + "-mmap" +
+                                   basePath.extension().string());
+        mmapFilePath = mmapPath.string();
+      } else {
+        mmapFilePath = "logs/firelands-mmap.log";
+      }
+    }
+
+    auto mmapSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+        mmapFilePath, config.maxFileSizeBytes, config.maxFiles);
+    mmapSink->set_level(
+        static_cast<spdlog::level::level_enum>(config.mmapFileLevel));
+    mmapSink->set_pattern(config.filePattern);
+
+    mmapSpdlogger_ = std::make_shared<spdlog::logger>(config.name + ".mmap",
+                                                      mmapSink);
+    mmapSpdlogger_->set_level(spdlog::level::trace);
+    mmapSpdlogger_->flush_on(spdlog::level::err);
+    spdlog::register_logger(mmapSpdlogger_);
   }
 
   std::shared_ptr<spdlog::logger> spdlogger_;
+  std::shared_ptr<spdlog::logger> mmapSpdlogger_;
   std::string console_pattern_;
   static std::unique_ptr<Logger> instance_;
 };
@@ -365,5 +429,11 @@ inline std::unique_ptr<Logger> Logger::instance_ = nullptr;
 #define LOG_WARN(...) ::Firelands::Logger::Get().Warn(__VA_ARGS__)
 #define LOG_ERROR(...) ::Firelands::Logger::Get().Error(__VA_ARGS__)
 #define LOG_CRITICAL(...) ::Firelands::Logger::Get().Critical(__VA_ARGS__)
+#define LOG_MMAP_TRACE(...) ::Firelands::Logger::Get().MmapTrace(__VA_ARGS__)
+#define LOG_MMAP_DEBUG(...) ::Firelands::Logger::Get().MmapDebug(__VA_ARGS__)
+#define LOG_MMAP_INFO(...) ::Firelands::Logger::Get().MmapInfo(__VA_ARGS__)
+#define LOG_MMAP_WARN(...) ::Firelands::Logger::Get().MmapWarn(__VA_ARGS__)
+#define LOG_MMAP_ERROR(...) ::Firelands::Logger::Get().MmapError(__VA_ARGS__)
+#define LOG_MMAP_CRITICAL(...) ::Firelands::Logger::Get().MmapCritical(__VA_ARGS__)
 
 #endif // FIRELANDS_SHARED_LOGGER_H

@@ -69,7 +69,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
 
   FILE* file = fopen(fileName.c_str(), "rb");
   if (!file) {
-    LOG_DEBUG("MMAP tile missing: mapId={} tileX={} tileY={} path={}", mapId,
+    LOG_MMAP_DEBUG("MMAP tile missing: mapId={} tileX={} tileY={} path={}", mapId,
               tileX, tileY, fileName);
     return false;
   }
@@ -79,7 +79,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   fseek(file, 0, SEEK_SET);
 
   if (fileSize < static_cast<long>(sizeof(MmapTileHeader) + sizeof(dtMeshHeader))) {
-    LOG_ERROR("MMAP tile too small: mapId={} tileX={} tileY={} path={} size={}",
+    LOG_MMAP_ERROR("MMAP tile too small: mapId={} tileX={} tileY={} path={} size={}",
               mapId, tileX, tileY, fileName, fileSize);
     fclose(file);
     return false;
@@ -91,7 +91,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
 
   if (readSize != static_cast<size_t>(fileSize))
   {
-    LOG_ERROR("MMAP tile short read: mapId={} tileX={} tileY={} path={} read={} size={}",
+    LOG_MMAP_ERROR("MMAP tile short read: mapId={} tileX={} tileY={} path={} read={} size={}",
               mapId, tileX, tileY, fileName, readSize, fileSize);
     return false;
   }
@@ -102,7 +102,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
       mmapHeader->dtVersion != DT_NAVMESH_VERSION ||
       mmapHeader->mmapSize == 0 ||
       sizeof(MmapTileHeader) + mmapHeader->mmapSize > data.size()) {
-    LOG_ERROR("MMAP tile header invalid: mapId={} tileX={} tileY={} path={} magic={} version={} mmapSize={} dataSize={}",
+    LOG_MMAP_ERROR("MMAP tile header invalid: mapId={} tileX={} tileY={} path={} magic={} version={} mmapSize={} dataSize={}",
               mapId, tileX, tileY, fileName, mmapHeader->mmapMagic,
               mmapHeader->dtVersion, mmapHeader->mmapSize, data.size());
     return false;
@@ -112,7 +112,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   dtMeshHeader const* header =
       reinterpret_cast<dtMeshHeader const*>(tilePayload);
   if (header->magic != DT_NAVMESH_MAGIC || header->version != DT_NAVMESH_VERSION) {
-    LOG_ERROR("MMAP tile nav header invalid: mapId={} tileX={} tileY={} path={} magic={} version={}",
+    LOG_MMAP_ERROR("MMAP tile nav header invalid: mapId={} tileX={} tileY={} path={} magic={} version={}",
               mapId, tileX, tileY, fileName, header->magic, header->version);
     return false;
   }
@@ -120,7 +120,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   auto* tileData =
       static_cast<unsigned char*>(dtAlloc(mmapHeader->mmapSize, DT_ALLOC_PERM));
   if (!tileData) {
-    LOG_ERROR("MMAP tile alloc failed: mapId={} tileX={} tileY={} size={}",
+    LOG_MMAP_ERROR("MMAP tile alloc failed: mapId={} tileX={} tileY={} size={}",
               mapId, tileX, tileY, mmapHeader->mmapSize);
     return false;
   }
@@ -129,7 +129,7 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
   dtStatus status = navMesh->addTile(tileData, static_cast<int>(mmapHeader->mmapSize),
                                      DT_TILE_FREE_DATA, 0, nullptr);
   if (dtStatusFailed(status)) {
-    LOG_ERROR("MMAP tile add failed: mapId={} tileX={} tileY={} status=0x{:x}",
+    LOG_MMAP_ERROR("MMAP tile add failed: mapId={} tileX={} tileY={} status=0x{:x}",
               mapId, tileX, tileY, static_cast<unsigned int>(status));
     dtFree(tileData);
   }
@@ -151,7 +151,7 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
   // DT_INVALID_PARAM.
   params.maxPolys = 1024;
 
-  LOG_DEBUG("MMAP navmesh init params: mapId={} origin=({}, {}, {}) tileSize={} maxTiles={} maxPolys={}",
+  LOG_MMAP_DEBUG("MMAP navmesh init params: mapId={} origin=({}, {}, {}) tileSize={} maxTiles={} maxPolys={}",
             mapId, params.orig[0], params.orig[1], params.orig[2], params.tileWidth,
             params.maxTiles, params.maxPolys);
 
@@ -161,10 +161,10 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
 
   dtStatus status = navMesh->init(&params);
   if (dtStatusFailed(status)) {
-    LOG_ERROR("MMAP navmesh init failed: mapId={} status=0x{:x}", mapId,
+    LOG_MMAP_ERROR("MMAP navmesh init failed: mapId={} status=0x{:x}", mapId,
               static_cast<unsigned int>(status));
     if (dtStatusDetail(status, DT_INVALID_PARAM)) {
-      LOG_ERROR("MMAP navmesh init detail: invalid params for mapId={} maxTiles={} maxPolys={}",
+      LOG_MMAP_ERROR("MMAP navmesh init detail: invalid params for mapId={} maxTiles={} maxPolys={}",
                 mapId, params.maxTiles, params.maxPolys);
     }
     dtFreeNavMesh(navMesh);
@@ -184,7 +184,7 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
   }
 
   if (!anyTileLoaded) {
-    LOG_WARN("MMAP navmesh load skipped: no tiles found for mapId={}", mapId);
+    LOG_MMAP_WARN("MMAP navmesh load skipped: no tiles found for mapId={}", mapId);
     dtFreeNavMesh(navMesh);
     return false;
   }
@@ -197,7 +197,7 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
 
   status = navQuery->init(navMesh, _config.maxNavMeshNodes);
   if (dtStatusFailed(status)) {
-    LOG_ERROR("MMAP navmesh query init failed: mapId={} status=0x{:x}", mapId,
+    LOG_MMAP_ERROR("MMAP navmesh query init failed: mapId={} status=0x{:x}", mapId,
               static_cast<unsigned int>(status));
     dtFreeNavMeshQuery(navQuery);
     dtFreeNavMesh(navMesh);
@@ -330,7 +330,7 @@ FindPathResult DetourNavMeshManager::FindPath(
   dtStatus status = navQuery->findNearestPoly(
       startPos, searchExtents, &filter, &startRef, startNearest);
   if (dtStatusFailed(status) || startRef == 0) {
-    LOG_DEBUG("MMAP path start not found: mapId={} start=({}, {}, {}) status=0x{:x}",
+    LOG_MMAP_DEBUG("MMAP path start not found: mapId={} start=({}, {}, {}) status=0x{:x}",
               req.mapId, req.startX, req.startY, req.startZ,
               static_cast<unsigned int>(status));
     result.status = FindPathStatus::NoPath;
@@ -340,7 +340,7 @@ FindPathResult DetourNavMeshManager::FindPath(
   status = navQuery->findNearestPoly(endPos, searchExtents, &filter,
                                      &endRef, endNearest);
   if (dtStatusFailed(status) || endRef == 0) {
-    LOG_DEBUG("MMAP path end not found: mapId={} end=({}, {}, {}) status=0x{:x}",
+    LOG_MMAP_DEBUG("MMAP path end not found: mapId={} end=({}, {}, {}) status=0x{:x}",
               req.mapId, req.endX, req.endY, req.endZ,
               static_cast<unsigned int>(status));
     result.status = FindPathStatus::NoPath;
@@ -359,7 +359,7 @@ FindPathResult DetourNavMeshManager::FindPath(
                               &filter, pathPolys, &pathCount,
                               maxPathPolys);
   if (dtStatusFailed(status) || pathCount == 0) {
-    LOG_DEBUG("MMAP path failed: mapId={} pathCount={} status=0x{:x}", req.mapId,
+    LOG_MMAP_DEBUG("MMAP path failed: mapId={} pathCount={} status=0x{:x}", req.mapId,
               pathCount, static_cast<unsigned int>(status));
     result.status = FindPathStatus::NoPath;
     return result;
@@ -370,7 +370,7 @@ FindPathResult DetourNavMeshManager::FindPath(
       straightPathFlags, straightPathPolys, &straightPathCount,
       maxPathPolys, 0);
   if (dtStatusFailed(status) || straightPathCount == 0) {
-    LOG_DEBUG("MMAP straight path failed: mapId={} straightCount={} status=0x{:x}",
+    LOG_MMAP_DEBUG("MMAP straight path failed: mapId={} straightCount={} status=0x{:x}",
               req.mapId, straightPathCount, static_cast<unsigned int>(status));
     result.status = FindPathStatus::NoPath;
     return result;
