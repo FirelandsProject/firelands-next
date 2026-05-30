@@ -31,6 +31,7 @@ public:
   void UnloadMapNavMesh(uint32_t mapId);
   bool IsNavMeshLoaded(uint32_t mapId) const;
   bool HasDataRoot() const { return !_dataRoot.empty(); }
+  std::string const& GetDataRoot() const { return _dataRoot; }
 
   FindPathResult FindPath(FindPathRequest const& req) const;
 

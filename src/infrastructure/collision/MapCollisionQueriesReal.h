@@ -3,6 +3,7 @@
 
 #include <application/ports/IMapCollisionQueries.h>
 #include <infrastructure/collision/DetourNavMeshManager.h>
+#include <infrastructure/collision/VMapManager2.h>
 #include <memory>
 #include <string>
 
@@ -22,6 +23,7 @@ public:
 
 private:
   mutable DetourNavMeshManager _navMeshManager;
+  mutable VMapManager2 _vmapManager;
 };
 
 } // namespace Firelands

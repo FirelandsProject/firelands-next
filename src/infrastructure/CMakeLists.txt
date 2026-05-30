@@ -65,6 +65,8 @@ add_library(FirelandsInfrastructure STATIC
     world/MapCollisionQueriesStub.cpp
     collision/DetourNavMeshManager.cpp
     collision/MapCollisionQueriesReal.cpp
+    collision/VMapManager2.cpp
+    collision/WorldModelRuntime.cpp
 )
 
 set_source_files_properties(scripting/LuaGameScriptHost.cpp
