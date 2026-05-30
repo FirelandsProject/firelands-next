@@ -374,8 +374,25 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   // Home splines already track a grounded point.
   float const targetZRaw = targetZ;
   if (collisionQueries && !returnHomeSpline) {
-    targetZ = collisionQueries->GetHeight(map->GetMapId(), targetX, targetY,
-                                          from.z);
+    float const projected = collisionQueries->GetHeight(map->GetMapId(),
+                                                         targetX, targetY,
+                                                         from.z);
+    // If the navmesh ground is wildly different from the creature's current Z
+    // (>15y), the .mmtile data is likely corrupted at this column. Fall back
+    // to from.z so the creature keeps its current footing instead of being
+    // teleported onto a ghost poly.
+    constexpr float kMaxProjectionDriftYards = 15.0f;
+    if (std::fabs(projected - from.z) > kMaxProjectionDriftYards) {
+      LOG_MMAP_WARN(
+          "CHASE rejecting navmesh target projection: mapId={} creatureGuid={} "
+          "targetXY=({}, {}) navmeshZ={} fromZ={} delta={} -- using fromZ as "
+          "fallback (likely corrupted .mmtile)",
+          map->GetMapId(), creature->GetGuid(), targetX, targetY, projected,
+          from.z, projected - from.z);
+      targetZ = from.z;
+    } else {
+      targetZ = projected;
+    }
     LOG_MMAP_DEBUG(
         "CHASE ground-project target: mapId={} creatureGuid={} from=({}, {}, {}) "
         "targetXY=({}, {}) targetZ_raw={} targetZ_grounded={} delta={}",
@@ -413,9 +430,26 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   // or 2D-only waypoint), keep the broadcast position on the navmesh floor.
   if (collisionQueries && !returnHomeSpline) {
     float const preClampZ = projected.position.z;
-    projected.position.z = collisionQueries->GetHeight(
+    float groundZ = collisionQueries->GetHeight(
         map->GetMapId(), projected.position.x, projected.position.y,
         projected.position.z);
+    // Safety net for corrupted navmesh tiles: if the resolved ground would
+    // teleport the creature more than 5 yards vertically in a single tick,
+    // ignore the navmesh value and keep the creature anchored at its current
+    // Z. WoW terrain rarely changes more than 5y per step horizontally, so
+    // this only kicks in when the .mmtile data is wrong.
+    constexpr float kMaxVerticalStepYards = 5.0f;
+    if (std::fabs(groundZ - from.z) > kMaxVerticalStepYards) {
+      LOG_MMAP_WARN(
+          "CHASE rejecting navmesh ground jump: mapId={} creatureGuid={} "
+          "step=({}, {}, {}) navmeshZ={} fromZ={} delta={} -- using fromZ as "
+          "fallback (likely corrupted .mmtile)",
+          map->GetMapId(), creature->GetGuid(), projected.position.x,
+          projected.position.y, projected.position.z, groundZ, from.z,
+          groundZ - from.z);
+      groundZ = from.z;
+    }
+    projected.position.z = groundZ;
     LOG_MMAP_DEBUG(
         "CHASE ground-clamp step: mapId={} creatureGuid={} step=({}, {}, {}) "
         "preClampZ={} clampedZ={} delta={} moved={} inStopRange={}",
