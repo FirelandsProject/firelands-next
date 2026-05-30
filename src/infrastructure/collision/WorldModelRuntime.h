@@ -37,6 +37,9 @@ public:
                      float maxDist, float& hitDist) const;
   float GetHeightAt(float x, float y) const;
   AaBox3 const& GetBounds() const { return _bound; }
+  bool RayTriangleIntersect(Vec3 const& orig, Vec3 const& dir,
+                            Vec3 const& v0, Vec3 const& v1,
+                            Vec3 const& v2, float& t) const;
 
 private:
   AaBox3 _bound;
@@ -44,9 +47,6 @@ private:
   uint32_t _groupWMOID = 0;
   std::vector<Vec3> _vertices;
   std::vector<MeshTriangle> _triangles;
-  bool RayTriangleIntersect(Vec3 const& orig, Vec3 const& dir,
-                            Vec3 const& v0, Vec3 const& v1,
-                            Vec3 const& v2, float& t) const;
 };
 
 class WorldModelRuntime {

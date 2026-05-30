@@ -229,17 +229,22 @@ FindPathResult DetourNavMeshManager::FindPath(
   dtPolyRef endRef = 0;
   float startNearest[3]{};
   float endNearest[3]{};
+  float const startPos[3] = {req.startX, req.startY, req.startZ};
+  float const endPos[3] = {req.endX, req.endY, req.endZ};
+
+  dtQueryFilter filter;
+  filter.setIncludeFlags(0xFFFF);
+  filter.setExcludeFlags(0);
 
   dtStatus status = navQuery->findNearestPoly(
-      &req.startX, &req.startY, &req.startZ, searchExtents, nullptr, &startRef,
-      startNearest);
+      startPos, searchExtents, &filter, &startRef, startNearest);
   if (dtStatusFailed(status) || startRef == 0) {
     result.status = FindPathStatus::NoPath;
     return result;
   }
 
-  status = navQuery->findNearestPoly(&req.endX, &req.endY, &req.endZ,
-                                     searchExtents, nullptr, &endRef, endNearest);
+  status = navQuery->findNearestPoly(endPos, searchExtents, &filter,
+                                     &endRef, endNearest);
   if (dtStatusFailed(status) || endRef == 0) {
     result.status = FindPathStatus::NoPath;
     return result;
@@ -251,10 +256,6 @@ FindPathResult DetourNavMeshManager::FindPath(
   unsigned char straightPathFlags[256];
   dtPolyRef straightPathPolys[256];
   int straightPathCount = 0;
-
-  dtQueryFilter filter;
-  filter.setIncludeFlags(0xFFFF);
-  filter.setExcludeFlags(0);
 
   status = navQuery->findPath(startRef, endRef, startNearest, endNearest,
                               &filter, pathPolys, &pathCount,

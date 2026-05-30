@@ -347,7 +347,7 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   bool const useNavMesh =
       collisionQueries && collisionQueries->IsNavMeshDataAvailable(map->GetMapId());
 
-  CreatureChaseStepResult projected;
+  application::combat::CreatureChaseStepResult projected;
   if (useNavMesh && !returnHomeSpline) {
     projected = application::combat::StepCreatureAlongNavMeshPath(
         from, targetX, targetY, targetZ, kCreatureSplineHorizonSeconds, config,

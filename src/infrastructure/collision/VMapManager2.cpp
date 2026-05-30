@@ -58,10 +58,10 @@ struct VMapManager2::LoadedTile {
     tileX = tx;
     tileY = ty;
 
-    std::string tilePath = std::filesystem::path(dataRoot) / "vmaps" /
-                           (std::to_string(mapId) + "_" +
-                            std::to_string(tileY) + "_" +
-                            std::to_string(tileX) + ".vmtile");
+    std::string tilePath = (std::filesystem::path(dataRoot) / "vmaps" /
+                            (std::to_string(mapId) + "_" +
+                             std::to_string(tileY) + "_" +
+                             std::to_string(tileX) + ".vmtile")).string();
 
     auto tileData = ReadEntireFile(tilePath);
     if (tileData.size() < 12)
@@ -117,8 +117,8 @@ struct VMapManager2::LoadedTile {
     for (auto const& sp : spawns) {
       if (sp.name.empty())
         continue;
-      std::string modelPath = std::filesystem::path(dataRoot) / "vmaps" /
-                              (sp.name + ".vmo");
+      std::string modelPath = (std::filesystem::path(dataRoot) / "vmaps" /
+                               (sp.name + ".vmo")).string();
       auto modelData = ReadEntireFile(modelPath);
       if (modelData.empty())
         continue;
@@ -144,8 +144,8 @@ struct VMapManager2::LoadedMap {
     mapId = id;
     dataRoot = root;
 
-    std::string treePath = std::filesystem::path(dataRoot) / "vmaps" /
-                           (std::to_string(mapId) + ".vmtree");
+    std::string treePath = (std::filesystem::path(dataRoot) / "vmaps" /
+                            (std::to_string(mapId) + ".vmtree")).string();
     auto treeData = ReadEntireFile(treePath);
     if (treeData.size() < 16)
       return false;
