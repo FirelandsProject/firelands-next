@@ -74,6 +74,24 @@ DetourNavMeshManager::~DetourNavMeshManager() {
   _loadedMaps.clear();
 }
 
+namespace {
+// Path to the extractor's .map file for (mapId, tileX, tileY). Uses the WoW
+// ADT naming convention: <3-digit mapId><2-digit tileY><2-digit tileX>.map.
+std::filesystem::path MapFilePath(std::string const& dataRoot, uint32_t mapId,
+                                  uint32_t tileX, uint32_t tileY) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%03u%02u%02u.map", mapId, tileY, tileX);
+  return std::filesystem::path(dataRoot) / "maps" / buf;
+}
+
+bool MapTileExistsOnDisk(std::string const& dataRoot, uint32_t mapId,
+                         uint32_t tileX, uint32_t tileY) {
+  std::error_code ec;
+  return std::filesystem::exists(
+      MapFilePath(dataRoot, mapId, tileX, tileY), ec);
+}
+} // namespace
+
 bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
                                          uint32_t tileY,
                                          dtNavMesh* navMesh) const {
@@ -86,8 +104,15 @@ bool DetourNavMeshManager::ReadMmapTile(uint32_t mapId, uint32_t tileX,
 
   FILE* file = fopen(fileName.c_str(), "rb");
   if (!file) {
-    LOG_MMAP_DEBUG("MMAP tile missing: mapId={} tileX={} tileY={} path={}", mapId,
-              tileX, tileY, fileName);
+    // Only complain when the source .map exists. If there's no .map either,
+    // this tile is genuinely off-continent (ocean / void) and the generator
+    // was never expected to produce an .mmtile for it.
+    if (MapTileExistsOnDisk(_dataRoot, mapId, tileX, tileY)) {
+      LOG_MMAP_WARN(
+          "MMAP tile missing but .map present (generator likely failed for "
+          "this tile): mapId={} tileX={} tileY={} path={}",
+          mapId, tileX, tileY, fileName);
+    }
     return false;
   }
 
@@ -196,16 +221,28 @@ bool DetourNavMeshManager::LoadMapNavMesh(uint32_t mapId) {
   }
 
   bool anyTileLoaded = false;
+  uint32_t expectedTiles = 0;
   MapNavMesh loadedEntry;
   loadedEntry.navMesh = navMesh;
   for (uint32_t ty = 0; ty < kTileCountPerAxis; ++ty) {
     for (uint32_t tx = 0; tx < kTileCountPerAxis; ++tx) {
+      bool const hasMap = MapTileExistsOnDisk(_dataRoot, mapId, tx, ty);
+      if (hasMap)
+        ++expectedTiles;
       if (ReadMmapTile(mapId, tx, ty, navMesh)) {
         anyTileLoaded = true;
         loadedEntry.loadedTiles.emplace_back(tx, ty);
       }
     }
   }
+
+  LOG_MMAP_INFO(
+      "MMAP navmesh tile load summary: mapId={} loaded={} expected(.map)={} "
+      "missing={}",
+      mapId, loadedEntry.loadedTiles.size(), expectedTiles,
+      expectedTiles > loadedEntry.loadedTiles.size()
+          ? expectedTiles - static_cast<uint32_t>(loadedEntry.loadedTiles.size())
+          : 0u);
 
   if (!anyTileLoaded) {
     LOG_MMAP_WARN("MMAP navmesh load skipped: no tiles found for mapId={}", mapId);
