@@ -1021,27 +1021,44 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
   ClearMmapMarkers(session, playerGuid, mapId);
 
   if (!result.waypoints.empty()) {
+    // Tauren female-ish display: tall, neutral, easy to spot from camera.
     constexpr uint32_t kMarkerDisplayId = 11686u;
     constexpr uint32_t kMarkerEntry = 1u;
+    // Float the marker well above a player model so it's visible even when
+    // start ≈ end and the waypoint lands inside the caster or the target.
+    constexpr float kMarkerVisualLiftYards = 3.0f;
     auto const now = std::chrono::steady_clock::now();
     std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>> markers;
     markers.reserve(result.waypoints.size());
 
     for (size_t i = 0; i < result.waypoints.size(); ++i) {
       auto const &wp = result.waypoints[i];
-      float const z = wp.z + 1.0f;
+      // Re-ground each waypoint Z before placing the marker. Detour's
+      // findStraightPath returns Z from the navmesh corridor, and on
+      // corrupted/ghost mmtiles that Z can be tens of yards above the real
+      // floor. Anchoring to the live GetHeight (which goes through the
+      // floor-under-(x,y) query) keeps markers visible on the ground.
+      float const groundZ =
+          collision->GetHeight(mapId, wp.x, wp.y, wp.z);
+      float const z = groundZ + kMarkerVisualLiftYards;
       uint64_t const markerGuid = AllocateMmapMarkerGuid(kMarkerEntry);
       SendMmapMarkerCreate(session, mapId, markerGuid,
                            Vec3{wp.x, wp.y, z}, kMarkerEntry,
                            kMarkerDisplayId, Creature::kDefaultFactionTemplate);
-      LOG_MMAP_TRACE("MMAP marker spawn: mapId={} guid={} wpIndex={} pos=({}, {}, {})",
-                mapId, markerGuid, i, wp.x, wp.y, z);
+      LOG_MMAP_DEBUG(
+          "MMAP marker spawn: mapId={} guid={} wpIndex={} wp=({}, {}, {}) "
+          "groundZ={} placedZ={}",
+          mapId, markerGuid, i, wp.x, wp.y, wp.z, groundZ, z);
       markers.emplace_back(markerGuid, now);
     }
     _mmapMarkers[playerGuid] = std::move(markers);
     session->SendNotification("MMAP: " +
                               std::to_string(result.waypoints.size()) +
                               " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
+  } else {
+    session->SendNotification(
+        "MMAP: no waypoints to mark (start and end resolved to the same "
+        "navmesh point).");
   }
   return true;
 }
