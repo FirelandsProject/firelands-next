@@ -6,6 +6,7 @@ add_library(FirelandsInfrastructure STATIC
     dbc/SpellEntryDbcStore.cpp
     persistence/MySqlAccountRepository.cpp
     persistence/MySqlRbacRepository.cpp
+    persistence/MySqlCommandDefinitionRepository.cpp
     persistence/MySqlAccountDataRepository.cpp
     persistence/MySqlRealmRepository.cpp
     persistence/MySqlCharacterRepository.cpp

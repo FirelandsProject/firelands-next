@@ -30,6 +30,7 @@
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlRbacRepository.h>
+#include <infrastructure/persistence/MySqlCommandDefinitionRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
@@ -173,7 +174,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     auto gmTicketService =
         std::make_shared<GmTicketService>(gmTicketRepo, charService);
     auto commandService = std::make_shared<CommandService>(
-        onlineCharRegistry, accountRepo, charService, gmTicketService, rbacRepo);
+        onlineCharRegistry, accountRepo, charService, gmTicketService, rbacRepo,
+        std::make_shared<MySqlCommandDefinitionRepository>(worldConn));
+    commandService->LoadCommandsFromDb();
 
     auto languagesDbc = std::make_shared<LanguagesDbc>();
     if (!languagesDbc->Load(dbcBasePath + "/Languages.dbc")) {

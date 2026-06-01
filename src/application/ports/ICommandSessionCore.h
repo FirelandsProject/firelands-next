@@ -36,6 +36,7 @@ public:
   virtual void SendPacket(WorldPacket &packet) { (void)packet; }
   virtual uint64_t GetClientSelectionGuid() const { return 0; }
   virtual uint64_t GetActiveCharacterObjectGuid() const { return 0; }
+  virtual AccessLevel GetAccountAccessLevel() const { return AccessLevel::Player; }
 };
 
 } // namespace Firelands

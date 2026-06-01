@@ -5,8 +5,9 @@
 #include <application/services/CharacterService.h>
 #include <application/services/WorldService.h>
 #include <application/logic/CreatureSpawnLogic.h>
-#include <domain/repositories/INpcTemplateSearchRepository.h>
 #include <domain/models/Character.h>
+#include <domain/repositories/INpcTemplateSearchRepository.h>
+#include <domain/repositories/ICommandDefinitionRepository.h>
 #include <domain/world/Creature.h>
 #include <domain/world/Map.h>
 #include <application/services/SRPService.h>
@@ -34,6 +35,7 @@
 #include <limits>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 
 namespace Firelands {
 
@@ -510,6 +512,11 @@ static void SendMmapMarkerCreate(std::shared_ptr<ICommandSession> const &session
 static void SendMmapMarkerDespawn(std::shared_ptr<ICommandSession> const &session,
                                   uint32_t mapId, uint64_t markerGuid) {
   WorldService::Instance().RemoveCreatureFromMap(mapId, markerGuid);
+  // The background sweep may run when the player is offline: still remove the
+  // creature from the map, but only push the out-of-range packet if a session is
+  // there to receive it.
+  if (!session)
+    return;
   UpdateData update(static_cast<uint16>(mapId));
   update.AddOutOfRangeObjects({markerGuid});
   WorldPacket pkt(SMSG_UPDATE_OBJECT);
@@ -583,144 +590,103 @@ CommandService::CommandService(
     std::shared_ptr<IAccountRepository> accountRepo,
     std::shared_ptr<CharacterService> characterService,
     std::shared_ptr<GmTicketService> gmTicketService,
-    std::shared_ptr<IRbacRepository> rbacRepo)
+    std::shared_ptr<IRbacRepository> rbacRepo,
+    std::shared_ptr<ICommandDefinitionRepository> commandDefRepo)
     : _onlineCharacters(std::move(onlineCharacters)),
       _accountRepo(std::move(accountRepo)),
       _characterService(std::move(characterService)),
       _gmTicketService(std::move(gmTicketService)),
-      _rbacRepo(std::move(rbacRepo)) {
-  RegisterCommand("gps", {[this](auto s, auto a, auto o) { return HandleGps(s, a, o); },
-                          ToMask(Permission::CommandGps), CommandAvailability::Both,
-                          ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand("mmap", {[this](auto s, auto a, auto o) { return HandleMmap(s, a, o); },
-                           ToMask(Permission::CommandGps), CommandAvailability::Both,
-                           ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand("tele", {[this](auto s, auto a, auto o) { return HandleTele(s, a, o); },
-                           ToMask(Permission::CommandTeleport), CommandAvailability::Both,
-                           ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand("help", {[this](auto s, auto a, auto o) { return HandleHelp(s, a, o); },
-                           0, CommandAvailability::Both,
-                           ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "commands", {[this](auto s, auto a, auto o) { return HandleHelp(s, a, o); }, 0,
-                   CommandAvailability::Both, ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "account", {[this](auto s, auto a, auto o) { return HandleAccount(s, a, o); },
-                  ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "rbac", {[this](auto s, auto a, auto o) { return HandleRbac(s, a, o); },
-               ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("gm", {[this](auto s, auto a, auto o) { return HandleGmTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("dnd", {[this](auto s, auto a, auto o) { return HandleDndTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("dev", {[this](auto s, auto a, auto o) { return HandleDevTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "visible", {[this](auto s, auto a, auto o) { return HandleGmVisible(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("fly", {[this](auto s, auto a, auto o) { return HandleGmFly(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "speed", {[this](auto s, auto a, auto o) { return HandleGmSpeed(s, a, o); },
-                ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "online", {[this](auto s, auto a, auto o) { return HandleOnline(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "announce", {[this](auto s, auto a, auto o) { return HandleAnnounce(s, a, o); },
-                   ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                   ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "kick", {[this](auto s, auto a, auto o) { return HandleKick(s, a, o); },
-               ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "goto", {[this](auto s, auto a, auto o) { return HandleGoto(s, a, o); },
-               ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "appear", {[this](auto s, auto a, auto o) { return HandleGoto(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "summon", {[this](auto s, auto a, auto o) { return HandleSummon(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "learn", {[this](auto s, auto a, auto o) { return HandleLearn(s, a, o); },
-                ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "unlearn", {[this](auto s, auto a, auto o) { return HandleUnlearn(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "money", {[this](auto s, auto a, auto o) { return HandleMoney(s, a, o); },
-               ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-               ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "additem", {[this](auto s, auto a, auto o) { return HandleAdditem(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "delitem", {[this](auto s, auto a, auto o) { return HandleDelitem(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "level", {[this](auto s, auto a, auto o) { return HandleLevel(s, a, o); },
-               ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-               ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "cd", {[this](auto s, auto a, auto o) { return HandleCd(s, a, o); },
-             ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-             ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "damage", {[this](auto s, auto a, auto o) { return HandleDamage(s, a, o); },
-                 ToMask(Permission::CommandGameplay), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "revive", {[this](auto s, auto a, auto o) { return HandleRevive(s, a, o); },
-                 ToMask(Permission::CommandGameplay), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "ban", {[this](auto s, auto a, auto o) { return HandleBan(s, a, o); },
-              ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-              ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "unban", {[this](auto s, auto a, auto o) { return HandleUnban(s, a, o); },
-                ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "ticket", {[this](auto s, auto a, auto o) { return HandleTicket(s, a, o); },
-                 ToMask(Permission::ManageGmTickets), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "email", {[this](auto s, auto a, auto o) { return HandleEmail(s, a, o); },
-                ToMask(Permission::CommandMailbox), CommandAvailability::Game,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "server", {[this](auto s, auto a, auto o) { return HandleServer(s, a, o); },
-                 ToMask(Permission::ServerControl), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "npc", {[this](auto s, auto a, auto o) { return HandleNpc(s, a, o); },
-             ToMask(Permission::ServerControl), CommandAvailability::Both,
-             ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "faction",
-      {[this](auto s, auto a, auto o) { return HandleFaction(s, a, o); },
-       ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-       ConsoleArgLayout::TargetOnlineCharacterFirst});
+      _rbacRepo(std::move(rbacRepo)),
+      _commandDefRepo(std::move(commandDefRepo)) {}
+
+void CommandService::LoadCommandsFromDb() {
+  // Build handler map (name → lambda capturing this)
+  std::unordered_map<std::string, CommandHandler> handlers;
+  handlers["gps"]      = [this](auto s, auto a, auto o) { return HandleGps(s, a, o); };
+  handlers["mmap"]     = [this](auto s, auto a, auto o) { return HandleMmap(s, a, o); };
+  handlers["tele"]     = [this](auto s, auto a, auto o) { return HandleTele(s, a, o); };
+  handlers["help"]     = [this](auto s, auto a, auto o) { return HandleHelp(s, a, o); };
+  handlers["commands"] = [this](auto s, auto a, auto o) { return HandleHelp(s, a, o); };
+  handlers["account"]  = [this](auto s, auto a, auto o) { return HandleAccount(s, a, o); };
+  handlers["rbac"]     = [this](auto s, auto a, auto o) { return HandleRbac(s, a, o); };
+  handlers["gm"]       = [this](auto s, auto a, auto o) { return HandleGmTag(s, a, o); };
+  handlers["dnd"]      = [this](auto s, auto a, auto o) { return HandleDndTag(s, a, o); };
+  handlers["dev"]      = [this](auto s, auto a, auto o) { return HandleDevTag(s, a, o); };
+  handlers["visible"]  = [this](auto s, auto a, auto o) { return HandleGmVisible(s, a, o); };
+  handlers["fly"]      = [this](auto s, auto a, auto o) { return HandleGmFly(s, a, o); };
+  handlers["speed"]    = [this](auto s, auto a, auto o) { return HandleGmSpeed(s, a, o); };
+  handlers["online"]   = [this](auto s, auto a, auto o) { return HandleOnline(s, a, o); };
+  handlers["announce"] = [this](auto s, auto a, auto o) { return HandleAnnounce(s, a, o); };
+  handlers["kick"]     = [this](auto s, auto a, auto o) { return HandleKick(s, a, o); };
+  handlers["goto"]     = [this](auto s, auto a, auto o) { return HandleGoto(s, a, o); };
+  handlers["appear"]   = [this](auto s, auto a, auto o) { return HandleGoto(s, a, o); };
+  handlers["summon"]   = [this](auto s, auto a, auto o) { return HandleSummon(s, a, o); };
+  handlers["learn"]    = [this](auto s, auto a, auto o) { return HandleLearn(s, a, o); };
+  handlers["unlearn"]  = [this](auto s, auto a, auto o) { return HandleUnlearn(s, a, o); };
+  handlers["money"]    = [this](auto s, auto a, auto o) { return HandleMoney(s, a, o); };
+  handlers["additem"]  = [this](auto s, auto a, auto o) { return HandleAdditem(s, a, o); };
+  handlers["delitem"]  = [this](auto s, auto a, auto o) { return HandleDelitem(s, a, o); };
+  handlers["level"]    = [this](auto s, auto a, auto o) { return HandleLevel(s, a, o); };
+  handlers["cd"]       = [this](auto s, auto a, auto o) { return HandleCd(s, a, o); };
+  handlers["damage"]   = [this](auto s, auto a, auto o) { return HandleDamage(s, a, o); };
+  handlers["revive"]   = [this](auto s, auto a, auto o) { return HandleRevive(s, a, o); };
+  handlers["ban"]      = [this](auto s, auto a, auto o) { return HandleBan(s, a, o); };
+  handlers["unban"]    = [this](auto s, auto a, auto o) { return HandleUnban(s, a, o); };
+  handlers["ticket"]   = [this](auto s, auto a, auto o) { return HandleTicket(s, a, o); };
+  handlers["email"]    = [this](auto s, auto a, auto o) { return HandleEmail(s, a, o); };
+  handlers["server"]   = [this](auto s, auto a, auto o) { return HandleServer(s, a, o); };
+  handlers["npc"]      = [this](auto s, auto a, auto o) { return HandleNpc(s, a, o); };
+  handlers["faction"]  = [this](auto s, auto a, auto o) { return HandleFaction(s, a, o); };
+
+  // Default permissions per command name
+  static std::unordered_map<std::string, uint64_t> const permDefaults = {
+    {"help",0},{"commands",0},{"gps",ToMask(Permission::CommandGps)},{"mmap",ToMask(Permission::CommandGps)},
+    {"email",ToMask(Permission::CommandMailbox)},{"tele",ToMask(Permission::CommandTeleport)},
+    {"gm",ToMask(Permission::CommandGmTools)},{"dnd",ToMask(Permission::CommandGmTools)},
+    {"dev",ToMask(Permission::CommandGmTools)},{"visible",ToMask(Permission::CommandGmTools)},
+    {"fly",ToMask(Permission::CommandGmTools)},{"speed",ToMask(Permission::CommandGmTools)},
+    {"online",ToMask(Permission::ManagePlayers)},{"announce",ToMask(Permission::ManagePlayers)},
+    {"kick",ToMask(Permission::ManagePlayers)},{"goto",ToMask(Permission::ManagePlayers)},
+    {"appear",ToMask(Permission::ManagePlayers)},{"summon",ToMask(Permission::ManagePlayers)},
+    {"learn",ToMask(Permission::CommandGameplay)},{"unlearn",ToMask(Permission::CommandGameplay)},
+    {"money",ToMask(Permission::CommandGameplay)},{"additem",ToMask(Permission::CommandGameplay)},
+    {"delitem",ToMask(Permission::CommandGameplay)},{"level",ToMask(Permission::CommandGameplay)},
+    {"cd",ToMask(Permission::CommandGameplay)},{"damage",ToMask(Permission::CommandGameplay)},
+    {"revive",ToMask(Permission::CommandGameplay)},{"faction",ToMask(Permission::CommandGameplay)},
+    {"ticket",ToMask(Permission::ManageGmTickets)},
+    {"account",ToMask(Permission::ManageAccounts)},{"ban",ToMask(Permission::ManageAccounts)},
+    {"unban",ToMask(Permission::ManageAccounts)},{"rbac",ToMask(Permission::ManageAccounts)},
+    {"server",ToMask(Permission::ServerControl)},{"npc",ToMask(Permission::ServerControl)},
+  };
+
+  auto permFor = [&](std::string const &name) -> uint64_t {
+    auto it = permDefaults.find(name);
+    return it != permDefaults.end() ? it->second : 0;
+  };
+
+  // Load from DB first — only commands with handlers are registered
+  if (_commandDefRepo) {
+    auto const defs = _commandDefRepo->LoadAll();
+    for (auto const &def : defs) {
+      auto hit = handlers.find(def.name);
+      if (hit == handlers.end())
+        continue;
+      CommandEntry entry;
+      entry.handler = hit->second;
+      entry.requiredPermissions = permFor(def.name);
+      _commands[def.name] = std::move(entry);
+    }
+  }
+
+  // Fallback: register any handler not yet in _commands (no DB row, but handler exists)
+  for (auto &[name, handler] : handlers) {
+    if (_commands.count(name) > 0)
+      continue;
+    CommandEntry entry;
+    entry.handler = handler;
+    entry.requiredPermissions = permFor(name);
+    _commands[name] = std::move(entry);
+  }
 }
 
 void CommandService::RegisterCommand(const std::string &name, CommandEntry entry) {
@@ -875,26 +841,10 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
       return HandleMmapTestArea(session, *collision, map, mapId);
   }
 
-  // Auto-remove expired markers (older than 9s)
-  {
-    auto mit = _mmapMarkers.find(playerGuid);
-    if (mit != _mmapMarkers.end()) {
-      auto const now = std::chrono::steady_clock::now();
-      auto &markers = mit->second;
-      markers.erase(
-          std::remove_if(markers.begin(), markers.end(),
-                         [&](auto const &p) {
-                           if (now - p.second > std::chrono::seconds(9)) {
-                             SendMmapMarkerDespawn(session, mapId, p.first);
-                             return true;
-                           }
-                           return false;
-                         }),
-          markers.end());
-      if (markers.empty())
-        _mmapMarkers.erase(mit);
-    }
-  }
+  // Auto-remove expired markers (older than 9s). The background sweep in
+  // PollScheduledRestart does this on time without another .mmap call; this keeps
+  // it prompt on the next invocation too.
+  SweepExpiredMmapMarkers();
 
   // .mmap clear — remove visual markers
   if (!args.empty() && args[0] == "clear") {
@@ -1065,7 +1015,12 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
           mapId, markerGuid, i, wp.x, wp.y, wp.z, groundZ, z);
       markers.emplace_back(markerGuid, now);
     }
-    _mmapMarkers[playerGuid] = std::move(markers);
+    {
+      std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
+      auto &set = _mmapMarkers[playerGuid];
+      set.mapId = mapId;
+      set.markers = std::move(markers);
+    }
     session->SendNotification("MMAP: " +
                               std::to_string(result.waypoints.size()) +
                               " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
@@ -1079,18 +1034,45 @@ bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
 
 void CommandService::ClearMmapMarkers(std::shared_ptr<ICommandSession> session,
                                      uint64_t playerGuid, uint32_t mapId) {
+  (void)mapId;
+  std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
   auto it = _mmapMarkers.find(playerGuid);
   if (it == _mmapMarkers.end())
     return;
 
-  // Remove expired + all markers
-  auto &markers = it->second;
-  for (auto &[guid, spawnTime] : markers) {
+  // Remove all markers (despawn on the map they were spawned on).
+  for (auto &[guid, spawnTime] : it->second.markers) {
     (void)spawnTime;
-    SendMmapMarkerDespawn(session, mapId, guid);
+    SendMmapMarkerDespawn(session, it->second.mapId, guid);
   }
-  markers.clear();
   _mmapMarkers.erase(it);
+}
+
+void CommandService::SweepExpiredMmapMarkers() {
+  std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
+  if (_mmapMarkers.empty())
+    return;
+  auto const now = std::chrono::steady_clock::now();
+  for (auto it = _mmapMarkers.begin(); it != _mmapMarkers.end();) {
+    std::shared_ptr<ICommandSession> const session =
+        _onlineCharacters ? _onlineCharacters->TryResolveByObjectGuid(it->first)
+                          : nullptr;
+    auto &set = it->second;
+    set.markers.erase(
+        std::remove_if(set.markers.begin(), set.markers.end(),
+                       [&](auto const &p) {
+                         if (now - p.second > std::chrono::seconds(9)) {
+                           SendMmapMarkerDespawn(session, set.mapId, p.first);
+                           return true;
+                         }
+                         return false;
+                       }),
+        set.markers.end());
+    if (set.markers.empty())
+      it = _mmapMarkers.erase(it);
+    else
+      ++it;
+  }
 }
 
 bool CommandService::HandleTele(std::shared_ptr<ICommandSession> session,
@@ -1436,6 +1418,26 @@ static void EmitFilteredStaffHelp(std::shared_ptr<ICommandSession> session,
 bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &,
                                 PrivilegeOrigin origin) {
+  // Emit commands from DB (firelands_commands table) filtered by access level
+  if (_commandDefRepo) {
+    auto cmds = _commandDefRepo->LoadAll();
+    if (!cmds.empty()) {
+      AccessLevel const level = session->GetAccountAccessLevel();
+      session->SendNotification("|cffFFD200--- Available Commands (Lvl " +
+                                std::to_string(static_cast<int>(level)) +
+                                ") ---|r");
+      for (auto const &cmd : cmds) {
+        if (static_cast<int>(level) >= static_cast<int>(cmd.minAccessLevel)) {
+          std::string line = "|cffCCCCCC." + cmd.name + "|r";
+          if (!cmd.syntax.empty())
+            line += " |cff888888" + cmd.syntax + "|r";
+          if (!cmd.description.empty())
+            line += " |cff666666-|r " + cmd.description;
+          session->SendNotification(line);
+        }
+      }
+    }
+  }
   EmitFilteredStaffHelp(std::move(session), origin);
   return true;
 }
@@ -2752,6 +2754,9 @@ bool CommandService::HandleEmail(std::shared_ptr<ICommandSession> session,
 }
 
 void CommandService::PollScheduledRestart() {
+  // Despawn expired .mmap path markers on time (runs on the main loop tick, so it
+  // happens at ~9s even if the player never invokes .mmap again).
+  SweepExpiredMmapMarkers();
   if (!_restartDeadline)
     return;
   auto const now = std::chrono::steady_clock::now();
