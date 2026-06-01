@@ -6,6 +6,9 @@
 #include <domain/models/Character.h>
 #include <application/services/SRPService.h>
 #include <domain/repositories/IAccountRepository.h>
+#include <domain/repositories/IRbacRepository.h>
+#include <shared/game/PermissionNames.h>
+#include <shared/game/RbacBuiltinRoles.h>
 #include <shared/Common.h>
 #include <shared/Crypto.h>
 #include <shared/game/AccessLevel.h>
@@ -52,8 +55,8 @@ public:
     _subject->TeleportTo(mapId, x, y, z, orientation);
   }
 
-  AccessLevel GetAccountAccessLevel() const override {
-    return _subject->GetAccountAccessLevel();
+  PermissionMask GetAccountRolePermissionMask() const override {
+    return _subject->GetAccountRolePermissionMask();
   }
 
   void SetGmTagEnabled(bool on) override { _subject->SetGmTagEnabled(on); }
@@ -303,11 +306,13 @@ CommandService::CommandService(
     std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharacters,
     std::shared_ptr<IAccountRepository> accountRepo,
     std::shared_ptr<CharacterService> characterService,
-    std::shared_ptr<GmTicketService> gmTicketService)
+    std::shared_ptr<GmTicketService> gmTicketService,
+    std::shared_ptr<IRbacRepository> rbacRepo)
     : _onlineCharacters(std::move(onlineCharacters)),
       _accountRepo(std::move(accountRepo)),
       _characterService(std::move(characterService)),
-      _gmTicketService(std::move(gmTicketService)) {
+      _gmTicketService(std::move(gmTicketService)),
+      _rbacRepo(std::move(rbacRepo)) {
   RegisterCommand("gps", {[this](auto s, auto a, auto o) { return HandleGps(s, a, o); },
                           ToMask(Permission::CommandGps), CommandAvailability::Both,
                           ConsoleArgLayout::TargetOnlineCharacterFirst});
@@ -324,6 +329,10 @@ CommandService::CommandService(
       "account", {[this](auto s, auto a, auto o) { return HandleAccount(s, a, o); },
                   ToMask(Permission::ManageAccounts), CommandAvailability::Console,
                   ConsoleArgLayout::SameAsInGame});
+  RegisterCommand(
+      "rbac", {[this](auto s, auto a, auto o) { return HandleRbac(s, a, o); },
+               ToMask(Permission::ManageAccounts), CommandAvailability::Console,
+               ConsoleArgLayout::SameAsInGame});
   RegisterCommand("gm", {[this](auto s, auto a, auto o) { return HandleGmTag(s, a, o); },
                   ToMask(Permission::CommandGmTools), CommandAvailability::Both,
                   ConsoleArgLayout::SameAsInGame});
@@ -452,20 +461,18 @@ bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
   // In-game: dot commands are for Game Master (2+) except `.email`, which
   // moderators (1+) may use to open the mailbox UI anywhere.
   if (origin == PrivilegeOrigin::GameClient) {
-    AccessLevel const acc = session->GetAccountAccessLevel();
+    PermissionMask const mask = session->GetAccountRolePermissionMask();
     std::string const tail = message.substr(1);
     std::istringstream peekIss(tail);
     std::string firstToken;
     peekIss >> firstToken;
-    bool const moderatorEmail =
-        AsciiEqualsLower(firstToken, "email") &&
-        HasAtLeast(acc, AccessLevel::Moderator);
+    bool const moderatorEmail = AsciiEqualsLower(firstToken, "email") &&
+                                CanUseModeratorDotCommands(mask);
     bool const moderatorHelp =
-        HasAtLeast(acc, AccessLevel::Moderator) &&
+        CanUseModeratorDotCommands(mask) &&
         (AsciiEqualsLower(firstToken, "help") ||
          AsciiEqualsLower(firstToken, "commands"));
-    if (!HasAtLeast(acc, AccessLevel::GameMaster) && !moderatorEmail &&
-        !moderatorHelp) {
+    if (!CanUseGameMasterDotCommands(mask) && !moderatorEmail && !moderatorHelp) {
       return true;
     }
   }
@@ -490,9 +497,8 @@ bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
 
   CommandEntry const &entry = it->second;
 
-  LOG_DEBUG("Command executed: Account={} Access={} Cmd=.{} Args={}",
-            session->GetAccountId(),
-            static_cast<int>(session->GetAccountAccessLevel()),
+  LOG_DEBUG("Command executed: Account={} StaffMask={:#x} Cmd=.{} Args={}",
+            session->GetAccountId(), session->GetAccountRolePermissionMask(),
             cmdName, args.size());
   switch (entry.availability) {
   case CommandAvailability::Console:
@@ -511,8 +517,8 @@ bool CommandService::ExecuteCommand(std::shared_ptr<ICommandSession> session,
   case CommandAvailability::Both:
     break;
   }
-  if (!HasPermission(session->GetAccountAccessLevel(), origin,
-                     entry.requiredPermissions)) {
+  if (!HasPermission(origin, entry.requiredPermissions,
+                     session->GetAccountRolePermissionMask())) {
     session->SendNotification("Insufficient privileges.");
     return true;
   }
@@ -843,16 +849,20 @@ NPC & faction  (in-game)
     {HelpChunkAudience::Console, ToMask(Permission::ManageAccounts),
      "|cffFFD200· Auth DB|r |cff666666(console only)|r\n"
      "|cffCCCCCC.account create|r ... |cffCCCCCC.account delete|r ... "
-     "|cffCCCCCC.account setaccess|r ... |cffCCCCCC.ban|r |cff888888/|r "
-     "|cffCCCCCC.unban|r",
+     "|cffCCCCCC.ban|r |cff888888/|r |cffCCCCCC.unban|r |cff888888·|r "
+     "|cffCCCCCC.rbac|r |cff666666(staff roles)|r",
      R"HA(--------------------------------------------------------------------------------
 Auth database  (console only)
 --------------------------------------------------------------------------------
 
-  .account create <user> <pass> [email] [expansion 0-3] [access 0-3]
+  .account create <user> <pass> [email] [expansion 0-3]
   .account delete <username>
-  .account setaccess <username> <0-3>
   .ban <account>   .unban <account>
+
+  .rbac setstaff <username> <moderator|gamemaster|administrator|none>
+  .rbac role list | create | delete | setperm
+  .rbac grant <username> <role>   .rbac revoke <username> <role>
+  .rbac show <username>
 )HA"},
     {HelpChunkAudience::Console, 0,
      "|cffAAAAAAShutdown:|r |cffffffffquit|r |cff888888or|r |cffffffffexit|r "
@@ -868,12 +878,11 @@ Shut down this world process
 
 static void EmitFilteredStaffHelp(std::shared_ptr<ICommandSession> session,
                                    PrivilegeOrigin origin) {
-  AccessLevel const acc = session->GetAccountAccessLevel();
+  PermissionMask const mask = session->GetAccountRolePermissionMask();
   for (StaffHelpChunk const &ch : kStaffHelpChunks) {
     if (!HelpChunkVisible(ch.audience, origin))
       continue;
-    if (ch.required != 0 &&
-        !HasPermission(acc, origin, ch.required))
+    if (ch.required != 0 && !HasPermission(origin, ch.required, mask))
       continue;
     if (origin == PrivilegeOrigin::GameClient) {
       if (ch.wow)
@@ -903,8 +912,8 @@ bool CommandService::HandleAccount(std::shared_ptr<ICommandSession> session,
   }
   if (args.empty()) {
     session->SendNotification(
-        "Usage: .account create <user> <pass> [email] [expansion] [access] | "
-        ".account setaccess <username> <0-3> | .account delete <username>");
+        "Usage: .account create <user> <pass> [email] [expansion] | "
+        ".account delete <username>  (staff: .rbac setstaff …)");
     return false;
   }
 
@@ -926,8 +935,7 @@ bool CommandService::HandleAccount(std::shared_ptr<ICommandSession> session,
   if (AsciiEqualsLower(args[0], "create")) {
     if (args.size() < 3) {
       session->SendNotification(
-          "Usage: .account create <username> <password> [email] [expansion 0-3] "
-          "[access_level 0-3]");
+          "Usage: .account create <username> <password> [email] [expansion 0-3]");
       return false;
     }
     std::string const userUpper = Crypto::ToUpper(args[1]);
@@ -935,20 +943,11 @@ bool CommandService::HandleAccount(std::shared_ptr<ICommandSession> session,
     std::string const email =
         (args.size() >= 4) ? args[3] : (args[1] + "@firelands.com");
     uint8 expansion = 3;
-    AccessLevel access = AccessLevel::Player;
     try {
       if (args.size() >= 5)
         expansion = static_cast<uint8>(std::stoul(args[4]));
-      if (args.size() >= 6) {
-        uint8 raw = static_cast<uint8>(std::stoul(args[5]));
-        if (raw > static_cast<uint8>(AccessLevel::Administrator)) {
-          session->SendNotification("access_level must be 0-3.");
-          return false;
-        }
-        access = static_cast<AccessLevel>(raw);
-      }
     } catch (const std::exception &) {
-      session->SendNotification("Invalid numeric argument (expansion or access).");
+      session->SendNotification("Invalid expansion (expected 0-3).");
       return false;
     }
     if (expansion > 3u) {
@@ -968,52 +967,224 @@ bool CommandService::HandleAccount(std::shared_ptr<ICommandSession> session,
     acc.salt = std::move(srp.salt);
     acc.verifier = std::move(srp.verifier);
     acc.expansion = expansion;
-    acc.accessLevel = access;
+    acc.accessLevel = AccessLevel::Player;
     _accountRepo->Create(acc);
-    session->SendNotification("Account created: " + userUpper +
-                              " access_level=" +
-                              std::to_string(static_cast<int>(access)));
-    return true;
-  }
-
-  if (AsciiEqualsLower(args[0], "setaccess")) {
-    if (args.size() < 3) {
-      session->SendNotification(
-          "Usage: .account setaccess <username> <0-3>  (auth username, upper "
-          "stored)");
-      return false;
-    }
-    std::string const userUpper = Crypto::ToUpper(args[1]);
-    AccessLevel newLevel = AccessLevel::Player;
-    try {
-      uint8 raw = static_cast<uint8>(std::stoul(args[2]));
-      if (raw > static_cast<uint8>(AccessLevel::Administrator)) {
-        session->SendNotification("Level must be 0-3.");
-        return false;
-      }
-      newLevel = static_cast<AccessLevel>(raw);
-    } catch (const std::exception &) {
-      session->SendNotification("Invalid level (expected 0-3).");
-      return false;
-    }
-
-    auto existing = _accountRepo->FindByUsername(userUpper);
-    if (!existing) {
-      session->SendNotification("Unknown account: " + userUpper);
-      return true;
-    }
-    Account updated = *existing;
-    updated.accessLevel = newLevel;
-    _accountRepo->Update(updated);
-    session->SendNotification("Updated " + userUpper +
-                              " access_level=" +
-                              std::to_string(static_cast<int>(newLevel)) +
-                              " (re-login to refresh session privileges).");
+    session->SendNotification(
+        "Account created: " + userUpper +
+        " (assign staff with .rbac setstaff …)");
     return true;
   }
 
   session->SendNotification(
-      "Unknown .account subcommand (use create, setaccess, or delete).");
+      "Unknown .account subcommand (use create or delete).");
+  return false;
+}
+
+bool CommandService::HandleRbac(std::shared_ptr<ICommandSession> session,
+                                const std::vector<std::string> &args,
+                                PrivilegeOrigin origin) {
+  (void)origin;
+  if (!_rbacRepo) {
+    session->SendNotification("RBAC repository is not configured.");
+    return true;
+  }
+  if (args.empty()) {
+    session->SendNotification(
+        "Usage: .rbac setstaff <user> "
+        "<moderator|gamemaster|administrator|none> | "
+        ".rbac role list | create | delete | setperm | "
+        "grant | revoke | show");
+    return false;
+  }
+
+  if (AsciiEqualsLower(args[0], "setstaff")) {
+    if (!_accountRepo) {
+      session->SendNotification("Account repository is not configured.");
+      return true;
+    }
+    if (args.size() < 3) {
+      session->SendNotification(
+          "Usage: .rbac setstaff <username> "
+          "<moderator|gamemaster|administrator|none>");
+      return false;
+    }
+    auto acc = _accountRepo->FindByUsername(Crypto::ToUpper(args[1]));
+    if (!acc) {
+      session->SendNotification("Unknown account: " + args[1]);
+      return true;
+    }
+    std::string const roleArg = args[2];
+    if (!_rbacRepo->SetPrimaryStaffRole(acc->id, roleArg)) {
+      session->SendNotification(
+          "Unknown staff role. Use moderator, gamemaster, administrator, or "
+          "none.");
+      return true;
+    }
+    session->SendNotification("Staff role for " + acc->username + " set to " +
+                              roleArg + " (re-login to refresh).");
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[0], "show")) {
+    if (!_accountRepo) {
+      session->SendNotification("Account repository is not configured.");
+      return true;
+    }
+    if (args.size() < 2) {
+      session->SendNotification("Usage: .rbac show <username>");
+      return false;
+    }
+    std::string const userUpper = Crypto::ToUpper(args[1]);
+    auto acc = _accountRepo->FindByUsername(userUpper);
+    if (!acc) {
+      session->SendNotification("Unknown account: " + userUpper);
+      return true;
+    }
+    auto roles = _rbacRepo->ListRolesForAccount(acc->id);
+    PermissionMask const roleMask =
+        static_cast<PermissionMask>(_rbacRepo->UnionPermissionMaskForAccount(acc->id));
+    std::string msg =
+        userUpper + " staff_tier=" +
+        std::to_string(EffectiveStaffTierRank(roleMask)) + " roles=";
+    if (roles.empty()) {
+      msg += "(none)";
+    } else {
+      for (size_t i = 0; i < roles.size(); ++i) {
+        if (i > 0)
+          msg += ", ";
+        msg += roles[i].name;
+      }
+    }
+    msg += " mask=" + FormatPermissionMask(roleMask);
+    session->SendNotification(msg);
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[0], "grant") || AsciiEqualsLower(args[0], "revoke")) {
+    if (!_accountRepo) {
+      session->SendNotification("Account repository is not configured.");
+      return true;
+    }
+    if (args.size() < 3) {
+      session->SendNotification("Usage: .rbac grant|revoke <username> <role>");
+      return false;
+    }
+    auto acc = _accountRepo->FindByUsername(Crypto::ToUpper(args[1]));
+    if (!acc) {
+      session->SendNotification("Unknown account: " + args[1]);
+      return true;
+    }
+    auto role = _rbacRepo->FindRoleByName(args[2]);
+    if (!role) {
+      session->SendNotification("Unknown role: " + args[2]);
+      return true;
+    }
+    bool ok = AsciiEqualsLower(args[0], "grant")
+                  ? _rbacRepo->GrantRoleToAccount(acc->id, role->id)
+                  : _rbacRepo->RevokeRoleFromAccount(acc->id, role->id);
+    if (!ok) {
+      session->SendNotification("RBAC update failed.");
+      return true;
+    }
+    session->SendNotification(std::string(AsciiEqualsLower(args[0], "grant") ? "Granted "
+                                                                             : "Revoked ") +
+                              role->name + " for " + acc->username +
+                              " (re-login for in-game permission changes).");
+    return true;
+  }
+
+  if (!AsciiEqualsLower(args[0], "role")) {
+    session->SendNotification("Unknown .rbac subcommand (use role, grant, revoke, show).");
+    return false;
+  }
+  if (args.size() < 2) {
+    session->SendNotification(
+        "Usage: .rbac role list | create | delete | setperm ...");
+    return false;
+  }
+
+  if (AsciiEqualsLower(args[1], "list")) {
+    auto roles = _rbacRepo->ListRoles();
+    if (roles.empty()) {
+      session->SendNotification("No RBAC roles defined.");
+      return true;
+    }
+    for (RbacRole const &r : roles) {
+      session->SendNotification(r.name + " id=" + std::to_string(r.id) + " mask=" +
+                                FormatPermissionMask(
+                                    static_cast<PermissionMask>(r.permissionMask)));
+    }
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[1], "create")) {
+    if (args.size() < 3) {
+      session->SendNotification(
+          "Usage: .rbac role create <name> [permission names or 0x mask...]");
+      return false;
+    }
+    PermissionMask mask = 0;
+    if (args.size() >= 4) {
+      std::vector<std::string> permArgs(args.begin() + 3, args.end());
+      auto parsed = ParsePermissionTokens(permArgs);
+      if (!parsed) {
+        session->SendNotification(
+            "Invalid permission token. Use names (gps, teleport, ...) or 0x hex.");
+        return false;
+      }
+      mask = *parsed;
+    }
+    auto id = _rbacRepo->CreateRole(args[2], mask);
+    if (!id) {
+      session->SendNotification("Could not create role (duplicate name?).");
+      return true;
+    }
+    session->SendNotification("Created role " + args[2] + " id=" +
+                            std::to_string(*id) + " mask=" + FormatPermissionMask(mask));
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[1], "delete")) {
+    if (args.size() < 3) {
+      session->SendNotification("Usage: .rbac role delete <name>");
+      return false;
+    }
+    if (!_rbacRepo->DeleteRoleByName(args[2])) {
+      session->SendNotification("Unknown role or delete failed: " + args[2]);
+      return true;
+    }
+    session->SendNotification("Deleted role: " + args[2]);
+    return true;
+  }
+
+  if (AsciiEqualsLower(args[1], "setperm")) {
+    if (args.size() < 4) {
+      session->SendNotification(
+          "Usage: .rbac role setperm <name> <permission names or 0x mask...>");
+      return false;
+    }
+    auto role = _rbacRepo->FindRoleByName(args[2]);
+    if (!role) {
+      session->SendNotification("Unknown role: " + args[2]);
+      return true;
+    }
+    std::vector<std::string> permArgs(args.begin() + 3, args.end());
+    auto parsed = ParsePermissionTokens(permArgs);
+    if (!parsed) {
+      session->SendNotification(
+          "Invalid permission token. Use names (gps, teleport, ...) or 0x hex.");
+      return false;
+    }
+    if (!_rbacRepo->UpdateRolePermissionMask(role->id, *parsed)) {
+      session->SendNotification("Failed to update role permissions.");
+      return true;
+    }
+    session->SendNotification("Updated " + role->name +
+                              " mask=" + FormatPermissionMask(*parsed));
+    return true;
+  }
+
+  session->SendNotification("Unknown .rbac role subcommand.");
   return false;
 }
 

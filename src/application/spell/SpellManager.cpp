@@ -2,6 +2,7 @@
 
 #include <application/spell/SpellHitEffects.h>
 #include <application/ports/IMapCollisionQueries.h>
+#include <shared/game/SpellCastHaste.h>
 #include <shared/game/SpellAttributes.h>
 #include <shared/game/SpellLevelGate.h>
 #include <shared/game/SpellPowerCost.h>
@@ -259,8 +260,12 @@ void SpellManager::ProcessCastRequest(SpellCastRequest const &req,
   }
 
   uint32 castTimeStart = 0;
-  if (def && m_spellCastTables)
-    castTimeStart = m_spellCastTables->GetCastTimeMs(def->castingTimeIndex);
+  if (def && m_spellCastTables) {
+    uint32 const baseCastMs =
+        m_spellCastTables->GetCastTimeMs(def->castingTimeIndex);
+    castTimeStart = ApplyCastHasteMultiplierToCastTimeMs(baseCastMs,
+                                                       req.casterCastHasteMultiplier);
+  }
 
   uint32 targetFlags = req.client.targetFlags;
   uint64 targetUnitGuid = req.casterGuid;

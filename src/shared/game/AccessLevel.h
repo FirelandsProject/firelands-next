@@ -5,9 +5,10 @@
 
 namespace Firelands {
 
-/// Stored on `account.access_level` (0 = player … 3 = administrator).
-/// `Console` is never persisted: it applies only when the server runs an action
-/// from its own terminal / REPL (`PrivilegeOrigin::ServerConsole`).
+/// Legacy numeric staff tiers (0 = player … 3 = administrator). Staff capabilities
+/// are granted via RBAC roles (`rbac_role` / `rbac_account_role`); this enum
+/// remains for `realmlist.allowedSecurityLevel` and migration helpers only.
+/// `Console` is never persisted: full grants come from `PrivilegeOrigin::ServerConsole`.
 enum class AccessLevel : uint8_t {
   Player = 0,
   Moderator = 1,

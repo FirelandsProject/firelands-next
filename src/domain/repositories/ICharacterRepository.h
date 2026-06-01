@@ -5,7 +5,6 @@
 #include <domain/models/CharacterCooldown.h>
 #include <domain/models/PlayerCreateInfo.h>
 #include <array>
-#include <shared/game/AccessLevel.h>
 #include <shared/game/Bag0InventoryData.h>
 #include <cstdint>
 #include <memory>
@@ -94,7 +93,6 @@ public:
   /// Removes up to `count` matching items from backpack grid only; returns amount removed.
   virtual uint32_t RemoveBag0ItemsByEntry(uint32_t characterGuid, uint32_t itemEntry,
                                           uint32_t count) = 0;
-  virtual AccessLevel GetAccountAccessLevel(uint32_t accountId) = 0;
   /// Move an item from backpack grid (`INVENTORY_SLOT_ITEM_*`) to its default equipment slot.
   virtual bool AutoEquipFromBag0Slot(
       uint32_t characterGuid, uint8_t srcSlot,

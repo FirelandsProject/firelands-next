@@ -37,6 +37,10 @@ public:
   ResourceRegenModifiers const &GetResourceRegenModifiers() const {
     return m_regenModifiers;
   }
+  void SetCastHasteMultiplier(float multiplier) {
+    m_castHasteMultiplier = multiplier >= 1.f ? multiplier : 1.f;
+  }
+  float GetCastHasteMultiplier() const { return m_castHasteMultiplier; }
   void SetKnownPermanentPassiveSpellIds(std::vector<uint32_t> spellIds) {
     m_permanentPassiveSpellIds = std::move(spellIds);
   }
@@ -104,6 +108,7 @@ private:
   std::array<uint32, 5> m_primaryStats{};
   std::vector<uint32_t> m_permanentPassiveSpellIds;
   ResourceRegenModifiers m_regenModifiers{};
+  float m_castHasteMultiplier = 1.f;
   uint32 m_livePower1 = 0;
   uint32 m_liveMaxPower1 = 1;
   uint32 m_liveBasePower1 = 1;

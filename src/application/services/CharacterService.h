@@ -1,6 +1,7 @@
 #pragma once
 
 #include <domain/repositories/ICharacterRepository.h>
+#include <domain/repositories/IRbacRepository.h>
 #include <shared/game/PlayerClass.h>
 #include <array>
 #include <domain/models/PlayerCreateInfo.h>
@@ -8,7 +9,8 @@
 #include <cstdint>
 #include <memory>
 #include <shared/game/EquipmentCache.h>
-#include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
+#include <shared/game/RbacBuiltinRoles.h>
 #include <shared/game/InventorySlots.h>
 #include <shared/game/ItemEquipSlots.h>
 #include <shared/dbc/NameGenDbc.h>
@@ -94,10 +96,12 @@ public:
   explicit CharacterService(
       std::shared_ptr<ICharacterRepository> repository,
       std::shared_ptr<PlayerCreateInfoService> playerCreateInfoService = nullptr,
-      std::shared_ptr<NameGenDbc const> nameGenDbc = nullptr)
+      std::shared_ptr<NameGenDbc const> nameGenDbc = nullptr,
+      std::shared_ptr<IRbacRepository> rbacRepo = nullptr)
       : m_repository(std::move(repository)),
         m_playerCreateInfoService(std::move(playerCreateInfoService)),
-        m_nameGenDbc(std::move(nameGenDbc)) {}
+        m_nameGenDbc(std::move(nameGenDbc)),
+        m_rbacRepo(std::move(rbacRepo)) {}
 
   std::vector<std::shared_ptr<Character>>
   GetCharactersForAccount(uint32 accountId) {
@@ -164,8 +168,7 @@ public:
     if (m_playerCreateInfoService) {
       auto grants = m_playerCreateInfoService->GetStarterItemGrants(
           race, klass, gender, outfitId);
-      if (HasAtLeast(m_repository->GetAccountAccessLevel(accountId),
-                     AccessLevel::GameMaster)) {
+      if (AccountHasGameMasterStarterItems(accountId)) {
         AppendGmStarterItems(grants);
       }
       if (!grants.empty())
@@ -347,8 +350,7 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
       if (entry != 0) {
         auto grants = m_playerCreateInfoService->GetStarterItemGrants(
             ch->GetRace(), ToClassId(ch->GetClass()), ch->GetGender(), ch->GetOutfitId());
-        if (HasAtLeast(m_repository->GetAccountAccessLevel(accountId),
-                       AccessLevel::GameMaster)) {
+        if (AccountHasGameMasterStarterItems(accountId)) {
           AppendGmStarterItems(grants);
         }
         for (StarterItemGrant const &grant : grants) {
@@ -412,9 +414,18 @@ bool UpdateCharacterMoney(uint32_t accountId, uint32_t characterGuid,
   }
 
 private:
+  bool AccountHasGameMasterStarterItems(uint32_t accountId) const {
+    if (!m_rbacRepo)
+      return false;
+    PermissionMask const mask = static_cast<PermissionMask>(
+        m_rbacRepo->UnionPermissionMaskForAccount(accountId));
+    return CanUseGameMasterDotCommands(mask);
+  }
+
   std::shared_ptr<ICharacterRepository> m_repository;
   std::shared_ptr<PlayerCreateInfoService> m_playerCreateInfoService;
   std::shared_ptr<NameGenDbc const> m_nameGenDbc;
+  std::shared_ptr<IRbacRepository> m_rbacRepo;
 };
 
 } // namespace Firelands

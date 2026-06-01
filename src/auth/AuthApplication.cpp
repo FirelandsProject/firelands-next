@@ -16,6 +16,7 @@
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <infrastructure/persistence/MemoryWebSessionRepository.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
+#include <infrastructure/persistence/MySqlRbacRepository.h>
 #include <infrastructure/persistence/MySqlRealmRepository.h>
 #include <memory>
 #include <mutex>
@@ -68,6 +69,7 @@ int AuthRunGameStack(std::shared_ptr<AuthFtxuiRuntime> tui_runtime) {
     LOG_DEBUG("Database connection established.");
 
     auto accountRepo = std::make_shared<MySqlAccountRepository>(conn);
+    auto rbacRepo = std::make_shared<MySqlRbacRepository>(conn);
     auto realmRepo = std::make_shared<MySqlRealmRepository>(conn);
 
     auto authService = std::make_shared<AuthService>(accountRepo);
@@ -110,10 +112,10 @@ int AuthRunGameStack(std::shared_ptr<AuthFtxuiRuntime> tui_runtime) {
     auto webSessionService =
         std::make_shared<WebSessionService>(webSessionRepo);
 
-    auto sessionFactory = [authService,
-                           realmService](boost::asio::ip::tcp::socket socket) {
-      std::make_shared<AuthSession>(std::move(socket), authService,
-                                    realmService)
+    auto sessionFactory = [authService, realmService,
+                           rbacRepo](boost::asio::ip::tcp::socket socket) {
+      std::make_shared<AuthSession>(std::move(socket), authService, realmService,
+                                    rbacRepo)
           ->Start();
     };
     auto authServer = std::make_shared<AsyncNetworkServer>(sessionFactory);

@@ -29,6 +29,7 @@
 #include <infrastructure/persistence/DatabaseMigrator.h>
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
+#include <infrastructure/persistence/MySqlRbacRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
@@ -135,6 +136,7 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
         driver->connect(worldUrl, properties));
 
     auto accountRepo = std::make_shared<MySqlAccountRepository>(authConn);
+    auto rbacRepo = std::make_shared<MySqlRbacRepository>(authConn);
     auto realmRepo = std::make_shared<MySqlRealmRepository>(authConn);
     auto authService = std::make_shared<AuthService>(accountRepo);
 
@@ -158,14 +160,14 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
       nameGenDbc.reset();
     }
     auto charService = std::make_shared<CharacterService>(
-        charRepo, playerCreateInfoService, nameGenDbc);
+        charRepo, playerCreateInfoService, nameGenDbc, rbacRepo);
     auto onlineCharRegistry =
         std::make_shared<OnlineCharacterSessionRegistry>();
     auto gmTicketRepo = std::make_shared<MySqlGmTicketRepository>(charConn);
     auto gmTicketService =
         std::make_shared<GmTicketService>(gmTicketRepo, charService);
     auto commandService = std::make_shared<CommandService>(
-        onlineCharRegistry, accountRepo, charService, gmTicketService);
+        onlineCharRegistry, accountRepo, charService, gmTicketService, rbacRepo);
 
     auto languagesDbc = std::make_shared<LanguagesDbc>();
     if (!languagesDbc->Load(dbcBasePath + "/Languages.dbc")) {
@@ -334,13 +336,15 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
          languagesDbc, spellDefinitions, realmRepo,
          onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
          combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo, npcTextRepo,
-         questGossipRepo, questProgressRepo, emotesTextDbc](boost::asio::ip::tcp::socket socket) {
+         questGossipRepo, questProgressRepo, emotesTextDbc, rbacRepo](
+            boost::asio::ip::tcp::socket socket) {
           std::make_shared<WorldSession>(
               std::move(socket), authService, charService, commandService,
               accountDataRepo, languagesDbc, spellDefinitions, realmRepo,
               onlineCharRegistry, gmTicketService, itemDbHotfix, spellManager,
               combatService, npcTemplateSearchRepo, factionTemplateDbc, gossipRepo,
-              npcTextRepo, questGossipRepo, questProgressRepo, emotesTextDbc, WorldRuntimePtr())
+              npcTextRepo, questGossipRepo, questProgressRepo, emotesTextDbc, rbacRepo,
+              WorldRuntimePtr())
               ->Start();
         };
 

@@ -69,7 +69,6 @@ namespace Firelands {
                                 uint32_t count) override;
         uint32_t RemoveBag0ItemsByEntry(uint32_t characterGuid, uint32_t itemEntry,
                                        uint32_t count) override;
-        AccessLevel GetAccountAccessLevel(uint32_t accountId) override;
         bool AutoEquipFromBag0Slot(
             uint32_t characterGuid, uint8_t srcSlot,
             std::optional<uint8_t> fallbackInventoryType = std::nullopt) override;

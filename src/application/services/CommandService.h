@@ -14,6 +14,7 @@ namespace Firelands {
 
 class ICommandSession;
 class IAccountRepository;
+class IRbacRepository;
 class OnlineCharacterSessionRegistry;
 class CharacterService;
 class GmTicketService;
@@ -42,7 +43,8 @@ public:
       std::shared_ptr<OnlineCharacterSessionRegistry> onlineCharacters = {},
       std::shared_ptr<IAccountRepository> accountRepo = {},
       std::shared_ptr<CharacterService> characterService = {},
-      std::shared_ptr<GmTicketService> gmTicketService = {});
+      std::shared_ptr<GmTicketService> gmTicketService = {},
+      std::shared_ptr<IRbacRepository> rbacRepo = {});
 
   bool ExecuteCommand(std::shared_ptr<ICommandSession> session,
                       const std::string &message,
@@ -73,6 +75,8 @@ private:
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleAccount(std::shared_ptr<ICommandSession> session,
                      const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleRbac(std::shared_ptr<ICommandSession> session,
+                  const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleGmTag(std::shared_ptr<ICommandSession> session,
                    const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleDndTag(std::shared_ptr<ICommandSession> session,
@@ -132,6 +136,7 @@ private:
   std::shared_ptr<IAccountRepository> _accountRepo;
   std::shared_ptr<CharacterService> _characterService;
   std::shared_ptr<GmTicketService> _gmTicketService;
+  std::shared_ptr<IRbacRepository> _rbacRepo;
   std::map<std::string, CommandEntry> _commands;
 
   std::function<void()> _shutdownRequestHandler;

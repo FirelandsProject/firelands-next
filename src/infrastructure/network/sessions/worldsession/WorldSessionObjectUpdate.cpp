@@ -669,6 +669,16 @@ void BuildPlayerAuraStatValuesUpdate(uint16 mapId, uint64 playerGuid,
       fields[static_cast<uint16>(UNIT_FIELD_RESISTANCEBUFFMODSNEGATIVE + school)] =
           static_cast<uint32>(std::max<int32>(0, resNeg));
   }
+  if (bonus.meleeHasteMultiplier != 1.f) {
+    fields[PLAYER_FIELD_MOD_HASTE] = PackFloat(bonus.meleeHasteMultiplier);
+    fields[PLAYER_FIELD_MOD_PET_HASTE] = PackFloat(bonus.meleeHasteMultiplier);
+  }
+  if (bonus.rangedHasteMultiplier != 1.f)
+    fields[PLAYER_FIELD_MOD_RANGED_HASTE] = PackFloat(bonus.rangedHasteMultiplier);
+  if (bonus.castHasteMultiplier != 1.f) {
+    fields[UNIT_MOD_CAST_SPEED] = PackFloat(bonus.castHasteMultiplier);
+    fields[UNIT_MOD_CAST_HASTE] = PackFloat(bonus.castHasteMultiplier);
+  }
   UpdateData update(mapId);
   update.AddValuesUpdate(playerGuid, fields);
   update.Build(outPacket);

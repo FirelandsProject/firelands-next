@@ -107,6 +107,7 @@ docker-compose up -d db
 - Ref world text: `python3 tools/sql/import_ref_npc_text.py` → `sql/migrations/34_world_npc_text_data.sql`.
 - Ref gossip menus: `python3 tools/sql/import_ref_gossip.py` → `sql/migrations/35_world_gossip_data.sql`.
 - Ref quest gossip (starters): `python3 tools/sql/import_ref_quest_gossip.py` → `sql/migrations/38_world_quest_gossip_data.sql`.
+- Quest chain prerequisites: `python3 tools/sql/import_ref_quest_prev_quest.py` → `sql/migrations/68_world_quest_prev_quest_data.sql` (DDL in `67_world_quest_template_prev_quest.sql`).
 - Phase catalogs (zone phasing + phase groups): `python3 tools/sql/import_ref_phase_data.py` → `sql/migrations/55_world_phase_catalog_data.sql` (needs `data/dbc/PhaseXPhaseGroup.dbc`).
 
 ## Testing

@@ -39,6 +39,8 @@
 #include <application/services/CharacterService.h>
 #include <application/world/PlayerQuestProgressStore.h>
 #include <domain/repositories/IPlayerQuestProgressRepository.h>
+#include <domain/repositories/IRbacRepository.h>
+#include <shared/game/Permissions.h>
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/WorldOpcodes.h>
 #include <shared/network/WorldPacket.h>
@@ -63,6 +65,13 @@ struct GmTicketUiSession;
 
 class SpellManager;
 struct SpellCastOutcome;
+
+/// Optional heavy work during `TryGrantQuestFromGiver` (DB save, phase rescan).
+struct QuestGrantSideEffects {
+  bool persist = true;
+  bool refreshPhase = false;
+  bool refreshNearbyQuestMarkers = false;
+};
 
 class UpdateData;
 
@@ -113,6 +122,7 @@ public:
       std::shared_ptr<IQuestGossipRepository> questGossipRepo,
       std::shared_ptr<IPlayerQuestProgressRepository> questProgressRepo,
       std::shared_ptr<EmotesTextDbc const> emotesTextDbc,
+      std::shared_ptr<IRbacRepository> rbacRepo = {},
       std::shared_ptr<IWorldRuntime> worldRuntime = {});
 
   ~WorldSession();
@@ -138,8 +148,8 @@ public:
   void OnCreatureKilledByPlayer(uint64 creatureGuid, uint32 hpBefore) override;
   const MovementInfo &GetPosition() const override { return _position; }
   uint32 GetMapId() const override { return _mapId; }
-  AccessLevel GetAccountAccessLevel() const override {
-    return _accountAccessLevel;
+  PermissionMask GetAccountRolePermissionMask() const override {
+    return _accountRolePermissionMask;
   }
 
   void RequestDisconnect(std::string const &reason) override;
@@ -276,9 +286,16 @@ public:
   void HandleQuestGiverHello(WorldPacket &packet);
   void HandleQuestGiverQueryQuest(WorldPacket &packet);
   void HandleQuestQuery(WorldPacket &packet);
+  void HandleQuestPoiQuery(WorldPacket &packet);
+  void HandleQuestNpcQuery(WorldPacket &packet);
   void HandleQuestLogRemoveQuest(WorldPacket &packet);
   void HandleQuestGiverAcceptQuest(WorldPacket &packet);
+  void HandleQuestGiverRequestReward(WorldPacket &packet);
+  void HandleQuestGiverChooseReward(WorldPacket &packet);
   void HandleQuestGiverCompleteQuest(WorldPacket &packet);
+  bool TrySendQuestGiverOfferReward(uint64_t npcGuid, uint32_t creatureEntry,
+                                    QuestGossipSummary const &summary);
+  bool TryRewardQuestFromEnder(uint64_t npcGuid, uint32_t creatureEntry, uint32_t questId);
   void HandleQuestGiverStatusQuery(WorldPacket &packet);
   void HandleTaxiNodeStatusQuery(WorldPacket &packet);
   void HandleQuestGiverStatusMultipleQuery(WorldPacket &packet);
@@ -383,6 +400,7 @@ public:
   void SendTriggerCinematic(uint32_t cinematicSequenceId);
   void SendAccountDataTimes(uint32 mask);
   void ReloadGlobalAccountDataFromDb();
+  void ReloadAccountRolePermissions();
   void ReloadCharacterAccountDataFromDb(uint32 characterGuid);
   void SendFeatureSystemStatus();
   void SendRealmSplit(uint32 realmId);
@@ -451,10 +469,13 @@ public:
   void TryProgressMeetQuestsAtCreature(uint32_t creatureEntry);
   /// Adds quest to log and sends `PLAYER_QUEST_LOG_*` update (ref `AddQuest` / `SetQuestSlot`).
   bool TryGrantQuestFromGiver(uint64_t npcGuid, uint32_t creatureEntry,
-                            QuestGossipSummary const &summary);
+                            QuestGossipSummary const &summary,
+                            QuestGrantSideEffects sideEffects = {});
 
   /// `SMSG_UPDATE_OBJECT` for one `PLAYER_QUEST_LOG_*` slot (ref `SetQuestSlot`).
   bool SendPlayerQuestLogSlotWire(uint32_t questId);
+  /// Clears a quest log slot on the client (ref `SetQuestSlot(slot, 0)` on reward).
+  bool ClearPlayerQuestLogSlotWire(uint8_t slot);
 
   void SendGmTicketMainMenu();
   void SendGmTicketListMenu();
@@ -511,7 +532,8 @@ public:
   bool IsCreatureVisibleToPlayer(Creature const &creature) const;
   void LoginFinalizeWorldEntry(uint64 guid);
   void LoadQuestProgressForCharacter(uint32 characterGuid);
-  void PersistQuestProgressForCharacter();
+  void MarkQuestProgressDirty();
+  void PersistQuestProgressForCharacter(bool force = false);
   void SendRestoredQuestLogToClient();
   void TrySendFirstLoginOpeningCinematic(Character const &character);
   void UnregisterFromOnlineCharacterRegistryIfNeeded();
@@ -581,8 +603,10 @@ public:
   std::shared_ptr<IQuestGossipRepository> _questGossipRepo;
   std::shared_ptr<IPlayerQuestProgressRepository> _questProgressRepo;
   std::shared_ptr<EmotesTextDbc const> _emotesTextDbc;
+  std::shared_ptr<IRbacRepository> _rbacRepo;
   std::shared_ptr<IWorldRuntime> _worldRuntime;
   PlayerQuestProgressStore _questProgress;
+  bool _questProgressDirty = false;
 
   bool IsActivePlayerAlive() const;
   void ApplyUnitNpcEmoteState(uint32_t emoteAnim);
@@ -603,7 +627,7 @@ public:
   bool _initialized = false;
   uint32 _serverSeed;
   uint32 _accountId = 0;
-  AccessLevel _accountAccessLevel = AccessLevel::Player;
+  PermissionMask _accountRolePermissionMask = 0;
   uint64 _playerGuid = 0;
   /// Latest `CMSG_SET_SELECTION` unit (0 = cleared / unknown).
   uint64_t _clientSelectionGuid = 0;

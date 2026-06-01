@@ -20,6 +20,8 @@ public:
               (uint32_t creatureEntry), (const, override));
   MOCK_METHOD(std::optional<QuestGossipSummary>, TryGetQuestTemplate, (uint32_t),
               (const, override));
+  MOCK_METHOD(std::vector<uint32_t>, GetInvolvedCreatureEntriesForQuest, (uint32_t),
+              (const, override));
 };
 
 } // namespace
@@ -35,7 +37,7 @@ TEST(QuestGiverLogicTests, EffectiveNpcFlags_AddsQuestGiverWhenStartersExist) {
 TEST(QuestGiverLogicTests, ResolveDialogStatus_UsesRepository) {
   PlayerQuestProgressStore progress;
   MockQuestGossipRepository repo;
-  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 100, 11, 8, progress),
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 100, 11, 8, 80, progress),
             QuestGiverDialogStatus::None);
 
   QuestGossipSummary summary;
@@ -46,9 +48,9 @@ TEST(QuestGiverLogicTests, ResolveDialogStatus_UsesRepository) {
       .WillOnce(testing::Return(std::vector<QuestGossipSummary>{summary}));
   EXPECT_CALL(repo, GetEnderQuestsForCreature(38243))
       .WillOnce(testing::Return(std::vector<QuestGossipSummary>{}));
-  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 11, 8, progress),
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 11, 8, 80, progress),
             QuestGiverDialogStatus::Available);
-  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 1, 8, progress),
+  EXPECT_EQ(ResolveQuestGiverDialogStatus(&repo, 38243, 1, 8, 80, progress),
             QuestGiverDialogStatus::None);
   EXPECT_EQ(static_cast<uint32_t>(QuestGiverDialogStatus::Available), 0x100u);
 }

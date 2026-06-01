@@ -32,11 +32,12 @@ TEST(DatabaseMigrationCatalogTests, AuthRoleTargetsOnlyAuth) {
   EXPECT_EQ(dbs[0], kAuthDatabase);
 }
 
-TEST(DatabaseMigrationCatalogTests, WorldRoleTargetsCharactersAndWorld) {
+TEST(DatabaseMigrationCatalogTests, WorldRoleTargetsAuthCharactersAndWorld) {
   auto const dbs = TargetDatabasesForRole(MigrationServerRole::World);
-  ASSERT_EQ(dbs.size(), 2U);
-  EXPECT_EQ(dbs[0], kCharactersDatabase);
-  EXPECT_EQ(dbs[1], kWorldDatabase);
+  ASSERT_EQ(dbs.size(), 3U);
+  EXPECT_EQ(dbs[0], kAuthDatabase);
+  EXPECT_EQ(dbs[1], kCharactersDatabase);
+  EXPECT_EQ(dbs[2], kWorldDatabase);
 }
 
 TEST(DatabaseMigrationCatalogTests, InitPathsForWorldInOrder) {

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <domain/models/SpellDefinition.h>
 #include <shared/game/SpellAttributes.h>
+#include <shared/game/SpellAuraTypes.h>
 
 using namespace Firelands;
 
@@ -33,4 +34,18 @@ TEST(SpellDefinitionTests, ActivatablePassiveUsesSpellCooldownRow) {
   hardiness.durationIndex = 21u;
   EXPECT_FALSE(hardiness.isActivatablePassiveSpell());
   EXPECT_TRUE(hardiness.isPermanentLoginPassiveSpell());
+}
+
+TEST(SpellDefinitionTests, DaVoodooShuffleQualifiesAsAlwaysOnLoginPassive) {
+  SpellDefinition daVoodoo{};
+  daVoodoo.attributes = 0x140u;
+  daVoodoo.durationIndex = 0u;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraMechanicDurationMod;
+  row.basePoints = -15;
+  daVoodoo.auraEffects.push_back(row);
+
+  EXPECT_FALSE(daVoodoo.isPassiveSpell());
+  EXPECT_FALSE(daVoodoo.isPermanentLoginPassiveSpell());
+  EXPECT_TRUE(daVoodoo.isAlwaysOnLoginPassiveSpell());
 }

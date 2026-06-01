@@ -24,6 +24,11 @@ public:
     return m_enders;
   }
 
+  std::vector<uint32_t>
+  GetInvolvedCreatureEntriesForQuest(uint32_t /*questId*/) const override {
+    return {};
+  }
+
   std::optional<QuestGossipSummary>
   TryGetQuestTemplate(uint32_t questId) const override {
     for (QuestGossipSummary const &q : m_starters) {
@@ -74,14 +79,14 @@ TEST(QuestProgressLogicTests, AcceptRejectedWhenAlreadyRewarded) {
   PlayerQuestProgressStore progress;
   progress.SetQuestRewarded(10);
   auto const result =
-      EvaluateQuestAccept(MakeQuest(10), progress, 1, 1);
+      EvaluateQuestAccept(MakeQuest(10), progress, 1, 1, 80);
   EXPECT_EQ(result, QuestAcceptResult::AlreadyRewarded);
 }
 
 TEST(QuestProgressLogicTests, AcceptRejectedWhenAlreadyActive) {
   PlayerQuestProgressStore progress;
   progress.SetQuestStatus(10, QuestStatus::Incomplete);
-  EXPECT_EQ(EvaluateQuestAccept(MakeQuest(10), progress, 1, 1),
+  EXPECT_EQ(EvaluateQuestAccept(MakeQuest(10), progress, 1, 1, 80),
             QuestAcceptResult::AlreadyOnQuest);
 }
 
@@ -96,10 +101,10 @@ TEST(QuestProgressLogicTests, DialogStatusRewardOnlyOnEnderWhenComplete) {
   constexpr uint8_t kTrollRaceId = 8u;
   MockQuestRepo repo({MakeQuest(24764, 1024, 946)}, {MakeQuest(24764, 1024, 946)});
   EXPECT_EQ(ResolveQuestGiverDialogStatusForPlayer(
-                &repo, 37951, kTrollDruidClass, kTrollRaceId, progress),
+                &repo, 37951, kTrollDruidClass, kTrollRaceId, 80, progress),
             QuestGiverDialogStatus::None);
   EXPECT_EQ(ResolveQuestGiverDialogStatusForPlayer(
-                &repo, 38243, kTrollDruidClass, kTrollRaceId, progress),
+                &repo, 38243, kTrollDruidClass, kTrollRaceId, 80, progress),
             QuestGiverDialogStatus::Reward);
 }
 
@@ -107,10 +112,26 @@ TEST(QuestProgressLogicTests, StarterGossipHidesCompleteQuestTurnIn) {
   PlayerQuestProgressStore progress;
   progress.SetQuestStatus(10, QuestStatus::Complete);
   MockQuestRepo repo({MakeQuest(10)});
-  EXPECT_EQ(ResolveStarterQuestGossipIconForPlayer(MakeQuest(10), progress),
+  EXPECT_EQ(ResolveStarterQuestGossipIconForPlayer(MakeQuest(10), progress, 1, 1, 80),
             QuestGossipIcon::None);
-  auto const items = BuildStarterGossipQuestItemsForPlayer({MakeQuest(10)}, progress);
+  auto const items =
+      BuildStarterGossipQuestItemsForPlayer({MakeQuest(10)}, progress, 1, 1, 80);
   EXPECT_TRUE(items.empty());
+}
+
+TEST(QuestProgressLogicTests, OfferRewardTextPrefersDedicatedField) {
+  QuestGossipSummary summary = MakeQuest(10);
+  summary.offerRewardText = "Reward line";
+  summary.questDescription = "Story";
+  EXPECT_EQ(QuestOfferRewardTextForPlayer(summary), "Reward line");
+}
+
+TEST(QuestProgressLogicTests, EnderGossipShowsLineWhenIncomplete) {
+  PlayerQuestProgressStore progress;
+  progress.SetQuestStatus(24764, QuestStatus::Incomplete);
+  auto const items = BuildEnderGossipQuestItemsForPlayer({MakeQuest(24764)}, progress);
+  ASSERT_EQ(items.size(), 1u);
+  EXPECT_EQ(items[0].questIcon, static_cast<uint8_t>(QuestGossipIcon::CompleteDaily));
 }
 
 TEST(QuestProgressLogicTests, EnderGossipShowsQuestionWhenComplete) {
@@ -118,5 +139,93 @@ TEST(QuestProgressLogicTests, EnderGossipShowsQuestionWhenComplete) {
   progress.SetQuestStatus(10, QuestStatus::Complete);
   auto const items = BuildEnderGossipQuestItemsForPlayer({MakeQuest(10)}, progress);
   ASSERT_EQ(items.size(), 1u);
-  EXPECT_EQ(items[0].questIcon, static_cast<uint8_t>(QuestGossipIcon::Complete));
+  EXPECT_EQ(items[0].questIcon, static_cast<uint8_t>(QuestGossipIcon::CompleteDaily));
+}
+
+TEST(QuestProgressLogicTests, DialogStatus_IncompleteBeatsAvailableWithoutPrevLoaded) {
+  PlayerQuestProgressStore progress;
+  progress.SetQuestStatus(24764, QuestStatus::Incomplete);
+  QuestGossipSummary next = MakeQuest(24765, 1024, 8388607);
+  next.prevQuestId = 0;
+  constexpr uint8_t kTrollDruidClass = ToClassId(PlayerClass::Druid);
+  constexpr uint8_t kTrollRaceId = 8u;
+  MockQuestRepo repo({next}, {MakeQuest(24764, 1024, 946)});
+  EXPECT_EQ(ResolveQuestGiverDialogStatusForPlayer(
+                &repo, 38243, kTrollDruidClass, kTrollRaceId, 80, progress),
+            QuestGiverDialogStatus::Incomplete);
+}
+
+TEST(QuestProgressLogicTests, ZentabraChain_Hides24765Until24764Rewarded) {
+  PlayerQuestProgressStore progress;
+  progress.SetQuestStatus(24764, QuestStatus::Incomplete);
+  QuestGossipSummary next = MakeQuest(24765, 1024, 8388607);
+  next.prevQuestId = 24764;
+  constexpr uint8_t kTrollDruidClass = ToClassId(PlayerClass::Druid);
+  constexpr uint8_t kTrollRaceId = 8u;
+  EXPECT_FALSE(
+      PlayerMayTakeStarterQuest(next, progress, kTrollDruidClass, kTrollRaceId, 80));
+  EXPECT_EQ(ResolveStarterQuestGossipIconForPlayer(next, progress, kTrollDruidClass,
+                                                     kTrollRaceId, 80),
+            QuestGossipIcon::None);
+  MockQuestRepo repo({next}, {MakeQuest(24764, 1024, 946)});
+  EXPECT_EQ(ResolveQuestGiverDialogStatusForPlayer(
+                &repo, 38243, kTrollDruidClass, kTrollRaceId, 80, progress),
+            QuestGiverDialogStatus::Incomplete);
+}
+
+TEST(QuestProgressLogicTests, ZentabraChain_ShowsRewardWhen24764Complete) {
+  PlayerQuestProgressStore progress;
+  progress.SetQuestStatus(24764, QuestStatus::Complete);
+  QuestGossipSummary next = MakeQuest(24765, 1024, 8388607);
+  next.prevQuestId = 24764;
+  constexpr uint8_t kTrollDruidClass = ToClassId(PlayerClass::Druid);
+  constexpr uint8_t kTrollRaceId = 8u;
+  MockQuestRepo repo({next}, {MakeQuest(24764, 1024, 946)});
+  EXPECT_EQ(ResolveQuestGiverDialogStatusForPlayer(
+                &repo, 38243, kTrollDruidClass, kTrollRaceId, 80, progress),
+            QuestGiverDialogStatus::Reward);
+}
+
+TEST(QuestProgressLogicTests, AcceptRejectedWhenPrevQuestNotRewarded) {
+  PlayerQuestProgressStore progress;
+  QuestGossipSummary q = MakeQuest(24765);
+  q.prevQuestId = 24764;
+  EXPECT_EQ(EvaluateQuestAccept(q, progress, ToClassId(PlayerClass::Druid), 8, 80),
+            QuestAcceptResult::PrerequisitesNotMet);
+}
+
+TEST(QuestProgressLogicTests, AcceptAllowedWhenNegativePrevQuestIsActive) {
+  PlayerQuestProgressStore progress;
+  progress.SetQuestStatus(100, QuestStatus::Incomplete);
+  QuestGossipSummary q = MakeQuest(200);
+  q.prevQuestId = -100;
+  EXPECT_EQ(EvaluateQuestAccept(q, progress, ToClassId(PlayerClass::Druid), 8, 80),
+            QuestAcceptResult::Accepted);
+}
+
+TEST(QuestProgressLogicTests, AcceptRejectedWhenNegativePrevQuestNotActive) {
+  PlayerQuestProgressStore progress;
+  QuestGossipSummary q = MakeQuest(200);
+  q.prevQuestId = -100;
+  EXPECT_EQ(EvaluateQuestAccept(q, progress, ToClassId(PlayerClass::Druid), 8, 80),
+            QuestAcceptResult::PrerequisitesNotMet);
+}
+
+TEST(QuestProgressLogicTests, StarterGossipHiddenWhenPrevQuestNotRewarded) {
+  PlayerQuestProgressStore progress;
+  QuestGossipSummary chained = MakeQuest(24765);
+  chained.prevQuestId = 24764;
+  auto const items = BuildStarterGossipQuestItemsForPlayer(
+      {chained}, progress, ToClassId(PlayerClass::Druid), 8, 80);
+  EXPECT_TRUE(items.empty());
+}
+
+TEST(QuestProgressLogicTests, StarterGossipShowsUnavailableWhenLevelTooLow) {
+  PlayerQuestProgressStore progress;
+  QuestGossipSummary high = MakeQuest(50);
+  high.questLevel = 10;
+  auto const items = BuildStarterGossipQuestItemsForPlayer(
+      {high}, progress, ToClassId(PlayerClass::Druid), 8, 1);
+  ASSERT_EQ(items.size(), 1u);
+  EXPECT_EQ(items[0].questIcon, static_cast<uint8_t>(QuestGossipIcon::Unavailable));
 }

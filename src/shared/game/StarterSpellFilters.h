@@ -32,4 +32,7 @@ bool IsMountOrVehicleAuraType(uint32_t auraEffectType);
 /// Aura types that must not be auto-applied on login (mount, shapeshift, vehicle).
 bool IsExcludedLoginAuraType(uint32_t auraEffectType);
 
+/// Beneficial always-on aura rows that may apply at login without `SPELL_ATTR0_PASSIVE`.
+bool IsAlwaysOnLoginAuraType(uint32_t auraEffectType);
+
 } // namespace Firelands

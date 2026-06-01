@@ -20,7 +20,7 @@ When a player talks to a creature (`CMSG_GOSSIP_HELLO`):
 
 `CMSG_GOSSIP_SELECT_OPTION` fires `gossip_select` in Lua, then supports **chained menus** via `gossip_menu_option_action.ActionMenuId`, else closes gossip.
 
-Quest lines in `SMSG_GOSSIP_MESSAGE` are **not implemented** (count `0`).
+Quest lines in `SMSG_GOSSIP_MESSAGE` come from `creature_queststarter` / `creature_questender` via `BuildAllGossipQuestItemsForPlayer` (Cataclysm wire: id, icon, level, flags, blue?, title).
 
 ### Opcodes and packets
 
@@ -133,22 +133,23 @@ After migrations land, regenerate bundled world schema (`merge-migrations`) and 
 
 The client requests `CMSG_QUESTGIVER_STATUS_QUERY` / `CMSG_QUESTGIVER_STATUS_MULTIPLE_QUERY`; the server answers with `SMSG_QUESTGIVER_STATUS` / `_MULTIPLE` (uint64 guid + uint32 cata status flags, e.g. `0x100` = available). Starter NPCs keep template gossip + quest-giver `UNIT_NPC_FLAGS` (flight master bit stripped). Interaction: `CMSG_QUESTGIVER_HELLO` and/or `CMSG_GOSSIP_HELLO` → gossip menu or `SMSG_QUESTGIVER_QUEST_LIST`.
 
-Until per-character quest status exists, any matching starter on the NPC is reported as **available** (yellow !, wire icon `2`). Gossip quest lines are filtered by `AllowableClasses` / `AllowableRaces` (`SatisfyQuestClass` / `SatisfyQuestRace`) so class-specific hubs like Jinthala show one line per player. Quest lines use `SendGossipMenu` layout; the byte after flags is blue-question styling for autocomplete repeatables only.
+Starter visibility uses per-character quest status plus `quest_template.PrevQuestId` (ref `quest_template_addon.PrevQuestID`: positive = previous quest must be **rewarded**; negative = previous must be **active**). Chain starters that fail the prev check are **omitted** from gossip / quest list (not grey). Too-low level shows **grey** (`QUEST_ICON_UNAVAILABLE`). Lines are filtered by `AllowableClasses` / `AllowableRaces` and `QuestLevel` vs player level. Echo Isles example: Zen'Tabra (38243) turn-in for 24764 shows **?** when complete; chain starters such as 24765 stay hidden until 24764 is turned in. Apply migrations `67`/`68` (or re-import gossip data with `PrevQuestId`) so chain data exists in `quest_template`. Meet-objective quests with no trackable counters auto-complete when the end NPC is opened or enters quest-giver status range. Turning in a quest clears the matching `PLAYER_QUEST_LOG_*` slot on the client via `SMSG_UPDATE_OBJECT` (ref `SetQuestSlot(slot, 0)`), in addition to `SMSG_QUESTGIVER_QUEST_COMPLETE`.
 
 ### Quest accept / complete (MVP)
 
 - `CMSG_QUESTGIVER_QUERY_QUEST` → `SMSG_QUESTGIVER_QUEST_DETAILS` (`LogTitle`, `QuestDescription` body, `LogDescription` objectives)
 - DB: migration `63` (columns) + `64_world_quest_gossip_text_data.sql` (text backfill from ref). Regenerate: `python3 tools/sql/import_ref_quest_gossip.py --out sql/migrations/64_world_quest_gossip_text_data.sql --backfill-text-only`
 - Accept updates `PLAYER_QUEST_LOG_*` via values update (no `SMSG_QUEST_UPDATE_COMPLETE` until objectives finish)
-- `CMSG_QUESTGIVER_ACCEPT_QUEST` / `CMSG_QUESTGIVER_COMPLETE_QUEST` wired; progress in `PlayerQuestProgressStore` (session memory + load from DB on login)
-- `RefreshPlayerPhaseVisibilityFromQuestProgress()` after accept/complete
+- `CMSG_QUESTGIVER_ACCEPT_QUEST` / `CMSG_QUESTGIVER_COMPLETE_QUEST` wired; progress in `PlayerQuestProgressStore` (session memory + dirty save on accept/turn-in, flush on logout)
+- Quest gossip rows are cached per creature entry; auto-accept on query skips DB save until accept or logout
+- `RefreshPlayerPhaseVisibilityFromQuestProgress()` after accept, meet-complete, and turn-in
 - Autocomplete-flag quests (`QUEST_FLAGS_AUTOCOMPLETE`) finish on accept
+- Persist accept/complete/reward to `character_queststatus` / `character_queststatus_rewarded` on dirty save (`PersistQuestProgressForCharacter`), load on login (`LoadQuestProgressForCharacter`), flush on logout
 
 ### Not in this slice yet
 
 - `BroadcastTextID*` columns stored but not used server-side yet
-- Persist accept/complete back to `character_queststatus` tables
-- Full `quest_template` reward block in details / turn-in packets
+- Full `quest_template` reward block in details / turn-in packets (wire uses zeroed `QuestRewards` block)
 
 ---
 

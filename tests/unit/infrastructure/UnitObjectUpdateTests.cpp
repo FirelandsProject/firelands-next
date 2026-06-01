@@ -92,6 +92,30 @@ TEST(UnitObjectUpdateTests, PlayerQuestLogSlotUpdateEncodesQuestId) {
   EXPECT_EQ(out.Read<uint32>(), 24607u);
 }
 
+TEST(UnitObjectUpdateTests, PlayerQuestLogSlotUpdateClearsSlotWithZeroQuestId) {
+  uint64_t const playerGuid = 0x0000000BULL;
+  WorldPacket out;
+  ws_obj::BuildPlayerQuestLogSlotValuesUpdate(1, playerGuid, 3, 0u, 0u, 0u, out);
+
+  ASSERT_GT(out.Size(), 0u);
+  out.SetReadPos(0);
+  (void)out.Read<uint16>();
+  (void)out.Read<uint32>();
+  (void)out.Read<uint8>();
+  (void)out.ReadPackedGuid();
+  uint8 const maskSize = out.Read<uint8>();
+  std::vector<uint32> blockMask(maskSize);
+  for (uint8 i = 0; i < maskSize; ++i)
+    blockMask[i] = out.Read<uint32>();
+
+  uint16 const questIdField = PlayerQuestLogFieldBase(3);
+  for (uint32 i = 0; i < questIdField; ++i) {
+    if (blockMask[i / 32] & (1u << (i % 32)))
+      (void)out.Read<uint32>();
+  }
+  EXPECT_EQ(out.Read<uint32>(), 0u);
+}
+
 TEST(UnitObjectUpdateTests, UnitDynamicFlagsValuesUpdateEncodesLootable) {
   WorldPacket out;
   ws_obj::BuildUnitDynamicFlagsValuesUpdate(

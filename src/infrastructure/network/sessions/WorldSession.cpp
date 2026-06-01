@@ -30,6 +30,7 @@ WorldSession::WorldSession(
     std::shared_ptr<IQuestGossipRepository> questGossipRepo,
     std::shared_ptr<IPlayerQuestProgressRepository> questProgressRepo,
     std::shared_ptr<EmotesTextDbc const> emotesTextDbc,
+    std::shared_ptr<IRbacRepository> rbacRepo,
     std::shared_ptr<IWorldRuntime> worldRuntime)
     : _socket(std::move(socket)), _authService(std::move(authService)),
       _charService(std::move(charService)),
@@ -50,6 +51,7 @@ WorldSession::WorldSession(
       _questGossipRepo(std::move(questGossipRepo)),
       _questProgressRepo(std::move(questProgressRepo)),
       _emotesTextDbc(std::move(emotesTextDbc)),
+      _rbacRepo(std::move(rbacRepo)),
       _worldRuntime(worldRuntime ? std::move(worldRuntime) : WorldRuntimePtr()),
       _serverSeed(0),
       _accountId(0), _timeSyncPeriodicTimer(_socket.get_executor()),
@@ -57,6 +59,13 @@ WorldSession::WorldSession(
       _meleeAutoAttackTimer(_socket.get_executor()),
       _creatureCombatMoveTimer(_socket.get_executor()),
       _writeWakeTimer(_socket.get_executor()) {}
+
+void WorldSession::ReloadAccountRolePermissions() {
+  _accountRolePermissionMask = 0;
+  if (_rbacRepo && _accountId != 0)
+    _accountRolePermissionMask =
+        static_cast<PermissionMask>(_rbacRepo->UnionPermissionMaskForAccount(_accountId));
+}
 
 WorldSession::~WorldSession() {
   if (_playerGuid != 0) {

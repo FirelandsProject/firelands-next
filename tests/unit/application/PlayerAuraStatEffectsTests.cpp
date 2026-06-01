@@ -215,6 +215,28 @@ TEST(PlayerAuraStatEffectsTests, MergePermanentPassiveWithoutActiveAura) {
   EXPECT_EQ(bonus.resistanceBuffPos[5], 5);
 }
 
+TEST(PlayerAuraStatEffectsTests, BerserkingCombatSpeedSetsHasteMultipliers) {
+  SpellDefinition def{};
+  def.id = 26297u;
+  def.attributes = SpellAttr0::kPassive;
+  def.cooldownsId = 1579u;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraModCombatSpeedPct;
+  row.basePoints = 20;
+  def.auraEffects.push_back(row);
+
+  StatAuraStore store;
+  store.Add(def);
+
+  std::vector<Aura> auras{MakePassiveAura(26297u)};
+  PlayerAuraStatBonus const bonus =
+      ComputePlayerAuraStatBonus(auras, &store, 85);
+
+  EXPECT_FLOAT_EQ(bonus.meleeHasteMultiplier, 1.21f);
+  EXPECT_FLOAT_EQ(bonus.rangedHasteMultiplier, 1.21f);
+  EXPECT_FLOAT_EQ(bonus.castHasteMultiplier, 1.21f);
+}
+
 TEST(PlayerAuraStatEffectsTests, ModRatingAddsCombatRating) {
   SpellDefinition def{};
   def.id = 200u;

@@ -111,4 +111,29 @@ bool IsExcludedLoginAuraType(uint32_t auraEffectType) {
   }
 }
 
+bool IsAlwaysOnLoginAuraType(uint32_t auraEffectType) {
+  if (IsExcludedLoginAuraType(auraEffectType))
+    return false;
+  switch (auraEffectType) {
+  case kSpellAuraModStat:
+  case kSpellAuraModPercentStat:
+  case kSpellAuraModAttackPower:
+  case kSpellAuraModAttackPowerPct:
+  case kSpellAuraModRating:
+  case kSpellAuraModResistance:
+  case kSpellAuraModDamageDone:
+  case kSpellAuraModDamagePercentDone:
+  case kSpellAuraModDodgePercent:
+  case kSpellAuraModIncreaseHealthPercent:
+  case kSpellAuraModHealthRegenPercent:
+  case kSpellAuraModRegenDuringCombat:
+  case kSpellAuraModPowerRegenPercent:
+  case kSpellAuraModCombatSpeedPct:
+  case kSpellAuraMechanicDurationMod:
+    return true;
+  default:
+    return false;
+  }
+}
+
 } // namespace Firelands

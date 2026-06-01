@@ -83,7 +83,8 @@ inline std::vector<std::string>
 TargetDatabasesForRole(MigrationServerRole role) {
   if (role == MigrationServerRole::Auth)
     return {kAuthDatabase};
-  return {kCharactersDatabase, kWorldDatabase};
+  // World uses auth for accounts, RBAC, realm gates — apply auth migrations here too.
+  return {kAuthDatabase, kCharactersDatabase, kWorldDatabase};
 }
 
 /// Init SQL paths for a database, in execution order.

@@ -27,8 +27,8 @@ TEST(GossipPacketTests, BuildGossipMessage_UsesFullGuidAndNullTerminatedStrings)
   WorldPacket copy = pkt;
   copy.SetReadPos(0);
   EXPECT_EQ(copy.Read<uint64_t>(), npcGuid);
-  EXPECT_EQ(copy.Read<int32_t>(), 2782);
-  EXPECT_EQ(copy.Read<int32_t>(), 3466);
+  EXPECT_EQ(copy.Read<uint32_t>(), 2782u);
+  EXPECT_EQ(copy.Read<uint32_t>(), 3466u);
   EXPECT_EQ(copy.Read<uint32_t>(), 1u);
   EXPECT_EQ(copy.Read<int32_t>(), 0);
   EXPECT_EQ(copy.Read<uint8_t>(), static_cast<uint8_t>(GossipOptionIcon::Chat));
@@ -57,14 +57,14 @@ TEST(GossipPacketTests, BuildGossipMessage_WritesQuestLinesAfterOptions) {
   WorldPacket copy = pkt;
   copy.SetReadPos(0);
   copy.Read<uint64_t>();
-  copy.Read<int32_t>();
-  copy.Read<int32_t>();
+  copy.Read<uint32_t>();
+  copy.Read<uint32_t>();
   EXPECT_EQ(copy.Read<uint32_t>(), 0u);
   EXPECT_EQ(copy.Read<uint32_t>(), 1u);
-  EXPECT_EQ(copy.Read<int32_t>(), static_cast<int32_t>(quest.questId));
-  EXPECT_EQ(copy.Read<int32_t>(), static_cast<int32_t>(quest.questIcon));
+  EXPECT_EQ(copy.Read<uint32_t>(), quest.questId);
+  EXPECT_EQ(copy.Read<uint32_t>(), static_cast<uint32_t>(quest.questIcon));
   EXPECT_EQ(copy.Read<int32_t>(), quest.questLevel);
-  EXPECT_EQ(copy.Read<int32_t>(), static_cast<int32_t>(quest.questFlags));
+  EXPECT_EQ(copy.Read<uint32_t>(), quest.questFlags);
   EXPECT_EQ(copy.Read<uint8_t>(), 0u);
   std::string title;
   char c = 0;
@@ -106,6 +106,32 @@ TEST(GossipPacketTests, BuildNpcTextUpdate_Fallback_IncludesTextIdAndGreeting) {
          (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
     line += c;
   EXPECT_EQ(line, "Greetings $N");
+}
+
+TEST(GossipPacketTests, BuildQuestGiverOfferReward_WritesGuidTitleAndRewards) {
+  QuestGossipSummary summary;
+  summary.title = "The Rise of the Darkspear";
+  summary.flags = 0x00080000u;
+  summary.questDescription = "Well done, $n.";
+
+  WorldPacket pkt =
+      quest::BuildQuestGiverOfferReward(0xABCD, 24764, summary, "Well done, $n.");
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_QUESTGIVER_OFFER_REWARD));
+
+  WorldPacket copy = pkt;
+  copy.SetReadPos(0);
+  EXPECT_EQ(copy.Read<uint64_t>(), 0xABCDu);
+  EXPECT_EQ(copy.Read<uint32_t>(), 24764u);
+  auto readCString = [&copy]() {
+    std::string s;
+    char c = 0;
+    while (copy.GetReadPos() < copy.Size() &&
+           (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
+      s += c;
+    return s;
+  };
+  EXPECT_EQ(readCString(), "The Rise of the Darkspear");
+  EXPECT_EQ(readCString(), "Well done, $n.");
 }
 
 TEST(GossipPacketTests, BuildQuestGiverQuestDetails_WritesBodyAndObjectives) {
@@ -173,6 +199,32 @@ TEST(GossipPacketTests, BuildNpcTextUpdate_FromDomainRow_WritesCustomGreeting) {
          (c = static_cast<char>(copy.Read<uint8_t>())) != 0)
     line += c;
   EXPECT_EQ(line, "Custom line");
+  while (copy.GetReadPos() < copy.Size() &&
+         (c = static_cast<char>(copy.Read<uint8_t>())) != 0) {
+  }
+  EXPECT_EQ(copy.Read<uint32_t>(), 0u);
+}
+
+TEST(GossipPacketTests, BuildNpcTextUpdate_LanguageIsUint32PerSlot) {
+  NpcText text;
+  text.id = 1;
+  text.options[0].probability = 1.f;
+  text.options[0].text0 = "Hi";
+  text.options[0].text1 = "Hi";
+  text.options[0].language = 7;
+
+  WorldPacket pkt = gossip::BuildNpcTextUpdate(text);
+  WorldPacket copy = pkt;
+  copy.SetReadPos(0);
+  copy.Read<uint32_t>();
+  copy.Read<float>();
+  while (copy.GetReadPos() < copy.Size() &&
+         static_cast<char>(copy.Read<uint8_t>()) != 0) {
+  }
+  while (copy.GetReadPos() < copy.Size() &&
+         static_cast<char>(copy.Read<uint8_t>()) != 0) {
+  }
+  EXPECT_EQ(copy.Read<uint32_t>(), 7u);
 }
 
 TEST(GossipPacketTests, BuildQuestQueryResponse_EncodesQuestHeader) {
@@ -193,6 +245,22 @@ TEST(GossipPacketTests, BuildQuestQueryResponse_EncodesQuestHeader) {
   EXPECT_EQ(copy.Read<int32_t>(), 1); // level
   EXPECT_EQ(copy.Read<int32_t>(), 0); // QuestMinLevel
   EXPECT_EQ(copy.Read<int32_t>(), 368); // QuestSortID (Echo Isles)
+}
+
+TEST(GossipPacketTests, BuildQuestPoiQueryResponse_EmptyPoiPerQuest) {
+  WorldPacket pkt = quest::BuildQuestPoiQueryResponse({24764u});
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_QUEST_POI_QUERY_RESPONSE));
+  pkt.SetReadPos(0);
+  EXPECT_EQ(pkt.Read<uint32_t>(), 1u);
+  EXPECT_EQ(pkt.Read<uint32_t>(), 24764u);
+  EXPECT_EQ(pkt.Read<uint32_t>(), 0u);
+}
+
+TEST(GossipPacketTests, BuildQuestNpcQueryResponse_EncodesCreatureList) {
+  WorldPacket pkt =
+      quest::BuildQuestNpcQueryResponse({{24764u, {37951u, 38243u}}});
+  EXPECT_EQ(pkt.GetOpcode(), static_cast<uint32>(SMSG_QUEST_NPC_QUERY_RESPONSE));
+  EXPECT_GT(pkt.Size(), 8u);
 }
 
 TEST(GossipPacketTests, BuildPlaySound_EncodesOpcodeAndKit) {

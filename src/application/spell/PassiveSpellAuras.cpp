@@ -12,7 +12,7 @@ namespace Firelands {
 namespace {
 
 bool ShouldApplyPassiveAuraRow(SpellDefinition const &def, SpellAuraEffectRow const &row) {
-  if (!def.isPermanentLoginPassiveSpell())
+  if (!def.isAlwaysOnLoginPassiveSpell())
     return false;
   if (IsExcludedLoginAuraType(row.auraType))
     return false;
@@ -20,7 +20,7 @@ bool ShouldApplyPassiveAuraRow(SpellDefinition const &def, SpellAuraEffectRow co
 }
 
 bool SpellQualifiesAsLoginPassive(SpellDefinition const &def) {
-  if (!def.isPermanentLoginPassiveSpell())
+  if (!def.isAlwaysOnLoginPassiveSpell())
     return false;
   if (!def.auraEffects.empty()) {
     for (SpellAuraEffectRow const &row : def.auraEffects) {
@@ -77,7 +77,7 @@ std::vector<SpellCastOutcome> BuildPassiveAuraOutcomes(
       continue;
 
     std::optional<SpellDefinition> def = spellDefinitions->GetDefinition(spellId);
-    if (!def || !def->isPermanentLoginPassiveSpell())
+    if (!def || !def->isAlwaysOnLoginPassiveSpell())
       continue;
 
     if (!def->auraEffects.empty()) {

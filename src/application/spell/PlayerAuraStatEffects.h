@@ -33,6 +33,10 @@ struct PlayerAuraStatBonus {
   int32 attackPowerModNeg = 0;
   /// Fraction added to melee AP (e.g. 0.07f = 7% from `SPELL_AURA_MOD_ATTACK_POWER_PCT`).
   float attackPowerMultiplier = 0.f;
+  /// Multipliers on baseline 1.0 (`PLAYER_FIELD_MOD_HASTE`, ranged/pet, `UNIT_MOD_CAST_HASTE`).
+  float meleeHasteMultiplier = 1.f;
+  float rangedHasteMultiplier = 1.f;
+  float castHasteMultiplier = 1.f;
 };
 
 /// Sums bonuses from `auras` using `spellDefinitions` aura rows (`auraEffects` when present).

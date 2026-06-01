@@ -7,6 +7,7 @@
 #include <domain/repositories/IQuestGossipRepository.h>
 #include <domain/repositories/INpcTextRepository.h>
 #include <shared/network/packets/server/NpcTextPackets.h>
+#include <shared/network/BitReader.h>
 #include <shared/network/packets/server/QuestPackets.h>
 #include <application/services/WorldService.h>
 #include <domain/repositories/IGossipRepository.h>
@@ -69,15 +70,16 @@ bool WorldSession::TrySendDatabaseGossipMenu(uint64_t npcGuid,
   std::vector<GossipQuestItem> quests;
   if (_questGossipRepo)
     quests = BuildAllGossipQuestItemsForPlayer(
-        _questGossipRepo.get(), templateEntry, _playerClass, _playerRace,
+        _questGossipRepo.get(), templateEntry, _playerClass, _playerRace, _playerLevel,
         _questProgress);
 
   if (!ShouldSendGossipMenu(options.size(), textId.has_value(), quests.size()))
     return false;
 
   uint32_t const wireTextId = textId.value_or(0);
-  LOG_DEBUG("Gossip open entry={} menu={} textId={} options={} quests={}",
-            templateEntry, menuId, wireTextId, options.size(), quests.size());
+  LOG_DEBUG("Gossip open entry={} menu={} textId={} options={} quests={} opcode={:#x}",
+            templateEntry, menuId, wireTextId, options.size(), quests.size(),
+            static_cast<uint32_t>(SMSG_GOSSIP_MESSAGE));
   SendGossipMessage(npcGuid, menuId, wireTextId, options, quests);
   return true;
 }
@@ -104,6 +106,9 @@ bool WorldSession::TryOpenQuestGiverDialog(uint64_t npcGuid) {
     return false;
 
   if (auto const entry = TryResolveCreatureTemplateEntry(npcGuid)) {
+    if (_questGossipRepo)
+      TryProgressMeetQuestsAtCreature(*entry);
+
     uint32_t templateGossipMenuId = 0;
     uint64_t npcFlags = 0;
     if (_npcTemplateSearch) {
@@ -119,9 +124,9 @@ bool WorldSession::TryOpenQuestGiverDialog(uint64_t npcGuid) {
     }
 
     if (_questGossipRepo) {
-      TryProgressMeetQuestsAtCreature(*entry);
       auto const quests = BuildAllGossipQuestItemsForPlayer(
-          _questGossipRepo.get(), *entry, _playerClass, _playerRace, _questProgress);
+          _questGossipRepo.get(), *entry, _playerClass, _playerRace, _playerLevel,
+          _questProgress);
       if (!quests.empty()) {
         LOG_DEBUG("Quest list open entry={} quests={}", *entry, quests.size());
         WorldPacket data =
@@ -139,7 +144,8 @@ uint32_t WorldSession::ResolveEffectiveNpcFlagsForCreature(
   return EffectiveUnitNpcFlagsForCreature(
       creature.GetNpcFlags(),
       CreatureHasStarterQuests(_questGossipRepo.get(), creature.GetEntry(),
-                               _playerClass, _playerRace));
+                               _playerClass, _playerRace, _playerLevel,
+                               _questProgress));
 }
 
 WorldSession::CreatureClientWireFields WorldSession::ResolveCreatureWireFieldsForClient(
@@ -158,8 +164,11 @@ void WorldSession::SendQuestGiverStatusForGuid(uint64_t npcGuid,
                                                uint32_t creatureEntry) {
   if (npcGuid == 0 || creatureEntry == 0)
     return;
+  if (_questGossipRepo)
+    TryProgressMeetQuestsAtCreature(creatureEntry);
   auto const status = ResolveQuestGiverDialogStatus(
-      _questGossipRepo.get(), creatureEntry, _playerClass, _playerRace, _questProgress);
+      _questGossipRepo.get(), creatureEntry, _playerClass, _playerRace, _playerLevel,
+      _questProgress);
   if (status == QuestGiverDialogStatus::None)
     return;
   auto data = quest::BuildQuestGiverStatus(npcGuid, static_cast<uint32_t>(status));
@@ -180,7 +189,8 @@ void WorldSession::SendQuestGiverStatusMultipleNearby() {
                                return;
                              auto const status = ResolveQuestGiverDialogStatus(
                                  _questGossipRepo.get(), cr->GetEntry(),
-                                 _playerClass, _playerRace, _questProgress);
+                                 _playerClass, _playerRace, _playerLevel,
+                                 _questProgress);
                              if (status == QuestGiverDialogStatus::None)
                                return;
                              entries.push_back(
@@ -204,10 +214,11 @@ void WorldSession::TryProgressMeetQuestsAtCreature(uint32_t creatureEntry) {
       continue;
     if (_questProgress.GetQuestStatus(summary.questId) != QuestStatus::Incomplete)
       continue;
-    if (!QuestCompletesOnMeetNpc(summary))
+    if (!QuestCompletesOnMeetNpc(summary, creatureEntry))
       continue;
 
     _questProgress.SetQuestStatus(summary.questId, QuestStatus::Complete);
+    MarkQuestProgressDirty();
     if (!SendPlayerQuestLogSlotWire(summary.questId))
       continue;
     WorldPacket updateComplete = quest::BuildQuestUpdateComplete(summary.questId);
@@ -219,7 +230,7 @@ void WorldSession::TryProgressMeetQuestsAtCreature(uint32_t creatureEntry) {
   if (!changed)
     return;
   PersistQuestProgressForCharacter();
-  SendQuestGiverStatusMultipleNearby();
+  RefreshPlayerPhaseVisibilityFromQuestProgress();
 }
 
 void WorldSession::HandleQuestGiverHello(WorldPacket &packet) {
@@ -252,6 +263,61 @@ void WorldSession::HandleQuestGiverStatusMultipleQuery(WorldPacket &) {
   SendQuestGiverStatusMultipleNearby();
 }
 
+void WorldSession::HandleQuestPoiQuery(WorldPacket &packet) {
+  if (!_questGossipRepo || packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
+    return;
+  uint32_t const count = packet.Read<uint32_t>();
+  if (count == 0 || count > kMaxQuestLogSlots)
+    return;
+
+  std::vector<uint32_t> questIds;
+  questIds.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    if (packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
+      break;
+    uint32_t const questId = packet.Read<uint32_t>();
+    if (questId == 0)
+      continue;
+    if (!_questGossipRepo || !_questGossipRepo->TryGetQuestTemplate(questId))
+      continue;
+    questIds.push_back(questId);
+  }
+
+  if (questIds.empty())
+    return;
+
+  WorldPacket poiResponse = quest::BuildQuestPoiQueryResponse(questIds);
+  SendPacket(poiResponse);
+}
+
+void WorldSession::HandleQuestNpcQuery(WorldPacket &packet) {
+  if (!_questGossipRepo || packet.Size() < 3)
+    return;
+
+  BitReader br(packet);
+  uint32_t const count = br.ReadBits(24);
+  if (count == 0 || count > kMaxQuestLogSlots)
+    return;
+
+  std::vector<std::pair<uint32_t, std::vector<uint32_t>>> quests;
+  quests.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    if (packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
+      break;
+    uint32_t const questId = packet.Read<uint32_t>();
+    if (questId == 0 || !_questGossipRepo->TryGetQuestTemplate(questId))
+      continue;
+    quests.emplace_back(
+        questId, _questGossipRepo->GetInvolvedCreatureEntriesForQuest(questId));
+  }
+
+  if (quests.empty())
+    return;
+
+  WorldPacket npcResponse = quest::BuildQuestNpcQueryResponse(quests);
+  SendPacket(npcResponse);
+}
+
 void WorldSession::HandleQuestQuery(WorldPacket &packet) {
   if (packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
     return;
@@ -279,13 +345,8 @@ void WorldSession::HandleQuestLogRemoveQuest(WorldPacket &packet) {
     return;
 
   _questProgress.SetQuestStatus(questId, QuestStatus::None);
-
-  WorldPacket logPkt;
-  ws_obj::BuildPlayerQuestLogSlotValuesUpdate(static_cast<uint16>(_mapId), _playerGuid,
-                                                slot, 0u, 0u, 0u, logPkt);
-  if (logPkt.Size() > 0)
-    SendPacket(logPkt);
-
+  MarkQuestProgressDirty();
+  (void)ClearPlayerQuestLogSlotWire(slot);
   PersistQuestProgressForCharacter();
   SendQuestGiverStatusMultipleNearby();
 }
@@ -304,6 +365,18 @@ void WorldSession::HandleQuestGiverQueryQuest(WorldPacket &packet) {
   if (!entry)
     return;
 
+  if (auto const ender =
+          FindEnderQuestForCreature(_questGossipRepo.get(), *entry, questId)) {
+    TryProgressMeetQuestsAtCreature(*entry);
+    if (_questProgress.GetQuestStatus(questId) == QuestStatus::Complete) {
+      if (TrySendQuestGiverOfferReward(npcGuid, *entry, *ender))
+        return;
+    }
+    WorldPacket invalid = quest::BuildQuestGiverInvalidQuest();
+    SendPacket(invalid);
+    return;
+  }
+
   auto const summary =
       FindStarterQuestForCreature(_questGossipRepo.get(), *entry, questId);
   if (!summary) {
@@ -313,7 +386,8 @@ void WorldSession::HandleQuestGiverQueryQuest(WorldPacket &packet) {
   }
 
   QuestAcceptResult const acceptCheck =
-      EvaluateQuestAccept(*summary, _questProgress, _playerClass, _playerRace);
+      EvaluateQuestAccept(*summary, _questProgress, _playerClass, _playerRace,
+                          _playerLevel);
   if (acceptCheck != QuestAcceptResult::Accepted) {
     WorldPacket invalid =
         quest::BuildQuestGiverInvalidQuest(QuestAcceptResultToInvalidReason(acceptCheck));
@@ -322,7 +396,11 @@ void WorldSession::HandleQuestGiverQueryQuest(WorldPacket &packet) {
   }
 
   if (QuestHasAutoAcceptFlag(summary->flags)) {
-    (void)TryGrantQuestFromGiver(npcGuid, *entry, *summary);
+    QuestGrantSideEffects preview{};
+    preview.persist = false;
+    preview.refreshPhase = false;
+    preview.refreshNearbyQuestMarkers = false;
+    (void)TryGrantQuestFromGiver(npcGuid, *entry, *summary, preview);
     if (_questProgress.GetQuestStatus(questId) != QuestStatus::None)
       (void)SendPlayerQuestLogSlotWire(questId);
   }
@@ -330,6 +408,112 @@ void WorldSession::HandleQuestGiverQueryQuest(WorldPacket &packet) {
   WorldPacket details =
       quest::BuildQuestGiverQuestDetails(npcGuid, questId, *summary);
   SendPacket(details);
+}
+
+bool WorldSession::TrySendQuestGiverOfferReward(uint64_t npcGuid, uint32_t creatureEntry,
+                                                QuestGossipSummary const &summary) {
+  if (npcGuid == 0 || creatureEntry == 0 || summary.questId == 0)
+    return false;
+  if (_questProgress.GetQuestStatus(summary.questId) != QuestStatus::Complete)
+    return false;
+
+  WorldPacket offer = quest::BuildQuestGiverOfferReward(
+      npcGuid, summary.questId, summary, QuestOfferRewardTextForPlayer(summary));
+  SendPacket(offer);
+  LOG_DEBUG("Quest offer reward: id={} creature={}", summary.questId, creatureEntry);
+  return true;
+}
+
+void WorldSession::HandleQuestGiverRequestReward(WorldPacket &packet) {
+  const uint64_t npcGuid = ws_obj::ReadClientQuestGiverGuid(packet);
+  if (npcGuid == 0 || packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
+    return;
+  const uint32_t questId = packet.Read<uint32_t>();
+
+  if (!_questGossipRepo || questId == 0)
+    return;
+
+  auto const entry = TryResolveCreatureTemplateEntry(npcGuid);
+  if (!entry)
+    return;
+
+  auto const summary =
+      FindEnderQuestForCreature(_questGossipRepo.get(), *entry, questId);
+  if (!summary) {
+    WorldPacket invalid = quest::BuildQuestGiverInvalidQuest();
+    SendPacket(invalid);
+    return;
+  }
+
+  TryProgressMeetQuestsAtCreature(*entry);
+  if (!TrySendQuestGiverOfferReward(npcGuid, *entry, *summary)) {
+    WorldPacket invalid = quest::BuildQuestGiverInvalidQuest();
+    SendPacket(invalid);
+  }
+}
+
+bool WorldSession::TryRewardQuestFromEnder(uint64_t npcGuid, uint32_t creatureEntry,
+                                           uint32_t questId) {
+  if (!_questGossipRepo || questId == 0 || _playerGuid == 0)
+    return false;
+
+  auto const summary =
+      FindEnderQuestForCreature(_questGossipRepo.get(), creatureEntry, questId);
+  if (!summary)
+    return false;
+
+  if (_questProgress.GetQuestStatus(questId) != QuestStatus::Complete)
+    return false;
+
+  std::optional<uint8_t> const logSlot = _questProgress.FindQuestLogSlot(questId);
+  _questProgress.SetQuestRewarded(questId);
+  MarkQuestProgressDirty();
+  if (logSlot)
+    (void)ClearPlayerQuestLogSlotWire(*logSlot);
+  PersistQuestProgressForCharacter();
+  WorldPacket questComplete = quest::BuildQuestGiverQuestComplete(questId);
+  SendPacket(questComplete);
+  if (summary->soundTurnIn != 0) {
+    WorldPacket sound = quest::BuildPlaySound(_playerGuid, summary->soundTurnIn);
+    SendPacket(sound);
+  }
+  RefreshPlayerPhaseVisibilityFromQuestProgress();
+  if (npcGuid != 0 && creatureEntry != 0)
+    SendQuestGiverStatusForGuid(npcGuid, creatureEntry);
+  SendGossipComplete();
+  LOG_DEBUG("Quest rewarded: id={} creature={}", questId, creatureEntry);
+  return true;
+}
+
+void WorldSession::HandleQuestGiverChooseReward(WorldPacket &packet) {
+  const uint64_t npcGuid = ws_obj::ReadClientQuestGiverGuid(packet);
+  if (npcGuid == 0 || packet.GetReadPos() + sizeof(uint32_t) > packet.Size())
+    return;
+  const uint32_t questId = packet.Read<uint32_t>();
+  if (packet.GetReadPos() + sizeof(uint32_t) <= packet.Size())
+    (void)packet.Read<uint32_t>(); // ItemChoiceID
+
+  auto const entry = TryResolveCreatureTemplateEntry(npcGuid);
+  if (!entry)
+    return;
+
+  if (!TryRewardQuestFromEnder(npcGuid, *entry, questId)) {
+    WorldPacket invalid = quest::BuildQuestGiverInvalidQuest();
+    SendPacket(invalid);
+    SendGossipComplete();
+  }
+}
+
+bool WorldSession::ClearPlayerQuestLogSlotWire(uint8_t slot) {
+  if (_playerGuid == 0 || slot >= kMaxQuestLogSlots)
+    return false;
+  WorldPacket logPkt;
+  ws_obj::BuildPlayerQuestLogSlotValuesUpdate(static_cast<uint16>(_mapId), _playerGuid,
+                                              slot, 0u, 0u, 0u, logPkt);
+  if (logPkt.Size() == 0)
+    return false;
+  SendPacket(logPkt);
+  return true;
 }
 
 bool WorldSession::SendPlayerQuestLogSlotWire(uint32_t questId) {
@@ -353,13 +537,14 @@ bool WorldSession::SendPlayerQuestLogSlotWire(uint32_t questId) {
 }
 
 bool WorldSession::TryGrantQuestFromGiver(uint64_t npcGuid, uint32_t creatureEntry,
-                                          QuestGossipSummary const &summary) {
+                                          QuestGossipSummary const &summary,
+                                          QuestGrantSideEffects sideEffects) {
   uint32_t const questId = summary.questId;
   if (questId == 0 || _playerGuid == 0)
     return false;
 
-  if (EvaluateQuestAccept(summary, _questProgress, _playerClass, _playerRace) !=
-      QuestAcceptResult::Accepted)
+  if (EvaluateQuestAccept(summary, _questProgress, _playerClass, _playerRace,
+                          _playerLevel) != QuestAcceptResult::Accepted)
     return false;
 
   if (!_questProgress.HasFreeQuestLogSlot() &&
@@ -372,7 +557,10 @@ bool WorldSession::TryGrantQuestFromGiver(uint64_t npcGuid, uint32_t creatureEnt
       return false;
     WorldPacket updateComplete = quest::BuildQuestUpdateComplete(questId);
     SendPacket(updateComplete);
+    std::optional<uint8_t> const logSlot = _questProgress.FindQuestLogSlot(questId);
     _questProgress.SetQuestRewarded(questId);
+    if (logSlot)
+      (void)ClearPlayerQuestLogSlotWire(*logSlot);
     WorldPacket questComplete = quest::BuildQuestGiverQuestComplete(questId);
     SendPacket(questComplete);
   } else {
@@ -388,12 +576,17 @@ bool WorldSession::TryGrantQuestFromGiver(uint64_t npcGuid, uint32_t creatureEnt
     SendPacket(sound);
   }
 
+  MarkQuestProgressDirty();
   LOG_DEBUG("Quest granted: id={} creature={} slot={}", questId, creatureEntry,
             _questProgress.FindQuestLogSlot(questId).value_or(255));
-  PersistQuestProgressForCharacter();
-  RefreshPlayerPhaseVisibilityFromQuestProgress();
-  SendQuestGiverStatusForGuid(npcGuid, creatureEntry);
-  SendQuestGiverStatusMultipleNearby();
+  if (sideEffects.persist)
+    PersistQuestProgressForCharacter();
+  if (sideEffects.refreshPhase)
+    RefreshPlayerPhaseVisibilityFromQuestProgress();
+  if (sideEffects.refreshNearbyQuestMarkers)
+    SendQuestGiverStatusMultipleNearby();
+  else if (npcGuid != 0 && creatureEntry != 0)
+    SendQuestGiverStatusForGuid(npcGuid, creatureEntry);
   return true;
 }
 
@@ -428,10 +621,13 @@ void WorldSession::HandleQuestGiverAcceptQuest(WorldPacket &packet) {
   }
 
   QuestAcceptResult const acceptResult =
-      EvaluateQuestAccept(*summary, _questProgress, _playerClass, _playerRace);
+      EvaluateQuestAccept(*summary, _questProgress, _playerClass, _playerRace,
+                          _playerLevel);
   if (acceptResult == QuestAcceptResult::AlreadyOnQuest &&
       _questProgress.GetQuestStatus(questId) != QuestStatus::None) {
     SendPlayerQuestLogSlotWire(questId);
+    PersistQuestProgressForCharacter();
+    SendQuestGiverStatusForGuid(npcGuid, *entry);
     SendGossipComplete();
     return;
   }
@@ -443,7 +639,11 @@ void WorldSession::HandleQuestGiverAcceptQuest(WorldPacket &packet) {
     return;
   }
 
-  if (!TryGrantQuestFromGiver(npcGuid, *entry, *summary)) {
+  QuestGrantSideEffects acceptEffects{};
+  acceptEffects.persist = true;
+  acceptEffects.refreshPhase = true;
+  acceptEffects.refreshNearbyQuestMarkers = false;
+  if (!TryGrantQuestFromGiver(npcGuid, *entry, *summary, acceptEffects)) {
     WorldPacket logFull = quest::BuildQuestLogFull();
     SendPacket(logFull);
     SendGossipComplete();
@@ -461,36 +661,15 @@ void WorldSession::HandleQuestGiverCompleteQuest(WorldPacket &packet) {
   if (packet.GetReadPos() < packet.Size())
     (void)packet.Read<uint8_t>(); // FromScript
 
-  if (!_questGossipRepo || questId == 0)
-    return;
-
   auto const entry = TryResolveCreatureTemplateEntry(npcGuid);
   if (!entry)
     return;
 
-  if (!FindEnderQuestForCreature(_questGossipRepo.get(), *entry, questId).has_value())
-    return;
-
-  if (_questProgress.GetQuestStatus(questId) != QuestStatus::Complete) {
+  if (!TryRewardQuestFromEnder(npcGuid, *entry, questId)) {
     WorldPacket invalid = quest::BuildQuestGiverInvalidQuest();
     SendPacket(invalid);
-    return;
+    SendGossipComplete();
   }
-
-  auto const summary =
-      FindEnderQuestForCreature(_questGossipRepo.get(), *entry, questId);
-  _questProgress.SetQuestRewarded(questId);
-  PersistQuestProgressForCharacter();
-  WorldPacket questComplete = quest::BuildQuestGiverQuestComplete(questId);
-  SendPacket(questComplete);
-  if (summary && summary->soundTurnIn != 0) {
-    WorldPacket sound = quest::BuildPlaySound(_playerGuid, summary->soundTurnIn);
-    SendPacket(sound);
-  }
-  RefreshPlayerPhaseVisibilityFromQuestProgress();
-  SendQuestGiverStatusForGuid(npcGuid, *entry);
-  SendQuestGiverStatusMultipleNearby();
-  SendGossipComplete();
 }
 
 void WorldSession::HandleTaxiNodeStatusQuery(WorldPacket &packet) {

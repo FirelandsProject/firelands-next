@@ -7,9 +7,11 @@ namespace Firelands {
 
 namespace {
 
-char const kQuestSelectBase[] =
+char const kQuestSelectCore[] =
     "q.`ID`, q.`LogTitle`, q.`QuestDescription`, q.`LogDescription`, "
     "q.`QuestLevel`, q.`Flags`, q.`AllowableClasses`, q.`AllowableRaces`";
+
+char const kQuestSelectPrev[] = ", q.`PrevQuestId`";
 
 char const kQuestSelectSort[] = ", q.`QuestSortID`";
 
@@ -61,7 +63,7 @@ void LoadGameplayColumns(sql::ResultSet &rs, QuestGossipSummary &summary) {
 
 QuestGossipSummary LoadQuestSummaryFromRow(sql::ResultSet &rs, bool hasTextColumns,
                                            bool hasGameplayColumns,
-                                           bool hasQuestSortId) {
+                                           bool hasQuestSortId, bool hasPrevQuestId) {
   QuestGossipSummary summary;
   summary.questId = rs.getUInt("ID");
   summary.title = rs.getString("LogTitle");
@@ -75,6 +77,8 @@ QuestGossipSummary LoadQuestSummaryFromRow(sql::ResultSet &rs, bool hasTextColum
   summary.flags = rs.getUInt("Flags");
   summary.allowableClasses = rs.getUInt("AllowableClasses");
   summary.allowableRaces = rs.getUInt("AllowableRaces");
+  if (hasPrevQuestId)
+    summary.prevQuestId = rs.getInt("PrevQuestId");
   summary.blueQuestionMark = QuestGossipUsesBlueQuestionMark(summary.flags);
   if (hasGameplayColumns)
     LoadGameplayColumns(rs, summary);
@@ -88,7 +92,7 @@ std::vector<QuestGossipSummary> LoadCreatureLinkedQuests(
     return result;
 
   auto const runQuery = [&](char const *selectList, bool hasText, bool hasGameplay,
-                            bool hasQuestSortId) {
+                            bool hasQuestSortId, bool hasPrevQuestId) {
     std::string const sql = std::string("SELECT ") + selectList + " FROM `" +
                             linkTable + "` cqs "
                             "INNER JOIN `quest_template` q ON q.`ID` = cqs.`quest` "
@@ -98,33 +102,41 @@ std::vector<QuestGossipSummary> LoadCreatureLinkedQuests(
     stmt->setUInt(1, creatureEntry);
     std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
     while (rs->next())
-      result.push_back(
-          LoadQuestSummaryFromRow(*rs, hasText, hasGameplay, hasQuestSortId));
+      result.push_back(LoadQuestSummaryFromRow(*rs, hasText, hasGameplay, hasQuestSortId,
+                                               hasPrevQuestId));
   };
 
+  // Prefer PrevQuestId when present (migration 67+) so quest chains gate correctly.
   try {
-    std::string const full = std::string(kQuestSelectBase) + kQuestSelectSort +
-                             kQuestSelectGameplay;
-    runQuery(full.c_str(), true, true, true);
-    return result;
-  } catch (sql::SQLException const &e) {
-    LOG_WARN("quest_template columns missing for {} entry={} ({}); run migrations "
-             "65/66",
-             linkTable, creatureEntry, e.what());
-  }
-
-  result.clear();
-  try {
-    std::string const withSort =
-        std::string(kQuestSelectBase) + kQuestSelectSort;
-    runQuery(withSort.c_str(), true, false, true);
+    std::string const withPrev = std::string(kQuestSelectCore) + kQuestSelectPrev +
+                                 kQuestSelectSort + kQuestSelectGameplay;
+    runQuery(withPrev.c_str(), true, true, true, true);
     return result;
   } catch (sql::SQLException const &) {
   }
 
   result.clear();
   try {
-    runQuery(kQuestSelectBase, true, false, false);
+    std::string const full =
+        std::string(kQuestSelectCore) + kQuestSelectSort + kQuestSelectGameplay;
+    runQuery(full.c_str(), true, true, true, false);
+    return result;
+  } catch (sql::SQLException const &e) {
+    LOG_WARN("quest_template columns missing for {} entry={} ({}); run migrations 65/66",
+             linkTable, creatureEntry, e.what());
+  }
+
+  result.clear();
+  try {
+    std::string const withSort = std::string(kQuestSelectCore) + kQuestSelectSort;
+    runQuery(withSort.c_str(), true, false, true, false);
+    return result;
+  } catch (sql::SQLException const &) {
+  }
+
+  result.clear();
+  try {
+    runQuery(kQuestSelectCore, true, false, false, false);
     return result;
   } catch (sql::SQLException const &) {
   }
@@ -133,7 +145,7 @@ std::vector<QuestGossipSummary> LoadCreatureLinkedQuests(
     result.clear();
     runQuery("q.`ID`, q.`LogTitle`, q.`QuestLevel`, q.`Flags`, "
              "q.`AllowableClasses`, q.`AllowableRaces`",
-             false, false, false);
+             false, false, false, false);
   } catch (sql::SQLException const &e2) {
     LOG_ERROR("LoadCreatureLinkedQuests {} entry={}: {}", linkTable, creatureEntry,
               e2.what());
@@ -147,19 +159,36 @@ MySqlQuestGossipRepository::MySqlQuestGossipRepository(
     std::shared_ptr<sql::Connection> connection)
     : _connection(std::move(connection)) {}
 
+std::vector<QuestGossipSummary> MySqlQuestGossipRepository::LoadCachedCreatureQuests(
+    uint32_t creatureEntry, char const *linkTable,
+    std::unordered_map<uint32_t, std::vector<QuestGossipSummary>> &cache) const {
+  {
+    std::lock_guard lock(_cacheMutex);
+    if (auto const it = cache.find(creatureEntry); it != cache.end())
+      return it->second;
+  }
+  std::vector<QuestGossipSummary> loaded =
+      LoadCreatureLinkedQuests(*_connection, linkTable, creatureEntry);
+  {
+    std::lock_guard lock(_cacheMutex);
+    cache.emplace(creatureEntry, loaded);
+  }
+  return loaded;
+}
+
 std::vector<QuestGossipSummary>
 MySqlQuestGossipRepository::GetStarterQuestsForCreature(
     uint32_t creatureEntry) const {
-  return LoadCreatureLinkedQuests(*_connection, "creature_queststarter",
-                                  creatureEntry);
+  return LoadCachedCreatureQuests(creatureEntry, "creature_queststarter",
+                                  _starterCache);
 }
 
 std::vector<QuestGossipSummary>
 MySqlQuestGossipRepository::GetEnderQuestsForCreature(
     uint32_t creatureEntry) const {
   try {
-    return LoadCreatureLinkedQuests(*_connection, "creature_questender",
-                                    creatureEntry);
+    return LoadCachedCreatureQuests(creatureEntry, "creature_questender",
+                                    _enderCache);
   } catch (sql::SQLException const &e) {
     LOG_WARN("creature_questender unavailable ({}); run migration "
              "66_world_creature_questender_and_sort.sql",
@@ -174,7 +203,8 @@ MySqlQuestGossipRepository::TryGetQuestTemplate(uint32_t questId) const {
     return std::nullopt;
 
   auto const tryQuery = [&](char const *selectList, bool hasText, bool hasGameplay,
-                            bool hasQuestSortId) -> std::optional<QuestGossipSummary> {
+                            bool hasQuestSortId,
+                            bool hasPrevQuestId) -> std::optional<QuestGossipSummary> {
     std::string const sql =
         std::string("SELECT ") + selectList + " FROM `quest_template` WHERE `ID` = ? LIMIT 1";
     std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(sql));
@@ -182,38 +212,88 @@ MySqlQuestGossipRepository::TryGetQuestTemplate(uint32_t questId) const {
     std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
     if (!rs->next())
       return std::nullopt;
-    return LoadQuestSummaryFromRow(*rs, hasText, hasGameplay, hasQuestSortId);
+    return LoadQuestSummaryFromRow(*rs, hasText, hasGameplay, hasQuestSortId,
+                                 hasPrevQuestId);
   };
 
   try {
-    std::string const full = std::string(kQuestSelectBase) + kQuestSelectSort +
-                             kQuestSelectGameplay;
-    if (auto summary = tryQuery(full.c_str(), true, true, true))
+    std::string const withPrev = std::string(kQuestSelectCore) + kQuestSelectPrev +
+                                 kQuestSelectSort + kQuestSelectGameplay;
+    if (auto summary = tryQuery(withPrev.c_str(), true, true, true, true))
       return summary;
   } catch (sql::SQLException const &) {
   }
 
   try {
-    std::string const withSort = std::string(kQuestSelectBase) + kQuestSelectSort;
-    if (auto summary = tryQuery(withSort.c_str(), true, false, true))
+    std::string const full =
+        std::string(kQuestSelectCore) + kQuestSelectSort + kQuestSelectGameplay;
+    if (auto summary = tryQuery(full.c_str(), true, true, true, false))
       return summary;
   } catch (sql::SQLException const &) {
   }
 
   try {
-    if (auto summary = tryQuery(kQuestSelectBase, true, false, false))
+    std::string const withSort = std::string(kQuestSelectCore) + kQuestSelectSort;
+    if (auto summary = tryQuery(withSort.c_str(), true, false, true, false))
+      return summary;
+  } catch (sql::SQLException const &) {
+  }
+
+  try {
+    if (auto summary = tryQuery(kQuestSelectCore, true, false, false, false))
       return summary;
   } catch (sql::SQLException const &) {
   }
 
   try {
     return tryQuery("ID, LogTitle, QuestLevel, Flags, AllowableClasses, AllowableRaces",
-                    false, false, false);
+                    false, false, false, false);
   } catch (sql::SQLException const &e) {
     LOG_ERROR("MySqlQuestGossipRepository::TryGetQuestTemplate id={}: {}", questId,
               e.what());
   }
   return std::nullopt;
+}
+
+std::vector<uint32_t>
+MySqlQuestGossipRepository::LoadInvolvedCreatureEntries(uint32_t questId) const {
+  std::vector<uint32_t> entries;
+  if (!_connection || questId == 0)
+    return entries;
+
+  try {
+    std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(
+        "SELECT `id` FROM `creature_queststarter` WHERE `quest` = ? "
+        "UNION "
+        "SELECT `id` FROM `creature_questender` WHERE `quest` = ? "
+        "ORDER BY `id`"));
+    stmt->setUInt(1, questId);
+    stmt->setUInt(2, questId);
+    std::unique_ptr<sql::ResultSet> rs(stmt->executeQuery());
+    while (rs->next())
+      entries.push_back(rs->getUInt("id"));
+  } catch (sql::SQLException const &e) {
+    LOG_WARN("GetInvolvedCreatureEntriesForQuest quest={}: {}", questId, e.what());
+  }
+  return entries;
+}
+
+std::vector<uint32_t>
+MySqlQuestGossipRepository::GetInvolvedCreatureEntriesForQuest(
+    uint32_t questId) const {
+  if (questId == 0)
+    return {};
+  {
+    std::lock_guard lock(_cacheMutex);
+    if (auto const it = _questCreatureCache.find(questId); it != _questCreatureCache.end())
+      return it->second;
+  }
+  std::vector<uint32_t> const loaded = LoadInvolvedCreatureEntries(questId);
+  {
+    std::lock_guard lock(_cacheMutex);
+    _questCreatureCache.emplace(questId, loaded);
+  }
+  return loaded;
 }
 
 } // namespace Firelands

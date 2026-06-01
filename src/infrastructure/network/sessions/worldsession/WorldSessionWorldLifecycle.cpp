@@ -65,7 +65,7 @@ void WorldSession::FinalizeWorldExit() {
 
   SavePersistedSpellCooldowns(charGuidLow);
   SaveActionButtonsForCharacter(charGuidLow);
-  PersistQuestProgressForCharacter();
+  PersistQuestProgressForCharacter(true);
 
   if (!_charService->SaveCharacterOnLogout(
           _accountId, charGuidLow, mapIdDb, zoneIdDb, persistPos.x, persistPos.y,

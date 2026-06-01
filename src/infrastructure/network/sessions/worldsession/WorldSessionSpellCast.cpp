@@ -256,6 +256,7 @@ void WorldSession::HandleCastSpell(WorldPacket &packet) {
       req.casterPower1 = casterPl->GetLivePower1();
       req.casterMaxPower1 = casterPl->GetLiveMaxPower1();
             req.casterBasePower1 = casterPl->GetLiveBasePower1();
+      req.casterCastHasteMultiplier = casterPl->GetCastHasteMultiplier();
   }
   }
     if (!req.hasCasterPowerSnapshot && _loginMaxPower1 > 0u) {

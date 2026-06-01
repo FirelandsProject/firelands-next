@@ -165,6 +165,12 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
   case CMSG_QUERY_QUEST_INFO:
     HandleQuestQuery(packet);
     break;
+  case CMSG_QUEST_POI_QUERY:
+    HandleQuestPoiQuery(packet);
+    break;
+  case CMSG_QUEST_NPC_QUERY:
+    HandleQuestNpcQuery(packet);
+    break;
   case CMSG_QUEST_LOG_REMOVE_QUEST:
     HandleQuestLogRemoveQuest(packet);
     break;
@@ -173,6 +179,12 @@ void WorldSession::ProcessPacket(WorldPacket &packet) {
     break;
   case CMSG_QUESTGIVER_ACCEPT_QUEST:
     HandleQuestGiverAcceptQuest(packet);
+    break;
+  case CMSG_QUESTGIVER_REQUEST_REWARD:
+    HandleQuestGiverRequestReward(packet);
+    break;
+  case CMSG_QUESTGIVER_CHOOSE_REWARD:
+    HandleQuestGiverChooseReward(packet);
     break;
   case CMSG_QUESTGIVER_COMPLETE_QUEST:
     HandleQuestGiverCompleteQuest(packet);
