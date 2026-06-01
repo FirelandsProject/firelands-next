@@ -4,7 +4,9 @@
 #include <infrastructure/persistence/MySqlRealmRepository.h>
 #include <shared/Banner.h>
 #include <shared/Config.h>
+#include <infrastructure/persistence/MySqlRbacRepository.h>
 #include <shared/game/AccessLevel.h>
+#include <shared/game/RbacBuiltinRoles.h>
 #include <shared/Logger.h>
 #include <cctype>
 #include <string>
@@ -31,7 +33,7 @@ bool IsAsciiUnsignedInteger(char const *s) {
 void PrintUsage(const char *progName) {
   LOG_ERROR("Usage:");
   LOG_ERROR("  {} account <username> <password> [email] [expansion (0-3)] "
-            "[access_level (0-3)]",
+            "[staff_role moderator|gamemaster|administrator]",
             progName);
   LOG_ERROR("  {} realm <id> <name> <address> <port> [icon] [timezone] "
             "[secLevel] [population]",
@@ -54,18 +56,12 @@ int CreateAccount(int argc, char **argv,
     return 1;
   }
 
-  AccessLevel accessLevel = AccessLevel::Player;
-  if (argc >= 7) {
-    uint8 raw = static_cast<uint8>(std::stoul(argv[6]));
-    if (raw > static_cast<uint8>(AccessLevel::Administrator)) {
-      LOG_ERROR("Invalid access_level: {}. Allowed range is 0-3.", (int)raw);
-      Logger::Shutdown();
-      return 1;
-    }
-    accessLevel = static_cast<AccessLevel>(raw);
-  }
+  std::string staffRole;
+  if (argc >= 7)
+    staffRole = argv[6];
 
   auto accountRepo = std::make_shared<MySqlAccountRepository>(conn);
+  auto rbacRepo = std::make_shared<MySqlRbacRepository>(conn);
 
   if (accountRepo->FindByUsername(user)) {
     LOG_WARN("Account '{}' already exists. Overwriting...", user);
@@ -79,10 +75,18 @@ int CreateAccount(int argc, char **argv,
   acc.salt = srpData.salt;
   acc.verifier = srpData.verifier;
   acc.expansion = expansion;
-  acc.accessLevel = accessLevel;
+  acc.accessLevel = AccessLevel::Player;
 
   LOG_INFO("Inserting account into database...");
   accountRepo->Create(acc);
+  if (!staffRole.empty()) {
+    auto created = accountRepo->FindByUsername(user);
+    if (created && !rbacRepo->SetPrimaryStaffRole(created->id, staffRole)) {
+      LOG_WARN("Account created but staff role '{}' was not applied.", staffRole);
+    } else if (created) {
+      LOG_INFO("Staff role '{}' assigned.", staffRole);
+    }
+  }
   LOG_INFO("Account created successfully.");
   return 0;
 }
