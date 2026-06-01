@@ -18,7 +18,12 @@ struct MmapGeneratorConfig {
   float agentHeight = 2.0f;
   float agentRadius = 0.6f;
   float agentMaxClimb = 0.9f;
-  float agentMaxSlope = 45.0f;
+  // Maximum walkable slope = the WoW client's walkable slope limit.
+  // 45 was too restrictive (it wouldn't follow the player uphill); 55 was too permissive
+  // (it would climb slopes that the player CANNOT climb). 50 is the standard value in WoW:
+  // the creature climbs exactly what a player climbs and goes around the steepest part
+  // where the player would go. Adjust only if you see that it does not match the client.
+  float agentMaxSlope = 50.0f;
   float minRegionArea = 10.0f;
   float mergeRegionArea = 20.0f;
   float maxEdgeLen = 12.0f;
