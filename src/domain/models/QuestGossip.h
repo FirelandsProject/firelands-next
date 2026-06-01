@@ -15,7 +15,9 @@ enum class QuestGossipIcon : uint8_t {
   Unavailable = 1,
   Available = 2, // yellow !
   Complete = 3, // yellow ?
-  CompleteDaily = 4, // blue ?
+  /// Wire 4 — ref `QuestMenu` ender lines (incomplete meet/kill); blue ? only when
+  /// `blueQuestionMark` is set on the gossip quest line.
+  CompleteDaily = 4,
 };
 
 /// Minimal quest fields required to render a gossip quest line.
@@ -26,12 +28,16 @@ struct QuestGossipSummary {
   std::string questDescription;
   /// `quest_template.LogDescription` → `SMSG_QUESTGIVER_QUEST_DETAILS.Objectives`.
   std::string logDescription;
+  /// `quest_template.OfferRewardText` → `SMSG_QUESTGIVER_OFFER_REWARD` (optional import).
+  std::string offerRewardText;
   int32_t questLevel = 0;
   /// `quest_template.QuestSortID` — quest log zone header (e.g. 368 = Echo Isles).
   int32_t questSortId = 0;
   uint32_t flags = 0;
   uint32_t allowableClasses = 0;
   uint32_t allowableRaces = 0;
+  /// `quest_template_addon.PrevQuestID` — positive: previous must be rewarded; negative: active.
+  int32_t prevQuestId = 0;
   uint16_t soundAccept = 890;
   uint16_t soundTurnIn = 878;
   std::array<int32_t, 4> requiredNpcOrGo{};

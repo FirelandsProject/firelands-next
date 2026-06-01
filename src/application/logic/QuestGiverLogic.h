@@ -13,12 +13,14 @@ namespace Firelands {
 
 inline bool CreatureHasStarterQuests(IQuestGossipRepository const *repo,
                                      uint32_t creatureEntry, uint8_t playerClass,
-                                     uint8_t playerRace) {
+                                     uint8_t playerRace, uint8_t playerLevel,
+                                     IPlayerQuestProgress const &progress) {
   if (repo == nullptr || creatureEntry == 0)
     return false;
   auto const quests = repo->GetStarterQuestsForCreature(creatureEntry);
   for (auto const &summary : quests) {
-    if (QuestGossipAllowsPlayer(summary, playerClass, playerRace))
+    if (ResolveStarterQuestGossipIconForPlayer(summary, progress, playerClass, playerRace,
+                                             playerLevel) != QuestGossipIcon::None)
       return true;
   }
   return false;
@@ -28,10 +30,10 @@ inline bool CreatureHasStarterQuests(IQuestGossipRepository const *repo,
 inline QuestGiverDialogStatus
 ResolveQuestGiverDialogStatus(IQuestGossipRepository const *repo,
                               uint32_t creatureEntry, uint8_t playerClass,
-                              uint8_t playerRace,
+                              uint8_t playerRace, uint8_t playerLevel,
                               IPlayerQuestProgress const &progress) {
   return ResolveQuestGiverDialogStatusForPlayer(repo, creatureEntry, playerClass,
-                                              playerRace, progress);
+                                              playerRace, playerLevel, progress);
 }
 
 /// Wire `UNIT_NPC_FLAGS` for starter NPCs: keep template gossip (cata uses gossip menus for

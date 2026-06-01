@@ -20,12 +20,12 @@ inline void AppendGossipMenuItem(WorldPacket &out, GossipMenuItem const &item) {
   out.WriteString(item.boxMessage);
 }
 
-/// 3.3.5+ quest line in `SMSG_GOSSIP_MESSAGE` (quest_id, icon, level, flags, blue?, title).
+/// Cataclysm 4.3.4 quest line in `SMSG_GOSSIP_MESSAGE` (ref `GossipDef::SendGossipMenu`).
 inline void AppendGossipQuestItem(WorldPacket &out, GossipQuestItem const &quest) {
-  out.Append<int32_t>(static_cast<int32_t>(quest.questId));
-  out.Append<int32_t>(static_cast<int32_t>(quest.questIcon));
+  out.Append<uint32_t>(quest.questId);
+  out.Append<uint32_t>(static_cast<uint32_t>(quest.questIcon));
   out.Append<int32_t>(quest.questLevel);
-  out.Append<int32_t>(static_cast<int32_t>(quest.questFlags));
+  out.Append<uint32_t>(quest.questFlags);
   out.Append<uint8_t>(quest.blueQuestionMark ? 1u : 0u);
   out.WriteString(quest.questTitle);
 }
@@ -36,8 +36,8 @@ inline WorldPacket BuildGossipMessage(uint64_t npcGuid, uint32_t menuId, uint32_
                                       std::vector<GossipQuestItem> const &quests = {}) {
   WorldPacket out(SMSG_GOSSIP_MESSAGE, 100);
   out.Append<uint64_t>(npcGuid);
-  out.Append<int32_t>(static_cast<int32_t>(menuId));
-  out.Append<int32_t>(static_cast<int32_t>(textId));
+  out.Append<uint32_t>(menuId);
+  out.Append<uint32_t>(textId);
   out.Append<uint32_t>(static_cast<uint32_t>(items.size()));
   for (auto const &item : items)
     AppendGossipMenuItem(out, item);

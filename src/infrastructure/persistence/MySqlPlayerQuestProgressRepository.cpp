@@ -82,6 +82,9 @@ bool MySqlPlayerQuestProgressRepository::SaveForCharacter(
     return false;
 
   try {
+    bool const hadAutoCommit = m_connection->getAutoCommit();
+    m_connection->setAutoCommit(false);
+
     std::unique_ptr<sql::PreparedStatement> clearActive(
         m_connection->prepareStatement(
             "DELETE FROM `character_queststatus` WHERE `guid` = ?"));
@@ -120,8 +123,15 @@ bool MySqlPlayerQuestProgressRepository::SaveForCharacter(
       insertRewarded->executeUpdate();
     }
 
+    m_connection->commit();
+    m_connection->setAutoCommit(hadAutoCommit);
     return true;
   } catch (sql::SQLException const &e) {
+    try {
+      m_connection->rollback();
+      m_connection->setAutoCommit(true);
+    } catch (sql::SQLException const &) {
+    }
     LOG_ERROR("SaveForCharacter quest progress failed for guid {}: {}", characterGuid,
               e.what());
     return false;

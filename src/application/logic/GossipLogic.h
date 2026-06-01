@@ -65,7 +65,7 @@ inline bool ShouldSendGossipMenu(size_t gossipOptionCount, bool hasMenuText,
   return questCount > 0 || gossipOptionCount > 0 || hasMenuText;
 }
 
-/// Until character quest status exists, starter quests show as available (yellow !).
+/// Legacy helper — prefer `BuildStarterGossipQuestItemsForPlayer` (progress + level + prev).
 inline QuestGossipIcon ResolveQuestGossipIcon(QuestGossipSummary const &) noexcept {
   return QuestGossipIcon::Available;
 }
