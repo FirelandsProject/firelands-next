@@ -38,7 +38,7 @@ from import_ref_creature_data import (  # noqa: E402
 
 QUEST_TEMPLATE_COLUMNS = (
     "`ID`, `QuestLevel`, `LogTitle`, `QuestDescription`, `LogDescription`, "
-    "`Flags`, `AllowableClasses`, `AllowableRaces`"
+    "`Flags`, `AllowableClasses`, `AllowableRaces`, `PrevQuestId`"
     )
 CREATURE_QUESTSTARTER_COLUMNS = "`id`, `quest`"
 
@@ -85,30 +85,34 @@ def map_creature_queststarter_row(fields: list[str]) -> str:
     return f"({fields[0].strip()},{fields[1].strip()})"
 
 
-def load_quest_addon_masks(ref_dir: Path) -> dict[int, tuple[int, int]]:
-    """Quest id -> (AllowableClasses, AllowableRaces) from `quest_template_addon`."""
+def load_quest_addon_masks(ref_dir: Path) -> dict[int, tuple[int, int, int]]:
+    """Quest id -> (AllowableClasses, AllowableRaces, PrevQuestId) from `quest_template_addon`."""
     addon_sql = ref_dir / "quest_template_addon.sql"
     if not addon_sql.is_file():
         raise SystemExit(f"Missing {addon_sql}")
 
     cols = extract_create_table_columns(addon_sql, "quest_template_addon")
     col_index = {name: i for i, name in enumerate(cols)}
-    for required in ("ID", "AllowableClasses", "AllowableRaces"):
+    prev_col = "PrevQuestID" if "PrevQuestID" in col_index else "PrevQuestId"
+    for required in ("ID", "AllowableClasses", "AllowableRaces", prev_col):
         if required not in col_index:
             raise SystemExit(
                 f"quest_template_addon missing column {required!r}; found: {cols[:12]}..."
     )
 
-    masks: dict[int, tuple[int, int]] = {}
+    masks: dict[int, tuple[int, int, int]] = {}
     for row in extract_insert_rows(addon_sql, "quest_template_addon"):
         quest_id = int(row[col_index["ID"]].strip())
         classes = row[col_index["AllowableClasses"]].strip()
         races = row[col_index["AllowableRaces"]].strip()
+        prev = row[col_index[prev_col]].strip()
         if classes.upper() == "NULL":
             classes = "0"
         if races.upper() == "NULL":
             races = "0"
-        masks[quest_id] = (int(classes), int(races))
+        if prev.upper() == "NULL":
+            prev = "0"
+        masks[quest_id] = (int(classes), int(races), int(prev))
     return masks
 
 
@@ -116,7 +120,7 @@ def map_quest_template_row(
     fields: list[str],
     col_index: dict[str, int],
     wanted_ids: set[int],
-    addon_masks: dict[int, tuple[int, int]],
+    addon_masks: dict[int, tuple[int, int, int]],
 ) -> str | None:
     idx_id = col_index["ID"]
     quest_id = int(fields[idx_id].strip())
@@ -142,11 +146,11 @@ def map_quest_template_row(
     if flags_sql.upper() == "NULL":
         flags_sql = "0"
 
-    allowable_classes, allowable_races = addon_masks.get(quest_id, (0, 0))
+    allowable_classes, allowable_races, prev_quest_id = addon_masks.get(quest_id, (0, 0, 0))
 
     return (
         f"({quest_id},{level_sql},{title_sql},{details_sql},{objectives_sql},"
-        f"{flags_sql},{allowable_classes},{allowable_races})"
+        f"{flags_sql},{allowable_classes},{allowable_races},{prev_quest_id})"
     )
 
 
@@ -240,11 +244,11 @@ def write_quest_gossip_data_migration(
     mask_out = out_path.parent / "40_world_quest_gossip_allowable_masks.sql"
     mask_updates = []
     for qid in sorted(wanted_ids):
-        ac, ar = addon_masks.get(qid, (0, 0))
+        ac, ar, prev = addon_masks.get(qid, (0, 0, 0))
         mask_updates.append(
             f"UPDATE `quest_template` SET `AllowableClasses`={ac}, "
-            f"`AllowableRaces`={ar} WHERE `ID`={qid};"
-    )
+            f"`AllowableRaces`={ar}, `PrevQuestId`={prev} WHERE `ID`={qid};"
+        )
     mask_header = (
         "-- Backfill AllowableClasses / AllowableRaces (when 38 predates mask columns).\n"
         "-- Regenerate: python3 tools/sql/import_ref_quest_gossip.py\n"

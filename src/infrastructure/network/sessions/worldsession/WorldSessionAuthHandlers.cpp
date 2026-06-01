@@ -1,7 +1,7 @@
 #include <domain/repositories/IRealmRepository.h>
 #include <infrastructure/network/sessions/WorldSession.h>
 #include <shared/Crypto.h>
-#include <shared/game/AccessLevel.h>
+#include <shared/game/RbacBuiltinRoles.h>
 #include <shared/Logger.h>
 #include <shared/network/BitReader.h>
 #include <shared/network/BitWriter.h>
@@ -183,19 +183,23 @@ void WorldSession::HandleAuthSession(WorldPacket &packet) {
   if (_realmRepo) {
     auto gate = _realmRepo->GetAllowedSecurityLevelForRealm(realmId);
     if (gate.has_value()) {
-      AccessLevel const need = AccessLevelFromStored(*gate);
-      if (!HasAtLeast(accountOpt->accessLevel, need)) {
+      PermissionMask const mask =
+          _rbacRepo
+              ? static_cast<PermissionMask>(
+                    _rbacRepo->UnionPermissionMaskForAccount(accountOpt->id))
+              : PermissionMask{0};
+      if (!MeetsRealmSecurityRequirement(mask, *gate)) {
         LOG_WARN("CMSG_AUTH_SESSION: account '{}' denied for realm {} (needs "
-                 "access_level >= {}).",
+                 "staff tier >= {}).",
                  account, realmId, static_cast<int>(*gate));
-    Close();
-    return;
-  }
-  }
+        Close();
+        return;
+      }
+    }
   }
 
   _accountId = accountOpt->id;
-  _accountAccessLevel = accountOpt->accessLevel;
+  ReloadAccountRolePermissions();
   LOG_DEBUG("CMSG_AUTH_SESSION: Digest validated successfully for account '{}'.",
               account);
 

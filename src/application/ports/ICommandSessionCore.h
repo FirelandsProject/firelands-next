@@ -1,6 +1,6 @@
 #pragma once
 
-#include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
 #include <shared/Common.h>
 #include <cstdint>
 #include <string>
@@ -30,7 +30,8 @@ public:
   virtual uint32 GetMapId() const { return 0; }
   virtual void TeleportTo(uint32_t mapId, float x, float y, float z,
                           float orientation = 0.0f) = 0;
-  virtual AccessLevel GetAccountAccessLevel() const = 0;
+  /// OR of assigned `rbac_role` permission masks (staff capabilities).
+  virtual PermissionMask GetAccountRolePermissionMask() const { return 0; }
   virtual void RequestDisconnect(std::string const &reason) { (void)reason; }
   virtual void SendPacket(WorldPacket &packet) { (void)packet; }
   virtual uint64_t GetClientSelectionGuid() const { return 0; }

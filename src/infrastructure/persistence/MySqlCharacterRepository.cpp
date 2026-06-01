@@ -2038,25 +2038,6 @@ bool MySqlCharacterRepository::SwapBag0Slots(uint32_t characterGuid, uint8_t src
   }
 }
 
-AccessLevel
-MySqlCharacterRepository::GetAccountAccessLevel(uint32_t accountId) {
-  try {
-    std::shared_ptr<sql::PreparedStatement> st(
-        _connection->prepareStatement(
-            "SELECT access_level FROM firelands_auth.account WHERE id = ? LIMIT 1"));
-    st->setUInt(1, accountId);
-    std::unique_ptr<sql::ResultSet> rs(st->executeQuery());
-    if (!rs->next())
-      return AccessLevel::Player;
-    return AccessLevelFromStored(
-        static_cast<uint8_t>(rs->getUInt("access_level")));
-  } catch (sql::SQLException &e) {
-    LOG_WARN("GetAccountAccessLevel failed for account {}: {}", accountId,
-             e.what());
-    return AccessLevel::Player;
-  }
-}
-
 bool MySqlCharacterRepository::SaveInventory(uint32_t characterGuid,
                                              Bag0InventoryData const &invData) {
   return SaveInventoryToDb(_connection, characterGuid, invData);

@@ -1,7 +1,6 @@
 #include "WorldInteractiveConsole.h"
 #include <application/ports/ICommandService.h>
 #include <shared/Common.h>
-#include <shared/game/AccessLevel.h>
 #include <shared/network/MovementInfo.h>
 #include <shared/Logger.h>
 #include <cctype>
@@ -63,9 +62,6 @@ public:
 
   uint64_t GetActiveCharacterObjectGuid() const override { return 0; }
 
-  AccessLevel GetAccountAccessLevel() const override {
-    return AccessLevel::Player;
-  }
 };
 
 std::string TrimInPlace(std::string s) {

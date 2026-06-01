@@ -8,6 +8,7 @@ add_executable(FirelandsUnitTests
     unit/domain/NpcTextTests.cpp
     unit/infrastructure/MySqlAccountRepositoryTests.cpp
     unit/infrastructure/MySqlRealmRepositoryTests.cpp
+    unit/infrastructure/MySqlPlayerQuestProgressRepositoryTests.cpp
     unit/infrastructure/RealmLiveRegistryTests.cpp
     unit/infrastructure/SqlStatementSplitterTests.cpp
     unit/infrastructure/DatabaseMigrationCatalogTests.cpp
@@ -32,6 +33,7 @@ add_executable(FirelandsUnitTests
     unit/shared/ChrRacesDbcTests.cpp
     unit/shared/NameGenDbcTests.cpp
     unit/shared/PermissionsTests.cpp
+    unit/shared/PermissionNamesTests.cpp
     unit/shared/SpellCastWireTests.cpp
     unit/shared/SpellVisualDbcTests.cpp
     unit/shared/PlaySpellVisualKitWireTests.cpp
@@ -54,6 +56,7 @@ add_executable(FirelandsUnitTests
     unit/shared/PhaseShiftTests.cpp
     unit/shared/GmCreatureVisibilityTests.cpp
     unit/shared/PlayerResourceRegenTests.cpp
+    unit/shared/SpellCastHasteTests.cpp
     unit/application/PlayerAuraRegenEffectsTests.cpp
     unit/shared/MeleeRangeTest.cpp
     unit/shared/WorldSessionMovementChecksTest.cpp
@@ -74,6 +77,7 @@ add_executable(FirelandsUnitTests
     unit/application/PhaseAreaCatalogTests.cpp
     unit/application/PhaseConditionEvaluatorTests.cpp
     unit/application/CommandServiceReviveUnlearnTests.cpp
+    unit/application/CommandServiceRbacTests.cpp
     unit/application/GmPlayerReviveTests.cpp
     unit/application/PlayerAuraStatEffectsTests.cpp
     unit/application/MapServiceTests.cpp

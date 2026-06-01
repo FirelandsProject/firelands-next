@@ -1,43 +1,55 @@
 #include <gtest/gtest.h>
 #include <shared/game/Permissions.h>
+#include <shared/game/RbacBuiltinRoles.h>
 
 using namespace Firelands;
 
-TEST(PermissionsTests, PlayerLacksGps) {
-  EXPECT_FALSE(HasPermission(AccessLevel::Player, PrivilegeOrigin::GameClient,
-                             ToMask(Permission::CommandGps)));
+TEST(PermissionsTests, PlayerLacksGpsWithoutRoles) {
+  EXPECT_FALSE(HasPermission(PrivilegeOrigin::GameClient, ToMask(Permission::CommandGps),
+                             0));
 }
 
-TEST(PermissionsTests, ModeratorHasGps) {
-  EXPECT_TRUE(HasPermission(AccessLevel::Moderator, PrivilegeOrigin::GameClient,
-                            ToMask(Permission::CommandGps)));
+TEST(PermissionsTests, ModeratorRoleMaskHasGps) {
+  PermissionMask const mod = DefaultPermissions(AccessLevel::Moderator);
+  EXPECT_TRUE(HasPermission(PrivilegeOrigin::GameClient, ToMask(Permission::CommandGps),
+                            mod));
 }
 
-TEST(PermissionsTests, ModeratorHasMailboxCommand) {
-  EXPECT_TRUE(HasPermission(AccessLevel::Moderator, PrivilegeOrigin::GameClient,
-                            ToMask(Permission::CommandMailbox)));
-}
-
-TEST(PermissionsTests, GameMasterHasTeleport) {
-  EXPECT_TRUE(HasPermission(AccessLevel::GameMaster, PrivilegeOrigin::GameClient,
-                             ToMask(Permission::CommandTeleport)));
-}
-
-TEST(PermissionsTests, ConsoleGrantsTeleportToPlayerAccount) {
-  EXPECT_TRUE(HasPermission(AccessLevel::Player, PrivilegeOrigin::ServerConsole,
-                             ToMask(Permission::CommandTeleport)));
+TEST(PermissionsTests, ConsoleGrantsAllPermissions) {
+  EXPECT_TRUE(HasPermission(PrivilegeOrigin::ServerConsole,
+                            ToMask(Permission::CommandTeleport), 0));
 }
 
 TEST(PermissionsTests, ZeroRequiredAlwaysTrue) {
-  EXPECT_TRUE(HasPermission(AccessLevel::Player, PrivilegeOrigin::GameClient, 0));
+  EXPECT_TRUE(HasPermission(PrivilegeOrigin::GameClient, 0, 0));
 }
 
-TEST(PermissionsTests, GameMasterHasGameplayCommands) {
-  EXPECT_TRUE(HasPermission(AccessLevel::GameMaster, PrivilegeOrigin::GameClient,
-                            ToMask(Permission::CommandGameplay)));
+TEST(PermissionsTests, GameMasterRoleMaskHasGameplay) {
+  PermissionMask const gm = DefaultPermissions(AccessLevel::GameMaster);
+  EXPECT_TRUE(HasPermission(PrivilegeOrigin::GameClient,
+                            ToMask(Permission::CommandGameplay), gm));
 }
 
-TEST(PermissionsTests, GameMasterHasGmTickets) {
-  EXPECT_TRUE(HasPermission(AccessLevel::GameMaster, PrivilegeOrigin::GameClient,
-                            ToMask(Permission::ManageGmTickets)));
+TEST(PermissionsTests, CustomRoleMaskGrantsTeleport) {
+  PermissionMask const custom = ToMask(Permission::CommandTeleport);
+  EXPECT_TRUE(HasPermission(PrivilegeOrigin::GameClient,
+                            ToMask(Permission::CommandTeleport), custom));
+}
+
+TEST(PermissionsTests, ModeratorDotGate) {
+  PermissionMask const mod = DefaultPermissions(AccessLevel::Moderator);
+  EXPECT_TRUE(CanUseModeratorDotCommands(mod));
+  EXPECT_FALSE(CanUseGameMasterDotCommands(mod));
+}
+
+TEST(PermissionsTests, GameMasterDotGate) {
+  PermissionMask const gm = DefaultPermissions(AccessLevel::GameMaster);
+  EXPECT_TRUE(CanUseGameMasterDotCommands(gm));
+}
+
+TEST(PermissionsTests, RealmGateUsesStaffTierRank) {
+  PermissionMask const gm = DefaultPermissions(AccessLevel::GameMaster);
+  EXPECT_TRUE(MeetsRealmSecurityRequirement(gm, 1));
+  EXPECT_TRUE(MeetsRealmSecurityRequirement(gm, 2));
+  EXPECT_FALSE(MeetsRealmSecurityRequirement(gm, 3));
 }

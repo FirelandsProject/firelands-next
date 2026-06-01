@@ -18,4 +18,8 @@ INSERT IGNORE INTO `firelands_auth`.`schema_migrations` (`migration`) VALUES
   ('auth_schema.sql'),
   ('characters_schema.sql'),
   ('world_schema.sql'),
-  ('world_schema_core.sql');
+  ('world_schema_core.sql'),
+  ('67_world_quest_template_prev_quest.sql'),
+  ('68_world_quest_prev_quest_data.sql'),
+  ('69_auth_rbac.sql'),
+  ('70_auth_rbac_builtin_roles.sql');

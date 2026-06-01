@@ -141,6 +141,16 @@ void ApplyAuraRowToBonus(SpellDefinition const &def, SpellAuraEffectRow const &r
 
   if (row.auraType == kSpellAuraModDamagePercentDone) {
     ApplyDamagePercentRowToBonus(row, level, bonus);
+    return;
+  }
+
+  if (row.auraType == kSpellAuraModCombatSpeedPct) {
+    if (magnitude != 0) {
+      float const factor = 1.f + static_cast<float>(magnitude) / 100.f;
+      bonus.meleeHasteMultiplier *= factor;
+      bonus.rangedHasteMultiplier *= factor;
+      bonus.castHasteMultiplier *= factor;
+    }
   }
 }
 
@@ -196,7 +206,7 @@ void MergePermanentPassiveSpellBonuses(
     if (spellId == 0u || activeAuraSpellIds.count(spellId) != 0)
       continue;
     std::optional<SpellDefinition> def = spellDefinitions->GetDefinition(spellId);
-    if (!def || !def->isPermanentLoginPassiveSpell())
+    if (!def || !def->isAlwaysOnLoginPassiveSpell())
       continue;
     ApplyDefinitionAurasToBonus(*def, casterLevel, primaryStats, bonus);
   }

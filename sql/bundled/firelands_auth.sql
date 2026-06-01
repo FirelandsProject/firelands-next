@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `account` (
   `joindate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_ip` varchar(15) NOT NULL DEFAULT '127.0.0.1',
   `expansion` tinyint(3) unsigned NOT NULL DEFAULT '3', -- 3 for Cataclysm
-  `access_level` tinyint unsigned NOT NULL DEFAULT '0', -- GM tier 0–3; see shared/game/AccessLevel.h
+  `access_level` tinyint unsigned NOT NULL DEFAULT '0', -- Legacy (migrated to RBAC); kept at 0
   `locked` tinyint unsigned NOT NULL DEFAULT '0', -- 1 = banned (auth rejects login); see migration 16
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_username` (`username`)
@@ -48,4 +48,69 @@ CREATE TABLE IF NOT EXISTS `account_data` (
   `data` blob NOT NULL,
   PRIMARY KEY (`accountId`, `type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rbac_role` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(64) NOT NULL,
+  `permission_mask` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_rbac_role_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rbac_account_role` (
+  `account_id` int unsigned NOT NULL,
+  `role_id` int unsigned NOT NULL,
+  PRIMARY KEY (`account_id`, `role_id`),
+  KEY `idx_rbac_account_role_role` (`role_id`),
+  CONSTRAINT `fk_rbac_account_role_account`
+    FOREIGN KEY (`account_id`) REFERENCES `account` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_rbac_account_role_role`
+    FOREIGN KEY (`role_id`) REFERENCES `rbac_role` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- === source: migrations/69_auth_rbac.sql ===
+USE `firelands_auth`;
+
+CREATE TABLE IF NOT EXISTS `rbac_role` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(64) NOT NULL,
+  `permission_mask` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_rbac_role_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rbac_account_role` (
+  `account_id` int unsigned NOT NULL,
+  `role_id` int unsigned NOT NULL,
+  PRIMARY KEY (`account_id`, `role_id`),
+  KEY `idx_rbac_account_role_role` (`role_id`),
+  CONSTRAINT `fk_rbac_account_role_account`
+    FOREIGN KEY (`account_id`) REFERENCES `account` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_rbac_account_role_role`
+    FOREIGN KEY (`role_id`) REFERENCES `rbac_role` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- === source: migrations/70_auth_rbac_builtin_roles.sql ===
+USE `firelands_auth`;
+
+-- Masks match `DefaultPermissions()` in shared/game/Permissions.h (4.3.4 staff set).
+INSERT IGNORE INTO `rbac_role` (`name`, `permission_mask`) VALUES
+  ('moderator', 517),
+  ('gamemaster', 975),
+  ('administrator', 1023);
+
+INSERT IGNORE INTO `rbac_account_role` (`account_id`, `role_id`)
+SELECT a.id, r.id
+FROM `account` a
+INNER JOIN `rbac_role` r ON r.name = CASE a.access_level
+  WHEN 1 THEN 'moderator'
+  WHEN 2 THEN 'gamemaster'
+  WHEN 3 THEN 'administrator'
+  ELSE ''
+END
+WHERE a.access_level > 0;
+
+UPDATE `account` SET `access_level` = 0 WHERE `access_level` > 0;
 

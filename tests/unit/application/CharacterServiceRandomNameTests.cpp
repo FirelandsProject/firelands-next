@@ -57,7 +57,6 @@ public:
   MOCK_METHOD(bool, SendGmMailWithItem, (uint32_t, uint32_t, uint32_t), (override));
   MOCK_METHOD(uint32_t, RemoveBag0ItemsByEntry, (uint32_t, uint32_t, uint32_t),
               (override));
-  MOCK_METHOD(AccessLevel, GetAccountAccessLevel, (uint32_t), (override));
   MOCK_METHOD(bool, AutoEquipFromBag0Slot, (uint32_t, uint8_t, std::optional<uint8_t>),
               (override));
   MOCK_METHOD(bool, DestroyBag0BackpackItem, (uint32_t, uint8_t, uint32_t), (override));

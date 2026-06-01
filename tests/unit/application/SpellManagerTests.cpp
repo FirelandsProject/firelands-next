@@ -574,6 +574,20 @@ TEST(SpellManagerTests, CastTablesFillSpellStartCastTime) {
   EXPECT_EQ(out.deferredCastTimeMs, 3200u);
 }
 
+TEST(SpellManagerTests, CastTimeReducedByCasterHasteMultiplier) {
+  auto defs = std::make_shared<SpellDefinitionStoreWithCasting>(9);
+  auto tables = std::make_shared<MockSpellCastTables>(3200u, 9u);
+  SpellManager mgr(defs, tables);
+  std::unordered_set<uint32> known = {100};
+  SpellCastRequest req = MakeRequest(0x10ULL, 100, &known);
+  req.casterCastHasteMultiplier = 1.21f;
+  SpellCastOutcome out;
+  mgr.ProcessCastRequest(req, &out);
+  ASSERT_EQ(out.kind, SpellCastOutcome::Kind::SpellStartDeferred);
+  EXPECT_EQ(ReadSpellStartCastTimeMs(out.spellStart), 2644u);
+  EXPECT_EQ(out.deferredCastTimeMs, 2644u);
+}
+
 TEST(SpellManagerTests, RangeExceeded_ReturnsOutOfRange) {
   uint32 constexpr kRi = 11;
   auto defs = std::make_shared<SpellDefinitionWithRange>(kRi);

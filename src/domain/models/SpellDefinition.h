@@ -2,6 +2,7 @@
 
 #include <shared/Common.h>
 #include <shared/game/SpellAttributes.h>
+#include <shared/game/StarterSpellFilters.h>
 
 #include <vector>
 
@@ -116,8 +117,23 @@ struct SpellDefinition {
     return isPassiveSpell() && cooldownsId == 0u;
   }
 
+  /// Infinite login auras, including racials without `SPELL_ATTR0_PASSIVE` (Da Voodoo Shuffle).
+  bool isAlwaysOnLoginPassiveSpell() const {
+    if (cooldownsId != 0u || isActivatablePassiveSpell())
+      return false;
+    if (isPermanentLoginPassiveSpell())
+      return true;
+    if (durationIndex != 0u || auraEffects.empty())
+      return false;
+    for (SpellAuraEffectRow const &row : auraEffects) {
+      if (!IsAlwaysOnLoginAuraType(row.auraType))
+        return false;
+    }
+    return true;
+  }
+
   bool HasLoginPassiveAura() const {
-    return isPermanentLoginPassiveSpell() &&
+    return isAlwaysOnLoginPassiveSpell() &&
            (!auraEffects.empty() || hasAuraEffect);
   }
 

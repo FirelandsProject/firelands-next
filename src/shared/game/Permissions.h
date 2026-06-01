@@ -55,15 +55,31 @@ inline PermissionMask DefaultPermissions(AccessLevel level) {
   return 0;
 }
 
-/// `required == 0` means any authenticated game client (or console) may run the
-/// command (subject to `CommandAvailability` in `CommandService`).
-inline bool HasPermission(AccessLevel account, PrivilegeOrigin origin,
-                          PermissionMask required) {
+/// Effective grant for command checks: RBAC role mask in-game; all bits on console.
+inline PermissionMask EffectivePermissions(PrivilegeOrigin origin,
+                                           PermissionMask roleMask) {
+  if (origin == PrivilegeOrigin::ServerConsole)
+    return UINT64_MAX;
+  return roleMask;
+}
+
+/// `required == 0` means any caller that passed staff command gates may run it.
+/// `roleMask` is the OR of `rbac_role.permission_mask` for the account.
+inline bool HasPermission(PrivilegeOrigin origin, PermissionMask required,
+                          PermissionMask roleMask) {
   if (required == 0)
     return true;
-  AccessLevel const effective = EffectiveAccess(account, origin);
-  PermissionMask const granted = DefaultPermissions(effective);
+  PermissionMask const granted = EffectivePermissions(origin, roleMask);
   return (granted & required) == required;
+}
+
+inline bool CanUseModeratorDotCommands(PermissionMask roleMask) {
+  return (roleMask & DefaultPermissions(AccessLevel::Moderator)) != 0;
+}
+
+inline bool CanUseGameMasterDotCommands(PermissionMask roleMask) {
+  return HasPermission(PrivilegeOrigin::GameClient,
+                       DefaultPermissions(AccessLevel::GameMaster), roleMask);
 }
 
 } // namespace Firelands

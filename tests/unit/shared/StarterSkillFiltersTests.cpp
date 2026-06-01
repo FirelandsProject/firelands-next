@@ -4,12 +4,17 @@
 using namespace Firelands;
 
 TEST(StarterSkillFiltersTests, MetaSkillsAreExcluded) {
+  EXPECT_TRUE(IsMetaOrInternalStarterSkill(95u));
+  EXPECT_TRUE(IsMetaOrInternalStarterSkill(183u));
   EXPECT_TRUE(IsMetaOrInternalStarterSkill(777u));
   EXPECT_TRUE(IsMetaOrInternalStarterSkill(778u));
-  EXPECT_FALSE(IsMetaOrInternalStarterSkill(95u));
+  EXPECT_TRUE(IsMetaOrInternalStarterSkill(810u));
+  EXPECT_FALSE(IsMetaOrInternalStarterSkill(43u));
+  EXPECT_FALSE(IsMetaOrInternalStarterSkill(415u));
 }
 
 TEST(StarterSkillFiltersTests, DefenseSkillExcludedFromStarterUi) {
+  EXPECT_TRUE(IsMetaOrInternalStarterSkill(95u));
   EXPECT_TRUE(IsExcludedStarterSkill(95u));
 }
 
@@ -26,6 +31,5 @@ TEST(StarterSkillFiltersTests, ClassSpellTabsAreExcluded) {
 
 TEST(StarterSkillFiltersTests, WeaponSkillsAreKept) {
   EXPECT_FALSE(IsExcludedStarterSkill(43u));
-  EXPECT_FALSE(IsExcludedStarterSkill(95u));
   EXPECT_FALSE(IsExcludedStarterSkill(415u));
 }

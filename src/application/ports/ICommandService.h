@@ -1,5 +1,5 @@
 #pragma once
-#include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
 #include <functional>
 #include <memory>
 #include <string>

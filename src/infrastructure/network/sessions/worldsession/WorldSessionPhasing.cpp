@@ -51,16 +51,23 @@ void WorldSession::LoadQuestProgressForCharacter(uint32 characterGuid) {
   if (!_questProgressRepo || characterGuid == 0)
     return;
   _questProgress.LoadSnapshot(_questProgressRepo->LoadForCharacter(characterGuid));
+  _questProgressDirty = false;
 }
 
-void WorldSession::PersistQuestProgressForCharacter() {
+void WorldSession::MarkQuestProgressDirty() { _questProgressDirty = true; }
+
+void WorldSession::PersistQuestProgressForCharacter(bool force) {
   if (!_questProgressRepo || _playerGuid == 0)
+    return;
+  if (!force && !_questProgressDirty)
     return;
   uint32_t const characterGuid = static_cast<uint32_t>(_playerGuid);
   if (!_questProgressRepo->SaveForCharacter(characterGuid,
                                             _questProgress.ExportSnapshot())) {
     LOG_WARN("Quest progress save failed for guid {}", characterGuid);
+    return;
   }
+  _questProgressDirty = false;
 }
 
 void WorldSession::SendRestoredQuestLogToClient() {

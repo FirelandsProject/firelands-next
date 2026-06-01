@@ -80,7 +80,7 @@ void MergePermanentPassiveRegenModifiers(
     if (spellId == 0u || activeAuraSpellIds.count(spellId) != 0)
       continue;
     std::optional<SpellDefinition> def = spellDefinitions->GetDefinition(spellId);
-    if (!def || !def->isPermanentLoginPassiveSpell())
+    if (!def || !def->isAlwaysOnLoginPassiveSpell())
       continue;
     ApplyDefinitionRegenModifiers(*def, casterLevel, modifiers);
   }

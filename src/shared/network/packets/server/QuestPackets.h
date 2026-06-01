@@ -105,6 +105,29 @@ inline WorldPacket BuildQuestGiverQuestDetails(uint64_t npcGuid, uint32_t questI
   return out;
 }
 
+/// `SMSG_QUESTGIVER_OFFER_REWARD` (4.3.4) — ref `QuestGiverOfferRewardMessage::Write`.
+inline WorldPacket BuildQuestGiverOfferReward(uint64_t npcGuid, uint32_t questId,
+                                              QuestGossipSummary const &summary,
+                                              std::string const &rewardText) {
+  WorldPacket out(SMSG_QUESTGIVER_OFFER_REWARD, 512);
+  out.Append<uint64_t>(npcGuid);
+  out.Append<uint32_t>(questId);
+  out.WriteString(summary.title);
+  out.WriteString(rewardText);
+  out.WriteString("");
+  out.WriteString("");
+  out.WriteString("");
+  out.WriteString("");
+  out.Append<uint32_t>(0u); // PortraitGiver
+  out.Append<uint32_t>(0u); // PortraitTurnIn
+  out.Append<uint8_t>(1u);  // AutoLaunched
+  out.Append<uint32_t>(summary.flags);
+  out.Append<uint32_t>(0u); // SuggestedPartyMembers
+  out.Append<uint32_t>(0u); // Emote count
+  AppendQuestRewardsBlock(out);
+  return out;
+}
+
 inline WorldPacket BuildQuestUpdateComplete(uint32_t questId) {
   WorldPacket out(SMSG_QUEST_UPDATE_COMPLETE, 8);
   out.Append<uint32_t>(questId);
@@ -164,10 +187,10 @@ inline WorldPacket BuildQuestGiverQuestListMessage(
   out.Append<uint32_t>(0); // greet emote type
   out.Append<uint8_t>(static_cast<uint8_t>(quests.size()));
   for (auto const &quest : quests) {
-    out.Append<int32_t>(static_cast<int32_t>(quest.questId));
-    out.Append<int32_t>(static_cast<int32_t>(quest.questIcon));
+    out.Append<uint32_t>(quest.questId);
+    out.Append<uint32_t>(static_cast<uint32_t>(quest.questIcon));
     out.Append<int32_t>(quest.questLevel);
-    out.Append<int32_t>(static_cast<int32_t>(quest.questFlags));
+    out.Append<uint32_t>(quest.questFlags);
     out.Append<uint8_t>(quest.blueQuestionMark ? 1u : 0u);
     out.WriteString(quest.questTitle);
   }
@@ -296,6 +319,39 @@ inline WorldPacket BuildQuestQueryResponse(QuestGossipSummary const &summary) {
   out.Append<uint32_t>(summary.soundAccept);
   out.Append<uint32_t>(summary.soundTurnIn);
 
+  return out;
+}
+
+/// `SMSG_QUEST_POI_QUERY_RESPONSE` — empty POI list per quest (MVP until `quest_poi` import).
+inline WorldPacket
+BuildQuestPoiQueryResponse(std::vector<uint32_t> const &questIds) {
+  WorldPacket out(SMSG_QUEST_POI_QUERY_RESPONSE, 4 + 8 * questIds.size());
+  out.Append<uint32_t>(static_cast<uint32_t>(questIds.size()));
+  for (uint32_t const questId : questIds)
+    out.Append<uint32_t>(questId);
+  for (uint32_t const questId : questIds) {
+    (void)questId;
+    out.Append<uint32_t>(0u); // POI count
+  }
+  return out;
+}
+
+/// `SMSG_QUEST_NPC_QUERY_RESPONSE` — ref `HandleQuestNPCQuery` (bit-packed header).
+inline WorldPacket BuildQuestNpcQueryResponse(
+    std::vector<std::pair<uint32_t, std::vector<uint32_t>>> const &quests) {
+  WorldPacket out(SMSG_QUEST_NPC_QUERY_RESPONSE, 16 + quests.size() * 16);
+  BitWriter bw(out);
+  bw.WriteBits(static_cast<uint32_t>(quests.size()), 23);
+  for (auto const &[questId, entries] : quests) {
+    (void)questId;
+    bw.WriteBits(static_cast<uint32_t>(entries.size()), 24);
+  }
+  bw.Flush();
+  for (auto const &[questId, entries] : quests) {
+    out.Append<uint32_t>(questId);
+    for (uint32_t const entry : entries)
+      out.Append<uint32_t>(entry);
+  }
   return out;
 }
 

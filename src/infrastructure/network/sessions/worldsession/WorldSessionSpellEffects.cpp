@@ -332,6 +332,7 @@ void BroadcastPlayerAuraStatBonusOnMap(uint32 mapId, std::shared_ptr<Map> const 
                                       activeSpellIds, defs.get(), casterLevel,
                                       regenMods);
   target->SetResourceRegenModifiers(regenMods);
+  target->SetCastHasteMultiplier(bonus.castHasteMultiplier);
 
   WorldPacket pkt;
   ws_obj::BuildPlayerAuraStatValuesUpdate(static_cast<uint16>(mapId), unitGuid, bonus, pkt,

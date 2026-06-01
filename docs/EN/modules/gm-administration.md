@@ -6,9 +6,10 @@ This document describes how Firelands handles **Game Master (GM) tooling**, **st
 
 | Concern | Location | Role |
 |--------|----------|------|
-| Stored account tier | `shared/game/AccessLevel.h` | Values persisted in `account.access_level` (0 = player … 3 = administrator). `AccessLevel::Console` exists only at runtime for the server REPL. |
-| Effective privilege | `AccessLevel.h` + `PrivilegeOrigin` | `EffectiveAccess()` upgrades the acting level to **Console** when `PrivilegeOrigin::ServerConsole` is used (world terminal), so console commands are not limited by the stub session’s stored level. |
-| Fine-grained caps | `shared/game/Permissions.h` | `Permission` bitmask + `DefaultPermissions(AccessLevel)` + `HasPermission()`. Add new bits here and wire them in `CommandService`. |
+| Staff capabilities | `rbac_role` + `rbac_account_role` (auth DB) | Built-in roles `moderator`, `gamemaster`, `administrator` replace legacy `account.access_level`. |
+| Permission checks | `shared/game/Permissions.h` | `HasPermission(origin, required, roleMask)` — in-game grants from RBAC only; console has full mask. |
+| Built-in role masks | `shared/game/RbacBuiltinRoles.h` | Same capability sets as former GM tiers (`DefaultPermissions` for seeding). |
+| RBAC admin | `IRbacRepository`, `.rbac` command | `setstaff`, `grant`/`revoke`, custom roles. |
 | Command execution | `application/services/CommandService.{h,cpp}` | Parses `.command args…`, checks **`CommandAvailability`** (BOTH / GAME / CONSOLE), permissions, and optional **console-first character name** for remote targeting. |
 | Session abstraction | `application/ports/ICommandSession.h` | Minimal port: notifications, position, teleport, GM appearance hooks, gameplay helpers (`GmLearnSpell`, etc.). |
 | Online player index | `application/services/OnlineCharacterSessionRegistry.{h,cpp}` | Thread-safe map **lowercased character name → weak `ICommandSession`**. Used for `.online`, `.kick`, `.goto`, `.summon`, `.announce`, and console `.tele` / `.gps` / gameplay-on-target. |
@@ -27,8 +28,8 @@ This document describes how Firelands handles **Game Master (GM) tooling**, **st
 
 Important behavior in `CommandService::ExecuteCommand`:
 
-- For **game clients**, only accounts with **`AccessLevel::GameMaster` or higher** may use dot commands. Moderators and players get **no response** (including no “unknown command” message), by design.
-- After that gate, each registered command checks **`HasPermission`** against `DefaultPermissions(EffectiveAccess(account, origin))`.
+- For **game clients**, dot commands require a **staff RBAC mask**: full GM commands need `CanUseGameMasterDotCommands(mask)`; moderators may use `.help` / `.commands` / `.email` when `CanUseModeratorDotCommands(mask)`. Players with no roles get **no response**, by design.
+- Each command then checks **`HasPermission(origin, required, roleMask)`**.
 
 ### World server console
 
@@ -95,7 +96,8 @@ All names are registered **without** the leading dot in `CommandService`’s con
 | `cd` | `CommandGameplay` | BOTH | target first (console) | Clears GCD and all spell/category cooldowns via `SMSG_CLEAR_COOLDOWNS` + empty category sync (not `SMSG_SPELL_COOLDOWN` with 0 ms); persists empty state. |
 | `damage` | `CommandGameplay` | GAME | same | Target a player or NPC, then `.damage <amount>`. |
 | `revive` | `CommandGameplay` | GAME | same | Restores full health and primary power for the selected player, or yourself when no player is targeted. |
-| `account` | `ManageAccounts` | CONSOLE | same | `create`, `setaccess`, `delete` against `IAccountRepository`. |
+| `account` | `ManageAccounts` | CONSOLE | same | `create`, `delete` (no staff tier — use `.rbac setstaff`). |
+| `rbac` | `ManageAccounts` | CONSOLE | same | `setstaff`, role CRUD, `grant` / `revoke`, `show`. Re-login refreshes in-game masks. |
 | `ban`, `unban` | `ManageAccounts` | CONSOLE | same | Toggles `account.locked` (login lock), not only a runtime kick. |
 | `ticket` | `ManageGmTickets` | GAME | same | GM queue: `queue`, `mine`, `ui`, `take <id>`, `reply <id> text`, `close <id>` (requires `account.id` on session; see [gm-tickets.md](gm-tickets.md)). |
 
@@ -124,7 +126,7 @@ Apply migrations through the world (or auth) startup migrator as configured; see
 ## Configuration pointers
 
 - **`worldserver.yaml`** — `Console.Enabled` toggles the interactive console; with a TTY the FTXUI console is always used (see [executables.md](executables.md)).
-- Staff **access level** is stored per account; changing it with `.account setaccess` requires **re-login** for the client session to pick up new privileges.
+- Staff capabilities are **RBAC roles** on the account; `.rbac setstaff` / `grant` / `revoke` require **re-login** for in-game sessions to reload the mask.
 
 ## Related documentation
 

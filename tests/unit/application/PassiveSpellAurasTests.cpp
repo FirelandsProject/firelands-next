@@ -5,6 +5,7 @@
 #include <shared/game/SpellAttributes.h>
 #include <shared/game/SpellAuraTypes.h>
 #include <shared/game/StarterSpellFilters.h>
+#include <shared/game/StarterSpellFilters.h>
 #include <unordered_set>
 
 using namespace Firelands;
@@ -117,4 +118,23 @@ TEST(PassiveSpellAurasTests, CollectLoginPassiveSpellIds_FiltersActiveAndLanguag
   auto ids = CollectLoginPassiveSpellIds(known, &store);
   ASSERT_EQ(ids.size(), 1u);
   EXPECT_EQ(ids[0], 20573u);
+}
+
+TEST(PassiveSpellAurasTests, CollectLoginPassive_IncludesDaVoodooWithoutPassiveAttr) {
+  SpellDefinition daVoodoo{};
+  daVoodoo.id = 58943u;
+  daVoodoo.attributes = 0x140u;
+  daVoodoo.durationIndex = 0u;
+  SpellAuraEffectRow row{};
+  row.auraType = kSpellAuraMechanicDurationMod;
+  row.basePoints = -15;
+  daVoodoo.auraEffects.push_back(row);
+
+  PassiveSpellStore store;
+  store.Add(daVoodoo);
+
+  std::unordered_set<uint32> known{58943u};
+  auto ids = CollectLoginPassiveSpellIds(known, &store);
+  ASSERT_EQ(ids.size(), 1u);
+  EXPECT_EQ(ids[0], 58943u);
 }

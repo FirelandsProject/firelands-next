@@ -4,7 +4,8 @@
 #include <infrastructure/network/asio/AsioAwaitables.h>
 #include <infrastructure/network/sessions/AuthSession.h>
 #include <shared/Config.h>
-#include <shared/game/AccessLevel.h>
+#include <domain/repositories/IRbacRepository.h>
+#include <shared/game/RbacBuiltinRoles.h>
 #include <shared/Logger.h>
 
 #include <mutex>
@@ -13,9 +14,10 @@ namespace Firelands {
 
 AuthSession::AuthSession(tcp::socket socket,
                          std::shared_ptr<AuthService> authService,
-                         std::shared_ptr<RealmListService> realmService)
+                         std::shared_ptr<RealmListService> realmService,
+                         std::shared_ptr<IRbacRepository> rbacRepo)
     : _socket(std::move(socket)), _authService(std::move(authService)),
-      _realmService(std::move(realmService)),
+      _realmService(std::move(realmService)), _rbacRepo(std::move(rbacRepo)),
       _writeWakeTimer(_socket.get_executor()) {}
 
 void AuthSession::Start() {
@@ -161,7 +163,7 @@ void AuthSession::HandleLogonChallenge(AuthPacket &packet) {
   challenge.Read(packet);
 
   _username = challenge.username;
-  _accountAccessLevel = AccessLevel::Player;
+  _accountRolePermissionMask = 0;
   LOG_DEBUG("Login challenge for user: {} ({})", _username, GetIpAddress());
 
   auto account = _authService->FindAccount(_username);
@@ -229,7 +231,7 @@ void AuthSession::HandleLogonProof(AuthPacket &packet) {
   if (std::memcmp(M1.data(), proof.M1, 20) != 0) {
     response.result = AUTH_FAIL_WRONG_PASSWORD;
     LOG_WARN("Auth failed: IP={} User='{}' Reason=Wrong Password", GetIpAddress(), _username);
-  _accountAccessLevel = AccessLevel::Player;
+  _accountRolePermissionMask = 0;
   } else {
     response.result = AUTH_SUCCESS;
     auto M2 = SRPService::CalculateM2(A, M1, K);
@@ -243,11 +245,17 @@ void AuthSession::HandleLogonProof(AuthPacket &packet) {
     uint32 accountId = account ? account->id : 0;
     if (account) {
       _authService->CreateSession(account->id, K);
-      _accountAccessLevel = account->accessLevel;
-  } else {
-  _accountAccessLevel = AccessLevel::Player;
-  }
-    LOG_INFO("Auth success: IP={} User='{}' AccountId={} Access={}", GetIpAddress(), _username, accountId, static_cast<int>(_accountAccessLevel));
+      if (_rbacRepo)
+        _accountRolePermissionMask = static_cast<PermissionMask>(
+            _rbacRepo->UnionPermissionMaskForAccount(account->id));
+      else
+        _accountRolePermissionMask = 0;
+    } else {
+      _accountRolePermissionMask = 0;
+    }
+    LOG_INFO("Auth success: IP={} User='{}' AccountId={} StaffTier={}",
+             GetIpAddress(), _username, accountId,
+             EffectiveStaffTierRank(_accountRolePermissionMask));
   }
 
   AuthPacket res(AUTH_LOGON_PROOF);
@@ -269,8 +277,8 @@ void AuthSession::HandleRealmList(AuthPacket & /*packet*/) {
   std::vector<Realm const *> visibleRealms;
   visibleRealms.reserve(realms.size());
   for (Realm const &r : realms) {
-    AccessLevel const need = AccessLevelFromStored(r.GetAllowedSecurityLevel());
-    if (HasAtLeast(_accountAccessLevel, need))
+    if (MeetsRealmSecurityRequirement(_accountRolePermissionMask,
+                                      r.GetAllowedSecurityLevel()))
       visibleRealms.push_back(&r);
   }
 

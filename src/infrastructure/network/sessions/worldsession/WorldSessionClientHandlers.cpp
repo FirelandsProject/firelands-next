@@ -580,7 +580,7 @@ void WorldSession::HandleGossipSelectOption(WorldPacket &packet) {
         if (_questGossipRepo) {
           if (auto const entry = TryResolveCreatureTemplateEntry(npcGuid)) {
             quests = BuildAllGossipQuestItemsForPlayer(
-                _questGossipRepo.get(), *entry, _playerClass, _playerRace,
+                _questGossipRepo.get(), *entry, _playerClass, _playerRace, _playerLevel,
                 _questProgress);
           }
         }
@@ -611,8 +611,8 @@ void WorldSession::HandleMailGetList(WorldPacket &packet) {
   uint64 const mailboxGuid = packet.ReadPackedGuid();
   if (mailboxGuid != _playerGuid)
     return;
-  if (!HasPermission(_accountAccessLevel, PrivilegeOrigin::GameClient,
-                     ToMask(Permission::CommandMailbox)))
+  if (!HasPermission(PrivilegeOrigin::GameClient, ToMask(Permission::CommandMailbox),
+                     _accountRolePermissionMask))
     return;
   SendMailListToClient(static_cast<uint32_t>(_playerGuid));
 }

@@ -25,6 +25,10 @@ constexpr uint32 kSpellAuraModPowerRegen = 85u;
 constexpr uint32 kSpellAuraModHealthRegenPercent = 88u;
 constexpr uint32 kSpellAuraModPowerRegenPercent = 110u;
 constexpr uint32 kSpellAuraModRegenDuringCombat = 116u;
+/// Combat (melee/ranged/cast) speed percent — Berserking, Bloodlust, etc.
+constexpr uint32 kSpellAuraModCombatSpeedPct = 193u;
+/// Reduces duration of matching debuff mechanics — Da Voodoo Shuffle.
+constexpr uint32 kSpellAuraMechanicDurationMod = 232u;
 constexpr uint32 kSpellAuraModShapeshift = 36u;
 constexpr uint32 kSpellAuraTransform = 56u;
 constexpr uint32 kSpellAuraModIncreaseMountedSpeed = 32u;

@@ -77,7 +77,7 @@ TEST(GossipLogicTests, BuildGossipQuestItems_MapsSummaryToWireFields) {
   summary.flags = kQuestFlagAutoComplete;
 
   PlayerQuestProgressStore progress;
-  auto items = BuildStarterGossipQuestItemsForPlayer({summary}, progress);
+  auto items = BuildStarterGossipQuestItemsForPlayer({summary}, progress, 1, 1, 80);
   ASSERT_EQ(items.size(), 1u);
   EXPECT_EQ(items[0].questId, 42u);
   EXPECT_EQ(items[0].questTitle, "Kill rats");

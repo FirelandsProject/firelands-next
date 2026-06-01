@@ -2,7 +2,7 @@
 #include <application/services/CommandService.h>
 #include <gtest/gtest.h>
 #include <shared/Logger.h>
-#include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
 #include <shared/network/MovementInfo.h>
 
 namespace Firelands {
@@ -18,7 +18,7 @@ protected:
 class MockCommandSession : public ICommandSession {
 public:
   MovementInfo const &GetPosition() const override { return m_pos; }
-  AccessLevel GetAccountAccessLevel() const override { return m_access; }
+  PermissionMask GetAccountRolePermissionMask() const override { return m_roleMask; }
   void TeleportTo(uint32_t, float, float, float, float) override {}
 
   void SendNotification(const std::string &message) override {
@@ -43,7 +43,7 @@ public:
   uint64_t GetClientSelectionGuid() const override { return selectionGuid; }
 
   MovementInfo m_pos{};
-  AccessLevel m_access = AccessLevel::GameMaster;
+  PermissionMask m_roleMask = DefaultPermissions(AccessLevel::GameMaster);
   std::vector<std::string> notifications;
   uint64_t selectionGuid = 0;
   uint32 lastUnlearnSpellId = 0;

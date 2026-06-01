@@ -10,7 +10,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <shared/game/AccessLevel.h>
+#include <shared/game/Permissions.h>
 #include <shared/network/AuthPacket.h>
 #include <shared/network/AuthPackets.h>
 
@@ -18,11 +18,14 @@ namespace Firelands {
 
 using boost::asio::ip::tcp;
 
+class IRbacRepository;
+
 class AuthSession : public IAuthSession,
                     public std::enable_shared_from_this<AuthSession> {
 public:
   AuthSession(tcp::socket socket, std::shared_ptr<AuthService> authService,
-              std::shared_ptr<RealmListService> realmService);
+              std::shared_ptr<RealmListService> realmService,
+              std::shared_ptr<IRbacRepository> rbacRepo = {});
 
   void Start();
 
@@ -60,9 +63,9 @@ private:
   std::unique_ptr<BigInt> _b;
   std::unique_ptr<BigInt> _B;
 
-  /// Effective after successful `AUTH_LOGON_PROOF`; until then treated as
-  /// `Player` for realm filtering.
-  AccessLevel _accountAccessLevel = AccessLevel::Player;
+  std::shared_ptr<IRbacRepository> _rbacRepo;
+  /// Loaded after successful `AUTH_LOGON_PROOF` for realm list filtering.
+  PermissionMask _accountRolePermissionMask = 0;
 };
 
 } // namespace Firelands

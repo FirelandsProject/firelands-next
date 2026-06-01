@@ -64,6 +64,8 @@ struct SpellCastRequest {
   bool targetIsFriendlyTeamForSpellRange = false;
   /// Caster level for aura packets (defaults to 1 when unset).
   uint8 casterLevel = 1;
+  /// `UNIT_MOD_CAST_HASTE` / Berserking-style bonus (1.0 = none).
+  float casterCastHasteMultiplier = 1.f;
 };
 
 /// Result of `SpellManager::ProcessCastRequest`: packets to send and new GCD time.
