@@ -45,6 +45,7 @@ TEST(DatabaseMigrationCatalogTests, InitPathsForWorldInOrder) {
   auto const paths = InitScriptPathsForDatabase(sqlDir, kWorldDatabase);
   ASSERT_GE(paths.size(), 1U);
   EXPECT_EQ(paths.front().filename().string(), "world_schema.sql");
+  EXPECT_EQ(paths.back().filename().string(), "world_seed.sql");
 }
 
 TEST(DatabaseMigrationCatalogTests, ExtractJdbcServerUriStripsDatabase) {

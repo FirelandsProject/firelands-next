@@ -99,7 +99,13 @@ InitScriptPathsForDatabase(std::filesystem::path const &sqlDir,
     paths.push_back(initDir / "characters_schema.sql");
   else if (database == kWorldDatabase) {
     paths.push_back(initDir / "world_schema.sql");
-    paths.push_back(initDir / "world_schema_core.sql");
+    paths.push_back(initDir / "world_schema_quest.sql");
+    paths.push_back(initDir / "world_schema_creature.sql");
+    paths.push_back(initDir / "world_schema_gossip.sql");
+    paths.push_back(initDir / "world_schema_spell.sql");
+    paths.push_back(initDir / "world_schema_player.sql");
+    paths.push_back(initDir / "world_schema_gameobject.sql");
+    paths.push_back(initDir / "world_seed.sql");
   }
   std::vector<std::filesystem::path> existing;
   for (auto const &p : paths) {
