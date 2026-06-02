@@ -34,6 +34,20 @@ void WorldSession::SetGmTagEnabled(bool on) {
   PublishGmVisualPatchIfInWorld();
   if (_playerGuid == 0 || wasOn == on)
     return;
+
+  // Sync GM mode flag on the Player for creature aggro immunity
+  if (auto map = runtime().GetMap(_mapId)) {
+    if (auto player = map->TryGetPlayer(_playerGuid))
+      player->SetGmModeEnabled(on);
+  }
+
+  if (on) {
+    LOG_DEBUG("GM mode enabled: clearing active creature combat for playerGuid={} mapId={}",
+              _playerGuid, _mapId);
+    StopAllCreatureCombat(false);
+    StopMeleeAutoAttack(false);
+  }
+
   RefreshNearbyCreaturePhaseVisibility(_position.x, _position.y);
   RefreshNearbyCreatureGmWireFlags();
 }

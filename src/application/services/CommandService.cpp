@@ -3,7 +3,13 @@
 #include <application/services/GmTicketService.h>
 #include <application/services/OnlineCharacterSessionRegistry.h>
 #include <application/services/CharacterService.h>
+#include <application/services/WorldService.h>
+#include <application/logic/CreatureSpawnLogic.h>
 #include <domain/models/Character.h>
+#include <domain/repositories/INpcTemplateSearchRepository.h>
+#include <domain/repositories/ICommandDefinitionRepository.h>
+#include <domain/world/Creature.h>
+#include <domain/world/Map.h>
 #include <application/services/SRPService.h>
 #include <domain/repositories/IAccountRepository.h>
 #include <domain/repositories/IRbacRepository.h>
@@ -13,8 +19,14 @@
 #include <shared/Crypto.h>
 #include <shared/game/AccessLevel.h>
 #include <shared/game/Permissions.h>
+#include <shared/game/WowGuid.h>
 #include <shared/Logger.h>
+#include <shared/game/UnitCombatStats.h>
 #include <shared/network/MovementInfo.h>
+#include <shared/network/UpdateData.h>
+#include <shared/network/WorldPacket.h>
+#include <infrastructure/network/sessions/worldsession/WorldSessionObjectUpdate.h>
+#include <atomic>
 #include <cmath>
 #include <cctype>
 #include <chrono>
@@ -23,6 +35,7 @@
 #include <limits>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 
 namespace Firelands {
 
@@ -30,6 +43,14 @@ namespace {
 
 /// Blood Elf Female civilian — usable placeholder when `.npc add` omits displayId.
 constexpr uint32_t kDefaultGmNpcDisplayId = 15688u;
+
+std::atomic<uint32_t> g_nextMmapMarkerLow{0x71000000u};
+
+uint64_t AllocateMmapMarkerGuid(uint32_t creatureEntry) {
+  uint32_t const low =
+      g_nextMmapMarkerLow.fetch_add(1u, std::memory_order_relaxed);
+  return MakeCreatureObjectGuid(creatureEntry, low);
+}
 
 class DelegatingCommandSession final : public ICommandSession {
   std::shared_ptr<ICommandSession> _subject;
@@ -44,6 +65,11 @@ public:
   void SendNotification(const std::string &message) override {
     if (_operatorSession)
       _operatorSession->SendNotification(message);
+  }
+
+  void SendPacket(WorldPacket &packet) override {
+    if (_operatorSession)
+      _operatorSession->SendPacket(packet);
   }
 
   const MovementInfo &GetPosition() const override {
@@ -152,6 +178,8 @@ public:
     return _subject->GmRevivePlayer(playerGuid);
   }
 
+  bool GmReviveSelf() override { return _subject->GmReviveSelf(); }
+
   uint64_t GetClientSelectionGuid() const override {
     return _operatorSession ? _operatorSession->GetClientSelectionGuid() : 0;
   }
@@ -241,6 +269,263 @@ static std::string StripWowChatColorTokens(std::string const &in) {
 
 static constexpr uint64_t kMaxRestartDelaySeconds = 7ULL * 24 * 3600;
 
+static char const *FindPathStatusName(FindPathStatus status) {
+  switch (status) {
+  case FindPathStatus::Complete:
+    return "Complete";
+  case FindPathStatus::Partial:
+    return "Partial";
+  case FindPathStatus::NoPath:
+    return "NoPath";
+  case FindPathStatus::NavMeshMissing:
+    return "NavMeshMissing";
+  }
+  return "Unknown";
+}
+
+static std::string FormatVec3(Vec3 const &v) {
+  std::ostringstream ss;
+  ss << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+  return ss.str();
+}
+
+static constexpr float kMmapGridSize = 533.3333f;
+static constexpr float kMmapNavMeshOrigin = -17066.66656f;
+
+static bool IsMmapSubcommand(std::string const &token, char const *name) {
+  return AsciiEqualsLower(token, name);
+}
+
+static std::pair<int32_t, int32_t> ComputeMmapGridTile(float x, float y) {
+  int32_t gx = 32 - static_cast<int32_t>(x / kMmapGridSize);
+  int32_t gy = 32 - static_cast<int32_t>(y / kMmapGridSize);
+  return {gx, gy};
+}
+
+static std::pair<int32_t, int32_t> ComputeMmapNavTile(float x, float y) {
+  int32_t tileX = static_cast<int32_t>(std::floor((x - kMmapNavMeshOrigin) /
+                                                  kMmapGridSize));
+  int32_t tileY = static_cast<int32_t>(std::floor((y - kMmapNavMeshOrigin) /
+                                                  kMmapGridSize));
+  return {tileX, tileY};
+}
+
+static bool HandleMmapLoadedTiles(std::shared_ptr<ICommandSession> const &session,
+                                  IMapCollisionQueries const &collision,
+                                  uint32_t mapId) {
+  if (!collision.IsNavMeshDataAvailable(mapId)) {
+    session->SendNotification("NavMesh not loaded for current map.");
+    return true;
+  }
+
+  session->SendNotification("mmap loadedtiles:");
+  auto tiles = collision.GetLoadedTiles(mapId);
+  if (tiles.empty()) {
+    session->SendNotification("  (none)");
+    return true;
+  }
+
+  for (auto const &[tileX, tileY] : tiles) {
+    session->SendNotification("[" + (tileX < 10 ? std::string("0") : std::string()) +
+                              std::to_string(tileX) + ", " +
+                              (tileY < 10 ? std::string("0") : std::string()) +
+                              std::to_string(tileY) + "]");
+  }
+  return true;
+}
+
+static bool HandleMmapLoc(std::shared_ptr<ICommandSession> const &session,
+                          IMapCollisionQueries const &collision,
+                          uint32_t mapId) {
+  auto const &pos = session->GetPosition();
+  session->SendNotification("mmap tileloc:");
+
+  if (!collision.IsNavMeshDataAvailable(mapId)) {
+    session->SendNotification("NavMesh not loaded for current map.");
+    return true;
+  }
+
+  auto const [tileX, tileY] = ComputeMmapNavTile(pos.x, pos.y);
+  session->SendNotification(std::to_string(mapId) + "_" +
+                            std::to_string(tileX) + "_" +
+                            std::to_string(tileY) + ".mmtile");
+  session->SendNotification("tileloc [" +
+                            (tileX < 10 ? std::string("0") : std::string()) +
+                            std::to_string(tileX) + ", " +
+                            (tileY < 10 ? std::string("0") : std::string()) +
+                            std::to_string(tileY) + "]");
+
+  auto const [gridX, gridY] = ComputeMmapGridTile(pos.x, pos.y);
+  session->SendNotification("legacy [" + std::to_string(gridY) + ", " +
+                            std::to_string(gridX) + "]");
+
+  session->SendNotification("Calc   [" +
+                            (tileX < 10 ? std::string("0") : std::string()) +
+                            std::to_string(tileX) + ", " +
+                            (tileY < 10 ? std::string("0") : std::string()) +
+                            std::to_string(tileY) + "]");
+
+  auto tiles = collision.GetLoadedTiles(mapId);
+  bool const loaded = std::find(tiles.begin(), tiles.end(), std::make_pair(
+                                         static_cast<uint32_t>(tileX),
+                                         static_cast<uint32_t>(tileY))) !=
+                      tiles.end();
+  if (loaded)
+    session->SendNotification("Dt     [" +
+                              (tileX < 10 ? std::string("0") : std::string()) +
+                              std::to_string(tileX) + "," +
+                              (tileY < 10 ? std::string("0") : std::string()) +
+                              std::to_string(tileY) + "]");
+  else
+    session->SendNotification("Dt     [??,??] (no tile loaded)");
+
+  return true;
+}
+
+static bool HandleMmapStats(std::shared_ptr<ICommandSession> const &session,
+                            IMapCollisionQueries const &collision,
+                            uint32_t mapId) {
+  session->SendNotification("mmap stats:");
+  session->SendNotification(std::string("  global mmap pathfinding is ") +
+                            (collision.IsNavMeshDataAvailable(mapId) ? "enabled"
+                                                                    : "disabled"));
+  session->SendNotification(" " + std::to_string(collision.GetLoadedMapCount()) +
+                            " maps loaded with " +
+                            std::to_string(collision.GetLoadedTileCount()) +
+                            " tiles overall");
+  session->SendNotification("Navmesh stats:");
+  session->SendNotification(" " + std::to_string(collision.GetLoadedTiles(mapId).size()) +
+                            " tiles loaded");
+  return true;
+}
+
+static bool HandleMmapTestArea(std::shared_ptr<ICommandSession> const &session,
+                               IMapCollisionQueries const &collision,
+                               std::shared_ptr<Map> const &map,
+                               uint32_t mapId) {
+  if (!map) {
+    session->SendNotification("MMAP: current map is not available.");
+    return true;
+  }
+
+  float radius = 40.0f;
+  float const cellRadius = 1.0f;
+  float const playerX = session->GetPosition().x;
+  float const playerY = session->GetPosition().y;
+  float const playerZ = session->GetPosition().z;
+
+  uint32_t creatureCount = 0;
+  uint32_t pathCount = 0;
+  auto const started = std::chrono::steady_clock::now();
+
+  map->ForEachCreatureNear(playerX, playerY, static_cast<int>(cellRadius),
+                           [&](std::shared_ptr<Creature> const &creature) {
+                             ++creatureCount;
+                             FindPathRequest req;
+                             req.mapId = mapId;
+                             req.startX = creature->GetX();
+                             req.startY = creature->GetY();
+                             req.startZ = creature->GetZ();
+                             req.endX = playerX;
+                             req.endY = playerY;
+                             req.endZ = playerZ;
+                             req.smoothPath = true;
+                             req.allowPartialPath = true;
+                             if (collision.FindPath(req).status != FindPathStatus::NavMeshMissing)
+                               ++pathCount;
+                           });
+
+  auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - started)
+                           .count();
+
+  if (creatureCount != 0) {
+    session->SendNotification("Found " + std::to_string(creatureCount) +
+                              " Creatures.");
+    session->SendNotification("Generated " + std::to_string(pathCount) +
+                              " paths in " + std::to_string(elapsed) + " ms");
+  } else {
+    session->SendNotification("No creatures in " + std::to_string(radius) +
+                              " yard range.");
+  }
+  return true;
+}
+
+static std::shared_ptr<Creature> ResolveMmapChaseCreature(
+    std::shared_ptr<ICommandSession> const &session,
+    std::shared_ptr<Map> const &map) {
+  if (!map)
+    return nullptr;
+
+  uint64_t const targetGuid = session->GetClientSelectionGuid();
+  if (targetGuid != 0) {
+    if (auto selected = map->TryGetCreature(targetGuid))
+      return selected;
+  }
+
+  MovementInfo const &playerPos = session->GetPosition();
+  std::shared_ptr<Creature> nearest;
+  float nearestDistSq = std::numeric_limits<float>::max();
+  constexpr int kSearchCellRadius = 2;
+
+  map->ForEachCreatureNear(
+      playerPos.x, playerPos.y, kSearchCellRadius,
+      [&](std::shared_ptr<Creature> const &creature) {
+        float const dx = creature->GetX() - playerPos.x;
+        float const dy = creature->GetY() - playerPos.y;
+        float const dz = creature->GetZ() - playerPos.z;
+        float const distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearest = creature;
+        }
+      });
+
+  return nearest;
+}
+
+static void SendMmapMarkerCreate(std::shared_ptr<ICommandSession> const &session,
+                                 uint32_t mapId, uint64_t markerGuid,
+                                 Vec3 const &pos, uint32_t entry,
+                                 uint32_t displayId,
+                                 uint32_t factionTemplate) {
+  auto marker = std::make_shared<Creature>(markerGuid, entry, displayId, 100u, 1u,
+                                            factionTemplate);
+  marker->SetPosition(MovementInfo{.x = pos.x, .y = pos.y, .z = pos.z, .orientation = 0.0f});
+  marker->SetCombatStats(BuildCreatureCombatStats(1u, 1u));
+  WorldService::Instance().AddCreatureToMap(mapId, std::move(marker));
+
+  MovementInfo move{};
+  move.x = pos.x;
+  move.y = pos.y;
+  move.z = pos.z;
+  move.orientation = 0.0f;
+
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddCreateObject(
+      markerGuid, TYPEID_UNIT, move,
+      WorldSessionObjectUpdate::BuildMinimalNpcUnitCreateFields(
+          markerGuid, entry, displayId, 1u, 1u, 1u, 0u, factionTemplate));
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  session->SendPacket(pkt);
+}
+
+static void SendMmapMarkerDespawn(std::shared_ptr<ICommandSession> const &session,
+                                  uint32_t mapId, uint64_t markerGuid) {
+  WorldService::Instance().RemoveCreatureFromMap(mapId, markerGuid);
+  // The background sweep may run when the player is offline: still remove the
+  // creature from the map, but only push the out-of-range packet if a session is
+  // there to receive it.
+  if (!session)
+    return;
+  UpdateData update(static_cast<uint16>(mapId));
+  update.AddOutOfRangeObjects({markerGuid});
+  WorldPacket pkt(SMSG_UPDATE_OBJECT);
+  update.Build(pkt);
+  session->SendPacket(pkt);
+}
+
 static bool ParseRestartDelayToken(std::string const &token,
                                     std::chrono::seconds &out) {
   if (token.size() < 2)
@@ -307,141 +592,121 @@ CommandService::CommandService(
     std::shared_ptr<IAccountRepository> accountRepo,
     std::shared_ptr<CharacterService> characterService,
     std::shared_ptr<GmTicketService> gmTicketService,
-    std::shared_ptr<IRbacRepository> rbacRepo)
+    std::shared_ptr<IRbacRepository> rbacRepo,
+    std::shared_ptr<ICommandDefinitionRepository> commandDefRepo)
     : _onlineCharacters(std::move(onlineCharacters)),
       _accountRepo(std::move(accountRepo)),
       _characterService(std::move(characterService)),
       _gmTicketService(std::move(gmTicketService)),
-      _rbacRepo(std::move(rbacRepo)) {
-  RegisterCommand("gps", {[this](auto s, auto a, auto o) { return HandleGps(s, a, o); },
-                          ToMask(Permission::CommandGps), CommandAvailability::Both,
-                          ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand("tele", {[this](auto s, auto a, auto o) { return HandleTele(s, a, o); },
-                           ToMask(Permission::CommandTeleport), CommandAvailability::Both,
-                           ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand("help", {[this](auto s, auto a, auto o) { return HandleHelp(s, a, o); },
-                           0, CommandAvailability::Both,
-                           ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "commands", {[this](auto s, auto a, auto o) { return HandleHelp(s, a, o); }, 0,
-                   CommandAvailability::Both, ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "account", {[this](auto s, auto a, auto o) { return HandleAccount(s, a, o); },
-                  ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "rbac", {[this](auto s, auto a, auto o) { return HandleRbac(s, a, o); },
-               ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("gm", {[this](auto s, auto a, auto o) { return HandleGmTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("dnd", {[this](auto s, auto a, auto o) { return HandleDndTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("dev", {[this](auto s, auto a, auto o) { return HandleDevTag(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "visible", {[this](auto s, auto a, auto o) { return HandleGmVisible(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand("fly", {[this](auto s, auto a, auto o) { return HandleGmFly(s, a, o); },
-                  ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                  ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "speed", {[this](auto s, auto a, auto o) { return HandleGmSpeed(s, a, o); },
-                ToMask(Permission::CommandGmTools), CommandAvailability::Both,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "online", {[this](auto s, auto a, auto o) { return HandleOnline(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "announce", {[this](auto s, auto a, auto o) { return HandleAnnounce(s, a, o); },
-                   ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                   ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "kick", {[this](auto s, auto a, auto o) { return HandleKick(s, a, o); },
-               ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "goto", {[this](auto s, auto a, auto o) { return HandleGoto(s, a, o); },
-               ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-               ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "appear", {[this](auto s, auto a, auto o) { return HandleGoto(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "summon", {[this](auto s, auto a, auto o) { return HandleSummon(s, a, o); },
-                 ToMask(Permission::ManagePlayers), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "learn", {[this](auto s, auto a, auto o) { return HandleLearn(s, a, o); },
-                ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "unlearn", {[this](auto s, auto a, auto o) { return HandleUnlearn(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "money", {[this](auto s, auto a, auto o) { return HandleMoney(s, a, o); },
-               ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-               ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "additem", {[this](auto s, auto a, auto o) { return HandleAdditem(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "delitem", {[this](auto s, auto a, auto o) { return HandleDelitem(s, a, o); },
-                  ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-                  ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "level", {[this](auto s, auto a, auto o) { return HandleLevel(s, a, o); },
-               ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-               ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "cd", {[this](auto s, auto a, auto o) { return HandleCd(s, a, o); },
-             ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-             ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "damage", {[this](auto s, auto a, auto o) { return HandleDamage(s, a, o); },
-                 ToMask(Permission::CommandGameplay), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "revive", {[this](auto s, auto a, auto o) { return HandleRevive(s, a, o); },
-                 ToMask(Permission::CommandGameplay), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "ban", {[this](auto s, auto a, auto o) { return HandleBan(s, a, o); },
-              ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-              ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "unban", {[this](auto s, auto a, auto o) { return HandleUnban(s, a, o); },
-                ToMask(Permission::ManageAccounts), CommandAvailability::Console,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "ticket", {[this](auto s, auto a, auto o) { return HandleTicket(s, a, o); },
-                 ToMask(Permission::ManageGmTickets), CommandAvailability::Game,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "email", {[this](auto s, auto a, auto o) { return HandleEmail(s, a, o); },
-                ToMask(Permission::CommandMailbox), CommandAvailability::Game,
-                ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "server", {[this](auto s, auto a, auto o) { return HandleServer(s, a, o); },
-                 ToMask(Permission::ServerControl), CommandAvailability::Both,
-                 ConsoleArgLayout::SameAsInGame});
-  RegisterCommand(
-      "npc", {[this](auto s, auto a, auto o) { return HandleNpc(s, a, o); },
-             ToMask(Permission::ServerControl), CommandAvailability::Both,
-             ConsoleArgLayout::TargetOnlineCharacterFirst});
-  RegisterCommand(
-      "faction",
-      {[this](auto s, auto a, auto o) { return HandleFaction(s, a, o); },
-       ToMask(Permission::CommandGameplay), CommandAvailability::Both,
-       ConsoleArgLayout::TargetOnlineCharacterFirst});
+      _rbacRepo(std::move(rbacRepo)),
+      _commandDefRepo(std::move(commandDefRepo)) {}
+
+void CommandService::LoadCommandsFromDb() {
+  // Build handler map (name → lambda capturing this)
+  std::unordered_map<std::string, CommandHandler> handlers;
+  handlers["gps"]      = [this](auto s, auto a, auto o) { return HandleGps(s, a, o); };
+  handlers["mmap"]     = [this](auto s, auto a, auto o) { return HandleMmap(s, a, o); };
+  handlers["tele"]     = [this](auto s, auto a, auto o) { return HandleTele(s, a, o); };
+  handlers["help"]     = [this](auto s, auto a, auto o) { return HandleHelp(s, a, o); };
+  handlers["commands"] = [this](auto s, auto a, auto o) { return HandleHelp(s, a, o); };
+  handlers["account"]  = [this](auto s, auto a, auto o) { return HandleAccount(s, a, o); };
+  handlers["rbac"]     = [this](auto s, auto a, auto o) { return HandleRbac(s, a, o); };
+  handlers["gm"]       = [this](auto s, auto a, auto o) { return HandleGmTag(s, a, o); };
+  handlers["dnd"]      = [this](auto s, auto a, auto o) { return HandleDndTag(s, a, o); };
+  handlers["dev"]      = [this](auto s, auto a, auto o) { return HandleDevTag(s, a, o); };
+  handlers["visible"]  = [this](auto s, auto a, auto o) { return HandleGmVisible(s, a, o); };
+  handlers["fly"]      = [this](auto s, auto a, auto o) { return HandleGmFly(s, a, o); };
+  handlers["speed"]    = [this](auto s, auto a, auto o) { return HandleGmSpeed(s, a, o); };
+  handlers["online"]   = [this](auto s, auto a, auto o) { return HandleOnline(s, a, o); };
+  handlers["announce"] = [this](auto s, auto a, auto o) { return HandleAnnounce(s, a, o); };
+  handlers["kick"]     = [this](auto s, auto a, auto o) { return HandleKick(s, a, o); };
+  handlers["goto"]     = [this](auto s, auto a, auto o) { return HandleGoto(s, a, o); };
+  handlers["appear"]   = [this](auto s, auto a, auto o) { return HandleGoto(s, a, o); };
+  handlers["summon"]   = [this](auto s, auto a, auto o) { return HandleSummon(s, a, o); };
+  handlers["learn"]    = [this](auto s, auto a, auto o) { return HandleLearn(s, a, o); };
+  handlers["unlearn"]  = [this](auto s, auto a, auto o) { return HandleUnlearn(s, a, o); };
+  handlers["money"]    = [this](auto s, auto a, auto o) { return HandleMoney(s, a, o); };
+  handlers["additem"]  = [this](auto s, auto a, auto o) { return HandleAdditem(s, a, o); };
+  handlers["delitem"]  = [this](auto s, auto a, auto o) { return HandleDelitem(s, a, o); };
+  handlers["level"]    = [this](auto s, auto a, auto o) { return HandleLevel(s, a, o); };
+  handlers["cd"]       = [this](auto s, auto a, auto o) { return HandleCd(s, a, o); };
+  handlers["damage"]   = [this](auto s, auto a, auto o) { return HandleDamage(s, a, o); };
+  handlers["revive"]   = [this](auto s, auto a, auto o) { return HandleRevive(s, a, o); };
+  handlers["ban"]      = [this](auto s, auto a, auto o) { return HandleBan(s, a, o); };
+  handlers["unban"]    = [this](auto s, auto a, auto o) { return HandleUnban(s, a, o); };
+  handlers["ticket"]   = [this](auto s, auto a, auto o) { return HandleTicket(s, a, o); };
+  handlers["email"]    = [this](auto s, auto a, auto o) { return HandleEmail(s, a, o); };
+  handlers["server"]   = [this](auto s, auto a, auto o) { return HandleServer(s, a, o); };
+  handlers["npc"]      = [this](auto s, auto a, auto o) { return HandleNpc(s, a, o); };
+  handlers["faction"]  = [this](auto s, auto a, auto o) { return HandleFaction(s, a, o); };
+
+  // Default permissions per command name
+  static std::unordered_map<std::string, uint64_t> const permDefaults = {
+    {"help",0},{"commands",0},{"gps",ToMask(Permission::CommandGps)},{"mmap",ToMask(Permission::CommandGps)},
+    {"email",ToMask(Permission::CommandMailbox)},{"tele",ToMask(Permission::CommandTeleport)},
+    {"gm",ToMask(Permission::CommandGmTools)},{"dnd",ToMask(Permission::CommandGmTools)},
+    {"dev",ToMask(Permission::CommandGmTools)},{"visible",ToMask(Permission::CommandGmTools)},
+    {"fly",ToMask(Permission::CommandGmTools)},{"speed",ToMask(Permission::CommandGmTools)},
+    {"online",ToMask(Permission::ManagePlayers)},{"announce",ToMask(Permission::ManagePlayers)},
+    {"kick",ToMask(Permission::ManagePlayers)},{"goto",ToMask(Permission::ManagePlayers)},
+    {"appear",ToMask(Permission::ManagePlayers)},{"summon",ToMask(Permission::ManagePlayers)},
+    {"learn",ToMask(Permission::CommandGameplay)},{"unlearn",ToMask(Permission::CommandGameplay)},
+    {"money",ToMask(Permission::CommandGameplay)},{"additem",ToMask(Permission::CommandGameplay)},
+    {"delitem",ToMask(Permission::CommandGameplay)},{"level",ToMask(Permission::CommandGameplay)},
+    {"cd",ToMask(Permission::CommandGameplay)},{"damage",ToMask(Permission::CommandGameplay)},
+    {"revive",ToMask(Permission::CommandGameplay)},{"faction",ToMask(Permission::CommandGameplay)},
+    {"ticket",ToMask(Permission::ManageGmTickets)},
+    {"account",ToMask(Permission::ManageAccounts)},{"ban",ToMask(Permission::ManageAccounts)},
+    {"unban",ToMask(Permission::ManageAccounts)},{"rbac",ToMask(Permission::ManageAccounts)},
+    {"server",ToMask(Permission::ServerControl)},{"npc",ToMask(Permission::ServerControl)},
+  };
+
+  auto permFor = [&](std::string const &name) -> uint64_t {
+    auto it = permDefaults.find(name);
+    return it != permDefaults.end() ? it->second : 0;
+  };
+
+  // From the server console these commands take an online character name as the
+  // first argument and delegate the action to that player. Without it they run
+  // against the console session (no character) and fail — e.g. `.revive` could
+  // only ever revive "self", which the console has none of.
+  auto consoleLayoutFor = [](std::string const &name) {
+    return name == "revive" ? ConsoleArgLayout::TargetOnlineCharacterFirst
+                            : ConsoleArgLayout::SameAsInGame;
+  };
+
+  // Load from DB first — only commands with handlers are registered. La tabla
+  // `firelands_commands` es la fuente autoritativa del permiso de EJECUCION (su
+  // columna required_permission_mask, donde 0 = cualquiera). Asi coincide con lo
+  // que filtra `.help`, que lee la misma tabla -> una sola fuente de verdad. El
+  // mapa hardcodeado permFor() solo queda como red de seguridad para comandos sin
+  // fila en la tabla (DB caida / tabla vacia).
+  if (_commandDefRepo) {
+    auto const defs = _commandDefRepo->LoadAll();
+    for (auto const &def : defs) {
+      auto hit = handlers.find(def.name);
+      if (hit == handlers.end())
+        continue;
+      CommandEntry entry;
+      entry.handler = hit->second;
+      entry.requiredPermissions = def.requiredPermissionMask;
+      entry.consoleLayout = consoleLayoutFor(def.name);
+      _commands[def.name] = std::move(entry);
+    }
+  }
+
+  // Fallback: register any handler not yet in _commands (no DB row, but handler
+  // exists). Aqui SI usamos permFor() porque no hay fila de tabla de donde sacar
+  // el permiso, y un comando staff nunca debe quedar publico por accidente.
+  for (auto &[name, handler] : handlers) {
+    if (_commands.count(name) > 0)
+      continue;
+    CommandEntry entry;
+    entry.handler = handler;
+    entry.requiredPermissions = permFor(name);
+    entry.consoleLayout = consoleLayoutFor(name);
+    _commands[name] = std::move(entry);
+  }
 }
 
 void CommandService::RegisterCommand(const std::string &name, CommandEntry entry) {
@@ -566,6 +831,270 @@ bool CommandService::HandleGps(std::shared_ptr<ICommandSession> session,
   return true;
 }
 
+bool CommandService::HandleMmap(std::shared_ptr<ICommandSession> session,
+                                const std::vector<std::string> &args,
+                                PrivilegeOrigin origin) {
+  (void)origin;
+  auto collision = WorldService::Instance().GetCollisionQueries();
+  if (!collision) {
+    LOG_MMAP_ERROR("[MMAP] collision service is not configured.");
+    session->SendNotification("MMAP: collision service is not configured.");
+    return true;
+  }
+
+  MovementInfo const &playerPos = session->GetPosition();
+  uint32_t mapId = session->GetMapId();
+  uint64_t const playerGuid = session->GetActiveCharacterObjectGuid();
+  auto map = WorldService::Instance().GetMap(mapId);
+
+  LOG_MMAP_DEBUG("[MMAP] request: playerGuid={} mapId={} args={}", playerGuid, mapId,
+            args.empty() ? std::string("<target>") : JoinArgs(args.begin(), args.end()));
+
+  if (!args.empty()) {
+    if (IsMmapSubcommand(args[0], "loadedtiles"))
+      return HandleMmapLoadedTiles(session, *collision, mapId);
+    if (IsMmapSubcommand(args[0], "loc"))
+      return HandleMmapLoc(session, *collision, mapId);
+    if (IsMmapSubcommand(args[0], "stats"))
+      return HandleMmapStats(session, *collision, mapId);
+    if (IsMmapSubcommand(args[0], "testarea"))
+      return HandleMmapTestArea(session, *collision, map, mapId);
+  }
+
+  // Auto-remove expired markers (older than 9s). The background sweep in
+  // PollScheduledRestart does this on time without another .mmap call; this keeps
+  // it prompt on the next invocation too.
+  SweepExpiredMmapMarkers();
+
+  // .mmap clear — remove visual markers
+  if (!args.empty() && args[0] == "clear") {
+    LOG_MMAP_DEBUG("[MMAP] clear: playerGuid={} mapId={}", playerGuid, mapId);
+    ClearMmapMarkers(session, playerGuid, mapId);
+    session->SendNotification("[MMAP] visual markers removed.");
+    return true;
+  }
+
+  std::vector<std::string> pathArgs = args;
+  bool const chasePath =
+      !pathArgs.empty() && IsMmapSubcommand(pathArgs[0], "chase");
+  if (!pathArgs.empty() &&
+      (IsMmapSubcommand(pathArgs[0], "path") ||
+       IsMmapSubcommand(pathArgs[0], "chase")))
+    pathArgs.erase(pathArgs.begin());
+
+  // Determine start/end positions for pathfinding
+  Vec3 startPos{playerPos.x, playerPos.y, playerPos.z};
+  Vec3 endPos{playerPos.x, playerPos.y, playerPos.z};
+  bool checkPath = false;
+  std::string pathLabel;
+
+  try {
+    if (!pathArgs.empty() || chasePath ||
+        (!args.empty() && IsMmapSubcommand(args[0], "path"))) {
+      bool const numericArgs = pathArgs.size() >= 3 &&
+                               IsAllDigitAscii(pathArgs[0].empty() ? std::string() : pathArgs[0]);
+      if (pathArgs.size() < 3) {
+        if (!IsMmapSubcommand(args[0], "path") && !chasePath) {
+          LOG_MMAP_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
+                   playerGuid, mapId, pathArgs.size());
+          session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap path  |  .mmap chase  |  .mmap loc  |  .mmap stats  |  .mmap loadedtiles  |  .mmap testarea  |  .mmap clear");
+          return false;
+        }
+      }
+      if (pathArgs.size() >= 3 && numericArgs) {
+        endPos.x = std::stof(pathArgs[0]);
+        endPos.y = std::stof(pathArgs[1]);
+        endPos.z = std::stof(pathArgs[2]);
+        if (pathArgs.size() > 3)
+          mapId = static_cast<uint32_t>(std::stoul(pathArgs[3]));
+        pathLabel = "you -> " + FormatVec3(endPos);
+        checkPath = true;
+      } else if (IsMmapSubcommand(args[0], "path") || chasePath ||
+                 pathArgs.empty()) {
+        auto creature = chasePath ? ResolveMmapChaseCreature(session, map)
+                                  : nullptr;
+        if (!creature) {
+          uint64_t const targetGuid = session->GetClientSelectionGuid();
+          if (targetGuid != 0 && map)
+            creature = map->TryGetCreature(targetGuid);
+        }
+        if (creature) {
+          MovementInfo const &crPos = creature->GetPosition();
+          startPos = Vec3{crPos.x, crPos.y, crPos.z};
+          endPos = Vec3{playerPos.x, playerPos.y, playerPos.z};
+          pathLabel = std::string("creature(") +
+                      std::to_string(creature->GetEntry()) + ") -> you";
+          checkPath = true;
+          LOG_MMAP_DEBUG("MMAP chase creature resolved: playerGuid={} entry={} mapId={} start=({}, {}, {})",
+                    playerGuid, creature->GetEntry(), mapId, crPos.x, crPos.y,
+                    crPos.z);
+        }
+        if (!checkPath) {
+          session->SendNotification(
+              chasePath ? "MMAP: no nearby creature found for chase path."
+                        : "MMAP: targeted object is not a creature.");
+        }
+      }
+      if (!checkPath && pathArgs.size() >= 3 && !numericArgs) {
+        LOG_MMAP_WARN("MMAP invalid coordinates: playerGuid={} mapId={} argCount={}",
+                 playerGuid, mapId, pathArgs.size());
+        session->SendNotification("Usage: .mmap [x y z [mapId]]  |  .mmap path  |  .mmap chase  |  .mmap loc  |  .mmap stats  |  .mmap loadedtiles  |  .mmap testarea  |  .mmap clear");
+        return false;
+      }
+    }
+  } catch (std::exception const &) {
+    LOG_MMAP_ERROR("MMAP invalid coordinates parse error: playerGuid={} mapId={} args={}",
+              playerGuid, mapId,
+              pathArgs.empty() ? std::string("<target>") : JoinArgs(pathArgs.begin(), pathArgs.end()));
+    session->SendNotification("MMAP: invalid coordinates.");
+    return false;
+  }
+
+  bool const available = collision->IsNavMeshDataAvailable(mapId);
+  LOG_MMAP_DEBUG("MMAP navmesh availability: mapId={} available={}", mapId, available);
+  float const height = collision->GetHeight(mapId, playerPos.x, playerPos.y, playerPos.z);
+  std::ostringstream head;
+  head << "MMAP map=" << mapId << " navmesh=" << (available ? "loaded" : "missing")
+       << " player=" << FormatVec3(Vec3{playerPos.x, playerPos.y, playerPos.z})
+       << " height=" << height;
+  session->SendNotification(head.str());
+
+  if (!checkPath)
+    return true;
+
+  FindPathRequest req;
+  req.mapId = mapId;
+  req.startX = startPos.x;
+  req.startY = startPos.y;
+  req.startZ = startPos.z;
+  req.endX = endPos.x;
+  req.endY = endPos.y;
+  req.endZ = endPos.z;
+  req.smoothPath = true;
+  req.allowPartialPath = true;
+
+  FindPathResult result = collision->FindPath(req);
+  LOG_MMAP_DEBUG("MMAP path result: mapId={} status={} waypoints={}", mapId,
+            FindPathStatusName(result.status), result.waypoints.size());
+  std::ostringstream path;
+  path << "MMAP path " << FormatVec3(startPos) << " -> "
+       << FormatVec3(endPos) << "  (" << pathLabel << ")"
+       << " status=" << FindPathStatusName(result.status)
+       << " waypoints=" << result.waypoints.size();
+  session->SendNotification(path.str());
+
+  constexpr size_t kMaxPrintedWaypoints = 8;
+  for (size_t i = 0; i < result.waypoints.size() && i < kMaxPrintedWaypoints; ++i) {
+    session->SendNotification("  wp[" + std::to_string(i) + "] " +
+                              FormatVec3(result.waypoints[i]));
+  }
+  if (result.waypoints.size() > kMaxPrintedWaypoints) {
+    session->SendNotification("  ... " +
+                              std::to_string(result.waypoints.size() -
+                                             kMaxPrintedWaypoints) +
+                              " more waypoint(s)");
+  }
+
+  // Spawn visual markers at each waypoint (auto-despawn after 9s)
+  ClearMmapMarkers(session, playerGuid, mapId);
+
+  if (!result.waypoints.empty()) {
+    constexpr uint32_t kMarkerEntry = 1u;
+    uint32_t kMarkerDisplayId = 15688u;
+    if (auto const repo = WorldService::Instance().GetNpcTemplateSearch()) {
+      if (auto const tpl = repo->TryGetByEntry(kMarkerEntry)) {
+        kMarkerDisplayId = ResolveCreatureDisplayId(
+            0, tpl->displayIds[0], tpl->displayIds[1], tpl->displayIds[2],
+            tpl->displayIds[3]);
+      }
+    }
+    // Float the marker well above a player model so it's visible even when
+    // start ≈ end and the waypoint lands inside the caster or the target.
+    constexpr float kMarkerVisualLiftYards = 3.0f;
+    auto const now = std::chrono::steady_clock::now();
+    std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>> markers;
+    markers.reserve(result.waypoints.size());
+
+    for (size_t i = 0; i < result.waypoints.size(); ++i) {
+      auto const &wp = result.waypoints[i];
+      // Re-ground each waypoint Z before placing the marker. Detour's
+      // findStraightPath returns Z from the navmesh corridor, and on
+      // corrupted/ghost mmtiles that Z can be tens of yards above the real
+      // floor. Anchoring to the live GetHeight (which goes through the
+      // floor-under-(x,y) query) keeps markers visible on the ground.
+      float const groundZ =
+          collision->GetHeight(mapId, wp.x, wp.y, wp.z);
+      float const z = groundZ + kMarkerVisualLiftYards;
+      uint64_t const markerGuid = AllocateMmapMarkerGuid(kMarkerEntry);
+      SendMmapMarkerCreate(session, mapId, markerGuid,
+                           Vec3{wp.x, wp.y, z}, kMarkerEntry,
+                           kMarkerDisplayId, Creature::kDefaultFactionTemplate);
+      LOG_MMAP_DEBUG(
+          "MMAP marker spawn: mapId={} guid={} wpIndex={} wp=({}, {}, {}) "
+          "groundZ={} placedZ={}",
+          mapId, markerGuid, i, wp.x, wp.y, wp.z, groundZ, z);
+      markers.emplace_back(markerGuid, now);
+    }
+    {
+      std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
+      auto &set = _mmapMarkers[playerGuid];
+      set.mapId = mapId;
+      set.markers = std::move(markers);
+    }
+    session->SendNotification("MMAP: " +
+                              std::to_string(result.waypoints.size()) +
+                              " marker(s) spawned (despawn in 9s). |cffffffff.mmap clear|r to remove earlier.");
+  } else {
+    session->SendNotification(
+        "MMAP: no waypoints to mark (start and end resolved to the same "
+        "navmesh point).");
+  }
+  return true;
+}
+
+void CommandService::ClearMmapMarkers(std::shared_ptr<ICommandSession> session,
+                                     uint64_t playerGuid, uint32_t mapId) {
+  (void)mapId;
+  std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
+  auto it = _mmapMarkers.find(playerGuid);
+  if (it == _mmapMarkers.end())
+    return;
+
+  // Remove all markers (despawn on the map they were spawned on).
+  for (auto &[guid, spawnTime] : it->second.markers) {
+    (void)spawnTime;
+    SendMmapMarkerDespawn(session, it->second.mapId, guid);
+  }
+  _mmapMarkers.erase(it);
+}
+
+void CommandService::SweepExpiredMmapMarkers() {
+  std::lock_guard<std::mutex> lock(_mmapMarkersMutex);
+  if (_mmapMarkers.empty())
+    return;
+  auto const now = std::chrono::steady_clock::now();
+  for (auto it = _mmapMarkers.begin(); it != _mmapMarkers.end();) {
+    std::shared_ptr<ICommandSession> const session =
+        _onlineCharacters ? _onlineCharacters->TryResolveByObjectGuid(it->first)
+                          : nullptr;
+    auto &set = it->second;
+    set.markers.erase(
+        std::remove_if(set.markers.begin(), set.markers.end(),
+                       [&](auto const &p) {
+                         if (now - p.second > std::chrono::seconds(9)) {
+                           SendMmapMarkerDespawn(session, set.mapId, p.first);
+                           return true;
+                         }
+                         return false;
+                       }),
+        set.markers.end());
+    if (set.markers.empty())
+      it = _mmapMarkers.erase(it);
+    else
+      ++it;
+  }
+}
+
 bool CommandService::HandleTele(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &args,
                                 PrivilegeOrigin origin) {
@@ -679,13 +1208,24 @@ Mailbox  (Moderator+ in-game)
      "|cffFFD200· Position|r\n"
      "|cffCCCCCC.gps|r |cff888888—|r Print X, Y, Z, facing.  |cff666666e.g.|r "
      "|cffffffff.gps|r\n"
-     "|cff666666Console (online character first):|r |cffffffff.gps Annabell|r",
+     "|cff666666Console (online character first):|r |cffffffff.gps Annabell|r\n"
+     "|cffCCCCCC.mmap|r |cff888888—|r Check navmesh and path waypoints.  "
+     "|cff666666e.g.|r |cffffffff.mmap -8759 544 97|r",
      R"H3(--------------------------------------------------------------------------------
 Position
 --------------------------------------------------------------------------------
 
   .gps   [.gps <OnlineCharName>]
       Print X, Y, Z, and facing. From console, prefix an online character name.
+
+  .mmap [x y z [mapId]]
+  .mmap path
+  .mmap chase
+  .mmap <OnlineCharName> [x y z [mapId]]   (console)
+      Check whether navmesh data is loaded for the current map. With coordinates,
+      calculate a path and print the status plus the first waypoints. In-game,
+      `.mmap path` uses the selected creature, and `.mmap chase` uses the
+      selected creature or nearest creature to draw the path it would take to you.
 )H3"},
     {HelpChunkAudience::Both, ToMask(Permission::CommandTeleport),
      "|cffFFD200· Teleport|r\n"
@@ -898,6 +1438,28 @@ static void EmitFilteredStaffHelp(std::shared_ptr<ICommandSession> session,
 bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &,
                                 PrivilegeOrigin origin) {
+  // Emit commands from DB (firelands_commands table) filtered by RBAC permission mask
+  if (_commandDefRepo) {
+    auto cmds = _commandDefRepo->LoadAll();
+    if (!cmds.empty()) {
+      PermissionMask const mask = session->GetAccountRolePermissionMask();
+      std::ostringstream hexMask;
+      hexMask << std::hex << static_cast<uint64_t>(mask);
+      session->SendNotification("|cffFFD200--- Available Commands (mask=0x" +
+                                hexMask.str() + ") ---|r");
+      for (auto const &cmd : cmds) {
+        if (cmd.requiredPermissionMask == 0 ||
+            (mask & cmd.requiredPermissionMask) == cmd.requiredPermissionMask) {
+          std::string line = "|cffCCCCCC." + cmd.name + "|r";
+          if (!cmd.syntax.empty())
+            line += " |cff888888" + cmd.syntax + "|r";
+          if (!cmd.description.empty())
+            line += " |cff666666-|r " + cmd.description;
+          session->SendNotification(line);
+        }
+      }
+    }
+  }
   EmitFilteredStaffHelp(std::move(session), origin);
   return true;
 }
@@ -2214,6 +2776,9 @@ bool CommandService::HandleEmail(std::shared_ptr<ICommandSession> session,
 }
 
 void CommandService::PollScheduledRestart() {
+  // Despawn expired .mmap path markers on time (runs on the main loop tick, so it
+  // happens at ~9s even if the player never invokes .mmap again).
+  SweepExpiredMmapMarkers();
   if (!_restartDeadline)
     return;
   auto const now = std::chrono::steady_clock::now();

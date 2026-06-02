@@ -52,6 +52,8 @@ Database:
 Log:
   Level: "Debug"
   File: "logs/firelands-world.log"
+  MmapFile: "logs/firelands-mmaps.log"
+  MmapLevel: "Debug"
   StickyBanner: true
 
 Motd:
@@ -66,3 +68,10 @@ Motd:
 # from a loose client file.
 Data:
   DbcPath: "data/dbc"
+
+# Collision & pathfinding data root (extracted from client via firelands-* tools).
+# When set, enables real LineOfSight and navmesh pathfinding via Detour.
+# Expected layout: <DataRoot>/vmaps/ and <DataRoot>/mmaps/
+# Leave empty to use the permissive stub (no collision, straight-line movement).
+Collision:
+  DataRoot: ""

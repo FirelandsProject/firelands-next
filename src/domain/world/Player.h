@@ -97,6 +97,9 @@ public:
   void SetPhaseShift(PhaseShift phaseShift) { m_phaseShift = std::move(phaseShift); }
   PhaseShift const &GetPhaseShift() const { return m_phaseShift; }
 
+  void SetGmModeEnabled(bool enabled) { m_gmModeEnabled = enabled; }
+  bool IsGmModeEnabled() const { return m_gmModeEnabled; }
+
 private:
   std::shared_ptr<IMapNotifier> m_notifier;
   uint8 m_race = 0;
@@ -121,6 +124,7 @@ private:
 
   PhaseShift m_phaseShift;
   UnitAuraState m_auraState;
+  bool m_gmModeEnabled = false;
 };
 
 } // namespace Firelands

@@ -116,6 +116,7 @@ add_executable(FirelandsUnitTests
     unit/infrastructure/LuaGameScriptHostTests.cpp
     unit/infrastructure/MapAuraTickerTests.cpp
     unit/infrastructure/MapCollisionQueriesStubTests.cpp
+    unit/infrastructure/VMapManager2Tests.cpp
     unit/infrastructure/SpellCastTablesSpellPowerTests.cpp
     unit/infrastructure/SpellCastTablesDurationTests.cpp
     # TODO: fix missing headers for vmap/tools tests

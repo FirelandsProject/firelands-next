@@ -27,6 +27,7 @@
 #include <shared/game/ActionButton.h>
 #include <shared/game/PhaseShift.h>
 #include <shared/game/PlayerGmAppearance.h>
+#include <application/combat/CreatureChaseMovement.h>
 #include <domain/models/Character.h>
 #include <domain/models/GossipMenu.h>
 #include <domain/models/QuestGossip.h>
@@ -214,6 +215,8 @@ public:
     std::optional<ActiveSpline> activeSpline;
     /// Last chase destination used for spline replanning (ref `_lastTargetPosition`).
     std::optional<MovementInfo> lastChaseTargetPos;
+    /// Navmesh pathfinding state for creature chase movement.
+    application::combat::ChaseNavMeshState navMeshState;
     std::chrono::steady_clock::time_point nextMeleeSwingAt{};
     std::chrono::steady_clock::time_point nextSpellTryAt{};
     std::vector<uint32_t> combatSpells;

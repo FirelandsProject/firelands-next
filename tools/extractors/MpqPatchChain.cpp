@@ -119,4 +119,74 @@ bool MpqPatchChain::EnumerateAcrossArchives(
   return true;
 }
 
+// static
+bool MpqPatchChain::ExtractFromBestArchive(
+    const std::vector<std::filesystem::path> &orderedArchives,
+    const char *archivedPath,
+    const std::filesystem::path &destPath) {
+  std::filesystem::create_directories(destPath.parent_path());
+
+  for (auto it = orderedArchives.rbegin(); it != orderedArchives.rend(); ++it) {
+    HANDLE h = nullptr;
+    if (!SFileOpenArchive(it->c_str(), 0, MPQ_FLAG_READ_ONLY, &h) || h == nullptr) {
+      continue;
+    }
+
+    HANDLE file = nullptr;
+    bool const exists =
+        SFileOpenFileEx(h, archivedPath, SFILE_OPEN_FROM_MPQ, &file);
+    if (exists && file) {
+      SFileCloseFile(file);
+#if defined(_WIN32)
+      const std::wstring wdest = destPath.wstring();
+      bool const ok = SFileExtractFile(h, archivedPath, wdest.c_str(),
+                                       SFILE_OPEN_FROM_MPQ);
+#else
+      const std::string dest = destPath.string();
+      bool const ok = SFileExtractFile(h, archivedPath, dest.c_str(),
+                                       SFILE_OPEN_FROM_MPQ);
+#endif
+      SFileCloseArchive(h);
+      return ok;
+    }
+
+    if (file) {
+      SFileCloseFile(file);
+    }
+    SFileCloseArchive(h);
+  }
+
+  return false;
+}
+
+// static
+bool MpqPatchChain::FileExistsInAnyArchive(
+    const std::vector<std::filesystem::path> &orderedArchives,
+    const char *archivedPath) {
+  static int callCount = 0;
+  callCount++;
+  for (auto it = orderedArchives.rbegin(); it != orderedArchives.rend(); ++it) {
+    HANDLE h = nullptr;
+    if (!SFileOpenArchive(it->c_str(), 0, MPQ_FLAG_READ_ONLY, &h) || h == nullptr) {
+      if (callCount == 1) printf("OPEN_FAIL: %s\n", it->string().c_str());
+      continue;
+    }
+
+    HANDLE file = nullptr;
+    bool const exists =
+        SFileOpenFileEx(h, archivedPath, SFILE_OPEN_FROM_MPQ, &file);
+    if (callCount == 1) printf("  %s -> %s = %d\n", it->filename().string().c_str(), archivedPath, (int)exists);
+    if (file) {
+      SFileCloseFile(file);
+    }
+    SFileCloseArchive(h);
+
+    if (exists) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 } // namespace firelands::extract

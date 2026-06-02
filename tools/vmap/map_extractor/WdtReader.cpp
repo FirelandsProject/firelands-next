@@ -4,8 +4,14 @@
 
 namespace Firelands::VMap::MapExtractor {
 
-static constexpr uint32_t kTagMVER = 0x4D524556u; // 'REVM' (reversed)  "MVER"
-static constexpr uint32_t kTagMAIN = 0x4E49414Du; // 'NIAM' (reversed)  "MAIN"
+static constexpr uint32_t RawTag(char a, char b, char c, char d) {
+    return (static_cast<uint32_t>(d) << 24u) |
+           (static_cast<uint32_t>(c) << 16u) |
+           (static_cast<uint32_t>(b) <<  8u) |
+           (static_cast<uint32_t>(a));
+}
+static constexpr uint32_t kTagMVER = RawTag('R','E','V','M');
+static constexpr uint32_t kTagMAIN = RawTag('N','I','A','M');
 
 static inline uint32_t Read32(const uint8_t* p) {
     uint32_t v; std::memcpy(&v, p, 4); return v;

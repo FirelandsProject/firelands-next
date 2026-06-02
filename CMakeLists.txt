@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(Firelands CXX)
+project(Firelands CXX C)
 
 # --- Policies ---
 if(POLICY CMP0135)
@@ -13,6 +13,8 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # spdlog 1.14.x bundled fmt breaks under C++20 (FMT_STRING / consteval on Apple Clang).
@@ -132,10 +134,26 @@ FetchContent_MakeAvailable(json)
 FetchContent_Declare(yaml-cpp URL https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.zip)
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
+# yaml-cpp 0.8.0 missing <cstdint> with C++20 – force include it
+target_compile_options(yaml-cpp PRIVATE -include cstdint)
 
 # Lua
 FetchContent_Declare(lua_cmake URL https://github.com/walterschell/Lua/archive/refs/tags/v5.4.7.zip)
 FetchContent_MakeAvailable(lua_cmake)
+
+# RecastNavigation (Recast + Detour for navmesh pathfinding)
+FetchContent_Declare(recastnavigation
+    GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+    GIT_TAG main
+)
+set(RECASTNAVIGATION_DEMO OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_STATIC ON CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(recastnavigation)
+# RecastNavigation defaults to C++98 which breaks with GCC 16 <cstdint>.
+# Force C++17 for Recast (it's a static lib, no ABI concerns).
+set_target_properties(Recast PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
 # MariaDB Connector/C++
 FetchContent_Declare(mariadb-connector-cpp URL https://github.com/mariadb-corporation/mariadb-connector-cpp/archive/refs/tags/1.1.7.zip)
@@ -148,6 +166,8 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS_ONLY OFF CACHE BOOL "" FORCE)
 include_directories(SYSTEM ${mariadb-connector-c_SOURCE_DIR}/include ${mariadb-connector-c_BINARY_DIR}/include)
 add_subdirectory(${mariadb-connector-cpp_SOURCE_DIR} ${mariadb-connector-cpp_BINARY_DIR})
+# MariaDB Connector/C++ 1.1.7 missing <cstdint> with new GCC (C++ only)
+target_compile_options(mariadbcpp_obj PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-include> $<$<COMPILE_LANGUAGE:CXX>:cstdint>)
 
 if(APPLE)
     set(MARIADB_EXTRA_LIBS "-framework CoreFoundation -framework Security")
@@ -186,7 +206,9 @@ target_link_libraries(auth
     PRIVATE OpenSSL::SSL
     PRIVATE OpenSSL::Crypto
     PRIVATE Boost::thread
+    PRIVATE mswsock
 )
+target_link_options(auth PRIVATE -static-libstdc++ -static-libgcc)
 
 # WORLD SERVER
 add_executable(world 
@@ -207,7 +229,9 @@ target_link_libraries(world
     PRIVATE OpenSSL::SSL
     PRIVATE OpenSSL::Crypto
     PRIVATE Boost::thread
+    PRIVATE mswsock
 )
+target_link_options(world PRIVATE -static-libstdc++ -static-libgcc)
 
 # DEVTOOLS CLI
 add_executable(FirelandsDevTools

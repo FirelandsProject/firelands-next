@@ -24,6 +24,7 @@
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/MonsterMovePackets.h>
 #include <shared/network/MovementFlags.h>
+#include <shared/network/MovementStateQueries.h>
 #include <shared/network/WorldPacket.h>
 #include <shared/network/packets/server/CombatPackets.h>
 
@@ -113,10 +114,33 @@ bool SessionPlayerInMeleeRangeOf(WorldSession const &session, float targetX, flo
   return IsWithinMeleeRange3d(pos.x, pos.y, pos.z, targetX, targetY, targetZ);
 }
 
+bool HasClearMeleeLineOfSight(uint32 mapId, float fromX, float fromY, float fromZ,
+                              float toX, float toY, float toZ) {
+  auto collision = WorldService::Instance().GetCollisionQueries();
+  if (!collision)
+    return true;
+  bool const clear = collision->LineOfSight(mapId, fromX, fromY, fromZ, toX, toY, toZ);
+  if (!clear) {
+    static thread_local std::chrono::steady_clock::time_point lastLog{};
+    auto const now = std::chrono::steady_clock::now();
+    if (lastLog.time_since_epoch().count() == 0 ||
+        now - lastLog >= std::chrono::seconds(2)) {
+      lastLog = now;
+      LOG_DEBUG("MELEE LoS blocked: mapId={} from=({}, {}, {}) to=({}, {}, {})",
+                mapId, fromX, fromY, fromZ, toX, toY, toZ);
+    }
+  }
+  return clear;
+}
+
 bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const &creature) {
   MovementInfo const &pos = session.GetPosition();
-  return IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, creature.GetX(), creature.GetY(),
-                                      creature.GetZ());
+  if (!IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, creature.GetX(), creature.GetY(),
+                                    creature.GetZ())) {
+    return false;
+  }
+  return HasClearMeleeLineOfSight(session.GetMapId(), creature.GetX(), creature.GetY(),
+                                  creature.GetZ(), pos.x, pos.y, pos.z);
 }
 
 void BroadcastCreatureChaseMove(std::shared_ptr<Map> const &map, uint64 creatureGuid,
@@ -211,17 +235,23 @@ bool IsCreatureInMeleeRangeOfPlayer(Creature const &creature, WorldSession const
                                     WorldSession::CreatureCombatRuntime const &runtime,
                                     std::chrono::steady_clock::time_point now) {
   MovementInfo const &playerPos = session.GetPosition();
-  MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  return IsWithinMeleeRangeAgainstNpc(playerPos.x, playerPos.y, playerPos.z, vis.x, vis.y,
-                                      vis.z);
+  (void)runtime;
+  (void)now;
+  MovementInfo const &creaturePos = creature.GetPosition();
+  if (!IsWithinMeleeRangeAgainstNpc(playerPos.x, playerPos.y, playerPos.z, creaturePos.x,
+                                    creaturePos.y, creaturePos.z)) {
+    return false;
+  }
+  return HasClearMeleeLineOfSight(session.GetMapId(), creaturePos.x, creaturePos.y,
+                                  creaturePos.z, playerPos.x, playerPos.y, playerPos.z);
 }
 
 bool SessionPlayerInMeleeRangeOfNpc(WorldSession const &session, Creature const &creature,
                                     WorldSession::CreatureCombatRuntime const &runtime,
                                     std::chrono::steady_clock::time_point now) {
-  MovementInfo const &pos = session.GetPosition();
-  MovementInfo const vis = GetCreatureClientVisiblePosition(creature, runtime, now);
-  return IsWithinMeleeRangeAgainstNpc(pos.x, pos.y, pos.z, vis.x, vis.y, vis.z);
+  (void)runtime;
+  (void)now;
+  return SessionPlayerInMeleeRangeOfNpc(session, creature);
 }
 
 /// Advances server position along the client-aligned spline timeline.
@@ -288,6 +318,13 @@ bool TryFinalizeCreatureChaseStand(std::shared_ptr<Map> const &map,
   float const standDistSq =
       DistanceSquared2d(from.x, from.y, stand.x, stand.y);
 
+  LOG_MMAP_DEBUG(
+      "CHASE finalize stand: mapId={} creatureGuid={} from=({}, {}, {}) "
+      "target=({}, {}, {}) stand=({}, {}, {}) standDist2d={}",
+      map ? map->GetMapId() : 0u, creature ? creature->GetGuid() : 0ULL, from.x,
+      from.y, from.z, targetX, targetY, targetZ, stand.x, stand.y, stand.z,
+      std::sqrt(standDistSq));
+
   if (IsCreatureSplineInFlight(runtime, now, true))
     return false;
 
@@ -326,6 +363,53 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
 
   SyncCreatureToActiveSpline(map, creature, runtime, now);
 
+  MovementInfo from = creature->GetPosition();
+  auto const collisionQueries = WorldService::Instance().GetCollisionQueries();
+  bool const useNavMesh =
+      collisionQueries && collisionQueries->IsNavMeshDataAvailable(map->GetMapId());
+
+  // Pin the chase target to the navmesh ground so creatures don't follow a
+  // flying player into the air. Done before the relocation check so the
+  // stored grounded Z and the new grounded Z compare consistently across
+  // ticks (otherwise an airborne player would trigger a replan every tick).
+  // Home splines already track a grounded point.
+  float const targetZRaw = targetZ;
+  // Ground creatures pull the target down to the floor so they never chase a
+  // flying player up into the air. Airborne creatures (flyers) skip this and
+  // follow the target's real Z. Inert for ground creatures today (no airborne
+  // flags), so behaviour is unchanged for them.
+  if (collisionQueries && !returnHomeSpline && !MovementIsAirborneTier(from)) {
+    float const projected = collisionQueries->GetHeight(map->GetMapId(),
+                                                         targetX, targetY,
+                                                         from.z);
+    // If the navmesh ground is very different from the creature/target Z,
+    // the .mmtile data likely picked a ghost/upper poly at this column. Fall back
+    // to from.z so the creature keeps its current footing instead of being
+    // teleported onto a ghost poly.
+    // Only distrust the navmesh ground when it sits well ABOVE the creature's
+    // current footing -- that signals a ghost/upper poly in the .mmtile. When
+    // the navmesh ground is at or below the creature (downhill target, or a
+    // flying player whose target we want pulled down to the floor) we trust it,
+    // so creatures never follow a target up into the air.
+    constexpr float kMaxUpwardProjectionYards = 4.0f;
+    if (projected - from.z > kMaxUpwardProjectionYards) {
+      LOG_MMAP_WARN(
+          "CHASE rejecting navmesh target projection: mapId={} creatureGuid={} "
+          "targetXY=({}, {}) navmeshZ={} fromZ={} rawZ={} deltaFrom={} -- ground "
+          "resolved above footing, keeping fromZ (likely corrupted .mmtile)",
+          map->GetMapId(), creature->GetGuid(), targetX, targetY, projected,
+          from.z, targetZRaw, projected - from.z);
+      targetZ = from.z;
+    } else {
+      targetZ = projected;
+    }
+    LOG_MMAP_DEBUG(
+        "CHASE ground-project target: mapId={} creatureGuid={} from=({}, {}, {}) "
+        "targetXY=({}, {}) targetZ_raw={} targetZ_grounded={} delta={}",
+        map->GetMapId(), creature->GetGuid(), from.x, from.y, from.z, targetX,
+        targetY, targetZRaw, targetZ, targetZ - targetZRaw);
+  }
+
   bool const chaseTargetMoved =
       !returnHomeSpline &&
       (!runtime.lastChaseTargetPos.has_value() ||
@@ -334,7 +418,6 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
                                                  runtime.lastChaseTargetPos->z, targetX,
                                                  targetY, targetZ));
 
-  MovementInfo from = creature->GetPosition();
   if (chaseTargetMoved && runtime.activeSpline.has_value()) {
     from = InterpolateActiveSpline(*runtime.activeSpline, now, true);
     map->UpdateObjectPosition(creature->GetGuid(), from);
@@ -343,8 +426,56 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   application::combat::CreatureChaseConfig config{};
   config.stopDistanceYards = stopDistanceYards;
 
-  auto const projected = application::combat::ProjectCreatureTowardTarget(
-      from, targetX, targetY, targetZ, kCreatureSplineHorizonSeconds, config);
+  application::combat::CreatureChaseStepResult projected;
+  if (useNavMesh && !returnHomeSpline) {
+    projected = application::combat::StepCreatureAlongNavMeshPath(
+        from, targetX, targetY, targetZ, kCreatureSplineHorizonSeconds, config,
+        runtime.navMeshState, collisionQueries.get(), map->GetMapId());
+  } else {
+    projected = application::combat::ProjectCreatureTowardTarget(
+        from, targetX, targetY, targetZ, kCreatureSplineHorizonSeconds, config);
+  }
+
+  // Belt-and-suspenders: even when the step skipped Z motion (stop-range case
+  // or 2D-only waypoint), keep the broadcast position on the navmesh floor.
+  // Skip for airborne creatures (flying / no-gravity / hover): forcing their Z to
+  // the ground would yank a flyer down to the terrain. For ground creatures this
+  // is inert today (they carry no airborne flags) and clamps as before.
+  if (collisionQueries && !returnHomeSpline && !MovementIsAirborneTier(from)) {
+    float const preClampZ = projected.position.z;
+    float groundZ = collisionQueries->GetHeight(
+        map->GetMapId(), projected.position.x, projected.position.y,
+        projected.position.z);
+    // Safety net for corrupted navmesh tiles: if the resolved ground would
+    // teleport the creature more than 5 yards vertically in a single tick,
+    // ignore the navmesh value and keep the creature anchored at its current
+    // Z. WoW terrain rarely changes more than 5y per step horizontally, so
+    // this only kicks in when the .mmtile data is wrong.
+    // Asymmetric guard: only reject when the resolved ground is well ABOVE the
+    // creature in a single tick (a ghost/upper poly). Downward corrections are
+    // always allowed -- that is just gravity, and it lets a creature that ended
+    // up airborne (knockback, chasing up a slope) fall back to the floor
+    // instead of getting stuck flying.
+    constexpr float kMaxUpwardStepYards = 5.0f;
+    if (groundZ - from.z > kMaxUpwardStepYards) {
+      LOG_MMAP_WARN(
+          "CHASE rejecting navmesh ground jump: mapId={} creatureGuid={} "
+          "step=({}, {}, {}) navmeshZ={} fromZ={} delta={} -- ground above "
+          "footing, keeping fromZ (likely corrupted .mmtile)",
+          map->GetMapId(), creature->GetGuid(), projected.position.x,
+          projected.position.y, projected.position.z, groundZ, from.z,
+          groundZ - from.z);
+      groundZ = from.z;
+    }
+    projected.position.z = groundZ;
+    LOG_MMAP_DEBUG(
+        "CHASE ground-clamp step: mapId={} creatureGuid={} step=({}, {}, {}) "
+        "preClampZ={} clampedZ={} delta={} moved={} inStopRange={}",
+        map->GetMapId(), creature->GetGuid(), projected.position.x,
+        projected.position.y, projected.position.z, preClampZ,
+        projected.position.z, projected.position.z - preClampZ, projected.moved,
+        projected.inStopRange);
+  }
 
   if (!returnHomeSpline) {
     float const distToPlayerSq =
@@ -378,6 +509,11 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   int32_t const splineId = static_cast<int32_t>(++moveCounter);
   uint32_t const durationMs = monster_move_wire::MonsterMoveDurationMs(
       from.x, from.y, from.z, to.x, to.y, to.z, kCreatureRunSpeedYardsPerSec);
+  LOG_MMAP_DEBUG(
+      "CHASE broadcast: mapId={} creatureGuid={} returnHome={} from=({}, {}, {}) "
+      "to=({}, {}, {}) duration={}ms splineId={}",
+      map->GetMapId(), creature->GetGuid(), returnHomeSpline, from.x, from.y,
+      from.z, to.x, to.y, to.z, durationMs, splineId);
   if (returnHomeSpline)
     BroadcastCreatureReturnMove(map, creature->GetGuid(), from, to, splineId);
   else
@@ -563,6 +699,11 @@ void WorldSession::StartCreatureAggro(uint64_t creatureGuid) {
   auto victimCr = map->TryGetCreature(creatureGuid);
   if (!attackerPl || !victimCr || attackerPl->GetLiveHealth() == 0 ||
       victimCr->GetLiveHealth() == 0) {
+    return;
+  }
+  if (attackerPl->IsGmModeEnabled()) {
+    LOG_DEBUG("GM aggro blocked: playerGuid={} creatureGuid={} mapId={}",
+              _playerGuid, creatureGuid, _mapId);
     return;
   }
   if (!application::CanMeleeAttack(*attackerPl, *victimCr, _factionTemplateDbc.get()))
@@ -810,6 +951,15 @@ void WorldSession::ProcessCreatureCombatMovementTick() {
   auto attackerPl = map->TryGetPlayer(_playerGuid);
   if (!attackerPl) {
     StopAllCreatureCombat(false);
+    return;
+  }
+  if (attackerPl->IsGmModeEnabled()) {
+    if (!_creatureAggroed.empty() || !_creatureReturningHome.empty()) {
+      LOG_DEBUG("GM combat cleanup: playerGuid={} mapId={} aggroed={} returningHome={}",
+                _playerGuid, _mapId, _creatureAggroed.size(), _creatureReturningHome.size());
+    }
+    StopAllCreatureCombat(false);
+    StopMeleeAutoAttack(false);
     return;
   }
 

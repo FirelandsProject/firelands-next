@@ -30,6 +30,7 @@
 #include <infrastructure/persistence/MySqlAccountDataRepository.h>
 #include <infrastructure/persistence/MySqlAccountRepository.h>
 #include <infrastructure/persistence/MySqlRbacRepository.h>
+#include <infrastructure/persistence/MySqlCommandDefinitionRepository.h>
 #include <infrastructure/persistence/MySqlCharacterRepository.h>
 #include <infrastructure/persistence/MySqlCreatureClassLevelStatsRepository.h>
 #include <infrastructure/persistence/MySqlCreatureSpawnRepository.h>
@@ -51,6 +52,7 @@
 #include <infrastructure/scripting/LuaGameScriptHost.h>
 #include <infrastructure/world/DbCreatureSpawnBootstrap.h>
 #include <infrastructure/world/MapCollisionQueriesStub.h>
+#include <infrastructure/collision/MapCollisionQueriesReal.h>
 #include <memory>
 #include <mutex>
 #include <shared/Banner.h>
@@ -100,8 +102,13 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
 
     const std::string collisionRoot =
         config.GetNested<std::string>({"Collision", "DataRoot"}, "");
-    WorldService::Instance().SetCollisionQueries(
-        std::make_shared<MapCollisionQueriesStub>(collisionRoot));
+    if (!collisionRoot.empty()) {
+      WorldService::Instance().SetCollisionQueries(
+          std::make_shared<MapCollisionQueriesReal>(collisionRoot));
+    } else {
+      WorldService::Instance().SetCollisionQueries(
+          std::make_shared<MapCollisionQueriesStub>(collisionRoot));
+    }
 
     std::string dbUser =
         config.GetNested<std::string>({"Database", "User"}, "firelands");
@@ -167,7 +174,9 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
     auto gmTicketService =
         std::make_shared<GmTicketService>(gmTicketRepo, charService);
     auto commandService = std::make_shared<CommandService>(
-        onlineCharRegistry, accountRepo, charService, gmTicketService, rbacRepo);
+        onlineCharRegistry, accountRepo, charService, gmTicketService, rbacRepo,
+        std::make_shared<MySqlCommandDefinitionRepository>(worldConn));
+    commandService->LoadCommandsFromDb();
 
     auto languagesDbc = std::make_shared<LanguagesDbc>();
     if (!languagesDbc->Load(dbcBasePath + "/Languages.dbc")) {
@@ -302,6 +311,7 @@ int RunWorldGameStack(std::shared_ptr<WorldFtxuiRuntime> tui_runtime,
 
     auto npcTemplateSearchRepo =
         std::make_shared<MySqlNpcTemplateSearchRepository>(worldConn);
+    WorldService::Instance().SetNpcTemplateSearch(npcTemplateSearchRepo);
     auto gossipRepo =
         std::make_shared<MySqlGossipRepository>(worldConn);
     auto npcTextRepo =
@@ -469,6 +479,10 @@ int RunWorldApplication(int argc, char **argv) {
           .WithFile(true, config.GetNested<std::string>(
                               {"Log", "File"}, "logs/firelands-world.log"))
           .WithFileLevel(LogLevel::Debug)
+          .WithMmapFile(config.GetNested<std::string>(
+              {"Log", "MmapFile"}, "logs/firelands-mmaps.log"))
+          .WithMmapFileLevel(config.GetNested<LogLevel>(
+              {"Log", "MmapLevel"}, LogLevel::Debug))
           .WithRotatingFile(10 * 1024 * 1024, 5)
           .Build());
 

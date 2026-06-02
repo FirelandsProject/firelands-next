@@ -63,4 +63,14 @@ inline std::filesystem::path DbcStoreOutputRelativePath(const std::string &archi
   return dbcRoot / ArchivedPathToRelative(archived.substr(tailStart));
 }
 
+inline std::filesystem::path DbcOutputPath(const std::filesystem::path &outDir,
+                                           const std::string &archived) {
+  std::filesystem::path relative = DbcStoreOutputRelativePath(archived);
+  if (outDir.filename() == "dbc" && !relative.empty() &&
+      *relative.begin() == "dbc") {
+    relative = relative.lexically_relative("dbc");
+  }
+  return outDir / relative;
+}
+
 } // namespace firelands::extract

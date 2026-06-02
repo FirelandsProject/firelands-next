@@ -31,6 +31,27 @@ static constexpr uint32_t kTagMCVT = RawTag('T','V','C','M');
 static constexpr uint32_t kTagMCLQ = RawTag('Q','L','C','M');
 static constexpr uint32_t kTagMH2O = RawTag('O','2','H','M');
 static constexpr uint32_t kTagMFBO = RawTag('O','B','F','M');
+template <typename T>
+static const T* ResolveMcnkSubChunk(const uint8_t* mcnkData,
+                                    uint32_t mcnkSize,
+                                    uint32_t offset,
+                                    uint32_t expectedTag) {
+    if (offset == 0)
+        return nullptr;
+
+    uint32_t const candidates[] = {8u + offset, offset};
+    uint32_t const totalSize = 8u + mcnkSize;
+    for (uint32_t candidate : candidates) {
+        if (candidate + sizeof(T) > totalSize)
+            continue;
+
+        const T* chunk = reinterpret_cast<const T*>(mcnkData + candidate);
+        if (chunk->fcc == expectedTag)
+            return chunk;
+    }
+
+    return nullptr;
+}
 
 // ─── LiquidVertexFormat resolution ──────────────────────────────────────────
 
@@ -117,8 +138,10 @@ void AdtReader::ProcessMcnk(const uint8_t* mcnkData,
 
     // MCVT sub-chunk (relative offsets within the MCNK payload)
     if (mcnk->offsMCVT) {
-        const adt_MCVT* mcvt = reinterpret_cast<const adt_MCVT*>(
-            mcnkData + 8 + mcnk->offsMCVT);  // +8 skips fcc+size
+        const adt_MCVT* mcvt =
+            ResolveMcnkSubChunk<adt_MCVT>(mcnkData, mcnk->size,
+                                          mcnk->offsMCVT, kTagMCVT);
+        if (mcvt) {
         // V9: outer grid (ADT_CELL_SIZE+1 × ADT_CELL_SIZE+1), stride = 2*CELL_SIZE+1
         for (int y = 0; y <= kAdtCellSize; ++y) {
             int cy = iy * kAdtCellSize + y;
@@ -135,12 +158,16 @@ void AdtReader::ProcessMcnk(const uint8_t* mcnkData,
                 out.V8[cy][cx] += mcvt->height_map[y * (kAdtCellSize * 2 + 1) + kAdtCellSize + 1 + x];
             }
         }
+        }
     }
 
     // MCLQ legacy liquid
     if (mcnk->sizeMCLQ > 8 && mcnk->offsMCLQ) {
-        const adt_MCLQ* liq = reinterpret_cast<const adt_MCLQ*>(
-            mcnkData + 8 + mcnk->offsMCLQ);
+        const adt_MCLQ* liq =
+            ResolveMcnkSubChunk<adt_MCLQ>(mcnkData, mcnk->size,
+                                          mcnk->offsMCLQ, kTagMCLQ);
+        if (!liq)
+            return;
         int count = 0;
         for (int y = 0; y < kAdtCellSize; ++y) {
             int cy = iy * kAdtCellSize + y;

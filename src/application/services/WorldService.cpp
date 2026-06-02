@@ -25,6 +25,18 @@ void WorldService::RemovePlayerFromMap(uint32 mapId, uint64 guid) {
     map->RemoveObject(guid);
 }
 
+void WorldService::RemoveCreatureFromMap(uint32 mapId, uint64 guid) {
+  std::shared_ptr<MapService> service;
+  {
+    std::lock_guard<std::mutex> lock(m_worldMutex);
+    service = m_mapRegistry.TryGet(mapId);
+  }
+  if (!service)
+    return;
+  if (auto *map = service->GetMap())
+    map->RemoveObject(guid);
+}
+
 void WorldService::AddCreatureToMap(uint32 mapId,
                                     std::shared_ptr<Creature> creature) {
   const uint64 guid = creature->GetGuid();
@@ -136,6 +148,18 @@ void WorldService::SetAreaTableDbc(std::shared_ptr<AreaTableDbc const> areaTable
 std::shared_ptr<AreaTableDbc const> WorldService::GetAreaTableDbc() {
   std::lock_guard<std::mutex> lock(m_auxMutex);
   return m_areaTableDbc;
+}
+
+void WorldService::SetNpcTemplateSearch(
+    std::shared_ptr<INpcTemplateSearchRepository const> repo) {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  m_npcTemplateSearch = std::move(repo);
+}
+
+std::shared_ptr<INpcTemplateSearchRepository const>
+WorldService::GetNpcTemplateSearch() {
+  std::lock_guard<std::mutex> lock(m_auxMutex);
+  return m_npcTemplateSearch;
 }
 
 void WorldService::SetExperienceRates(ExperienceRates rates) {

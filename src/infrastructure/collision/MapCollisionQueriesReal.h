@@ -1,15 +1,18 @@
-#ifndef FIRELANDS_INFRASTRUCTURE_WORLD_MAP_COLLISION_QUERIES_STUB_H
-#define FIRELANDS_INFRASTRUCTURE_WORLD_MAP_COLLISION_QUERIES_STUB_H
+#ifndef FIRELANDS_INFRASTRUCTURE_COLLISION_MAP_COLLISION_QUERIES_REAL_H
+#define FIRELANDS_INFRASTRUCTURE_COLLISION_MAP_COLLISION_QUERIES_REAL_H
 
 #include <application/ports/IMapCollisionQueries.h>
+#include <infrastructure/collision/DetourNavMeshManager.h>
+#include <infrastructure/collision/VMapManager2.h>
+#include <memory>
 #include <string>
 
 namespace Firelands {
 
-/// Placeholder until vmap/mmap from reference implementation extractors are integrated.
-class MapCollisionQueriesStub final : public IMapCollisionQueries {
+class MapCollisionQueriesReal final : public IMapCollisionQueries {
 public:
-  explicit MapCollisionQueriesStub(std::string dataRoot = {});
+  explicit MapCollisionQueriesReal(std::string dataRoot);
+  ~MapCollisionQueriesReal() override = default;
 
   bool IsNavMeshDataAvailable(uint32_t mapId) const override;
   uint32_t GetLoadedMapCount() const override;
@@ -22,7 +25,8 @@ public:
                   float zHint) const override;
 
 private:
-  std::string _dataRoot;
+  mutable DetourNavMeshManager _navMeshManager;
+  mutable VMapManager2 _vmapManager;
 };
 
 } // namespace Firelands

@@ -1,11 +1,15 @@
 #include "CreatureChaseMovement.h"
 
 #include <shared/network/MovementFlags.h>
+#include <shared/network/MovementStateQueries.h>
+#include <application/ports/IMapCollisionQueries.h>
+#include <shared/Logger.h>
 #include <cmath>
 
 using Firelands::MOVEMENTFLAG_FORWARD;
 using Firelands::MOVEMENTFLAG_NONE;
 using Firelands::MovementInfo;
+using Firelands::Vec3;
 
 namespace application::combat {
 
@@ -122,6 +126,170 @@ bool ChaseTargetRelocated(float lastX, float lastY, float lastZ, float newX, flo
   float const dz = newZ - lastZ;
   float const thresholdSq = thresholdYards * thresholdYards;
   return (dx * dx + dy * dy + dz * dz) > thresholdSq;
+}
+
+std::vector<Vec3> ComputeNavMeshPath(uint32_t mapId,
+                                     MovementInfo const &start, float targetX,
+                                     float targetY, float targetZ,
+                                     Firelands::IMapCollisionQueries const *collision) {
+  std::vector<Vec3> waypoints;
+  if (!collision) {
+    LOG_DEBUG("CHASE navmesh path skipped: mapId={} no collision service", mapId);
+    return waypoints;
+  }
+
+  Firelands::FindPathRequest req;
+  req.mapId = mapId;
+  req.startX = start.x;
+  req.startY = start.y;
+  req.startZ = start.z;
+  req.endX = targetX;
+  req.endY = targetY;
+  req.endZ = targetZ;
+  req.smoothPath = true;
+  req.allowPartialPath = true;
+
+  auto result = collision->FindPath(req);
+  if (result.status == Firelands::FindPathStatus::Complete ||
+      result.status == Firelands::FindPathStatus::Partial) {
+    waypoints = std::move(result.waypoints);
+  } else {
+    LOG_DEBUG("CHASE navmesh path failed: mapId={} status={} start=({}, {}, {}) end=({}, {}, {})",
+              mapId, static_cast<int>(result.status), start.x, start.y, start.z,
+              targetX, targetY, targetZ);
+  }
+  return waypoints;
+}
+
+CreatureChaseStepResult StepCreatureAlongNavMeshPath(
+    MovementInfo const &current, float targetX, float targetY, float targetZ,
+    float deltaSeconds, CreatureChaseConfig const &config,
+    ChaseNavMeshState &state,
+    Firelands::IMapCollisionQueries const *collision,
+    uint32_t mapId) {
+  // Set the Z value of the result to the navmesh floor on every tick. Blending with
+  // a delay (zBlendPerTick) toward the waypoint’s Z value causes the creature to
+  // float on slopes (when climbing slowly) or sink into/pass through the slope (the Z value doesn’t rise
+  // as fast as the terrain). Solving the Z value against the actual ground eliminates both
+  // problems, and the creature always stays attached to the terrain.
+  // Only ground creatures get pinned to the floor. Airborne ones (flying /
+  // no-gravity / hover) keep the Z the step produced, so a flyer isn't yanked to
+  // the terrain while chasing. Today ground creatures carry no airborne flags, so
+  // this is inert for them and behaves exactly as before.
+  bool const airborne = Firelands::MovementIsAirborneTier(current);
+  auto snapToGround = [&](CreatureChaseStepResult res) {
+    if (collision && res.moved && !airborne) {
+      float const ground = collision->GetHeight(mapId, res.position.x,
+                                                res.position.y, res.position.z);
+      if (std::isfinite(ground))
+        res.position.z = ground;
+    }
+    return res;
+  };
+
+  // 3y threshold so the corridor persists across ticks while the player is
+  // walking. With the default 0.5y the path tore down and rebuilt every
+  // single tick, which on tiles with ghost polys made findNearestPoly
+  // alternate between bad start projections and the NPC oscillated.
+  constexpr float kChaseReplanThresholdYards = 3.0f;
+  bool const targetRelocated =
+      ChaseTargetRelocated(state.lastTargetX, state.lastTargetY,
+                           state.lastTargetZ, targetX, targetY, targetZ,
+                           kChaseReplanThresholdYards);
+
+  if (targetRelocated || state.waypoints.empty()) {
+    state.lastTargetX = targetX;
+    state.lastTargetY = targetY;
+    state.lastTargetZ = targetZ;
+    state.currentWaypoint = 0;
+    state.waypoints.clear();
+  }
+
+  // Short-range bypass: when the target is well within engagement distance,
+  // skip the navmesh corridor entirely. It rarely adds value and is the case
+  // most vulnerable to ghost-poly start projections, which is what makes the
+  // NPC walk toward the player, turn around, replan, and come back.
+  constexpr float kDirectChaseRangeYards = 8.0f;
+  float const directDxFast = targetX - current.x;
+  float const directDyFast = targetY - current.y;
+  float const directDistSqFast =
+      directDxFast * directDxFast + directDyFast * directDyFast;
+  if (directDistSqFast <=
+      kDirectChaseRangeYards * kDirectChaseRangeYards) {
+    state.waypoints.clear();
+    state.currentWaypoint = 0;
+    return snapToGround(StepCreatureTowardTarget(current, targetX, targetY,
+                                                 targetZ, deltaSeconds, config));
+  }
+
+  if (targetRelocated && collision) {
+    state.waypoints = ComputeNavMeshPath(mapId, current, targetX, targetY, targetZ, collision);
+    if (!state.waypoints.empty()) {
+      state.waypoints.push_back(Vec3{targetX, targetY, targetZ});
+      state.currentWaypoint = 0;
+      LOG_DEBUG("CHASE navmesh path ready: mapId={} waypointCount={} current=({}, {}, {}) target=({}, {}, {})",
+                mapId, state.waypoints.size(), current.x, current.y, current.z,
+                targetX, targetY, targetZ);
+    } else {
+      LOG_DEBUG("CHASE navmesh path empty: mapId={} current=({}, {}, {}) target=({}, {}, {}) fallback=straight-line",
+                mapId, current.x, current.y, current.z, targetX, targetY, targetZ);
+    }
+  }
+
+  if (state.waypoints.empty() || state.currentWaypoint >= state.waypoints.size()) {
+    if (!collision) {
+      LOG_DEBUG("CHASE fallback without collision: mapId={} current=({}, {}, {}) target=({}, {}, {})",
+                mapId, current.x, current.y, current.z, targetX, targetY, targetZ);
+    }
+    return snapToGround(StepCreatureTowardTarget(current, targetX, targetY,
+                                                 targetZ, deltaSeconds, config));
+  }
+
+  float const directDx = targetX - current.x;
+  float const directDy = targetY - current.y;
+  float const directDistSq = directDx * directDx + directDy * directDy;
+
+  while (state.currentWaypoint < state.waypoints.size()) {
+    Vec3 const &wp = state.waypoints[state.currentWaypoint];
+    float const dx = current.x - wp.x;
+    float const dy = current.y - wp.y;
+    float const distSq = dx * dx + dy * dy;
+
+    if (distSq < 0.25f) {
+      ++state.currentWaypoint;
+      LOG_TRACE("CHASE waypoint reached: mapId={} waypointIndex={} pos=({}, {}, {})",
+                mapId, state.currentWaypoint - 1, wp.x, wp.y, wp.z);
+      continue;
+    }
+
+    // Skip a waypoint that goes the wrong way. Detour's findStraightPath can
+    // emit a start-projection point far from the actual creature when
+    // findNearestPoly picks a stale/corrupted poly; following it sends the NPC
+    // *away* from the player. "Wrong way" = the vector from current to wp
+    // points away from the target, AND wp is farther from the target than
+    // current already is.
+    float const wpToTargetX = targetX - wp.x;
+    float const wpToTargetY = targetY - wp.y;
+    float const wpToTargetDistSq =
+        wpToTargetX * wpToTargetX + wpToTargetY * wpToTargetY;
+    float const wpFromCurrentDot =
+        (wp.x - current.x) * directDx + (wp.y - current.y) * directDy;
+    if (wpFromCurrentDot < 0.f && wpToTargetDistSq > directDistSq) {
+      LOG_DEBUG(
+          "CHASE skipping wrong-way waypoint: mapId={} waypointIndex={} "
+          "wp=({}, {}, {}) current=({}, {}, {}) target=({}, {})",
+          mapId, state.currentWaypoint, wp.x, wp.y, wp.z, current.x, current.y,
+          current.z, targetX, targetY);
+      ++state.currentWaypoint;
+      continue;
+    }
+
+    auto step = StepCreatureTowardTarget(current, wp.x, wp.y, wp.z, deltaSeconds, config);
+    return snapToGround(step);
+  }
+
+  return snapToGround(StepCreatureTowardTarget(current, targetX, targetY,
+                                               targetZ, deltaSeconds, config));
 }
 
 } // namespace application::combat

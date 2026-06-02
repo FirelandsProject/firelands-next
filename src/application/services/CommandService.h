@@ -2,18 +2,22 @@
 #include <application/ports/ICommandService.h>
 #include <shared/game/Permissions.h>
 #include <chrono>
+#include <mutex>
 #include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Firelands {
 
 class ICommandSession;
 class IAccountRepository;
+class ICommandDefinitionRepository;
 class IRbacRepository;
+class ICommandDefinitionRepository;
 class OnlineCharacterSessionRegistry;
 class CharacterService;
 class GmTicketService;
@@ -43,7 +47,10 @@ public:
       std::shared_ptr<IAccountRepository> accountRepo = {},
       std::shared_ptr<CharacterService> characterService = {},
       std::shared_ptr<GmTicketService> gmTicketService = {},
-      std::shared_ptr<IRbacRepository> rbacRepo = {});
+      std::shared_ptr<IRbacRepository> rbacRepo = {},
+      std::shared_ptr<ICommandDefinitionRepository> commandDefRepo = {});
+
+  void LoadCommandsFromDb();
 
   bool ExecuteCommand(std::shared_ptr<ICommandSession> session,
                       const std::string &message,
@@ -68,6 +75,13 @@ private:
 
   bool HandleGps(std::shared_ptr<ICommandSession> session,
                  const std::vector<std::string> &args, PrivilegeOrigin origin);
+  bool HandleMmap(std::shared_ptr<ICommandSession> session,
+                  const std::vector<std::string> &args, PrivilegeOrigin origin);
+  void ClearMmapMarkers(std::shared_ptr<ICommandSession> session,
+                        uint64_t playerGuid, uint32_t mapId);
+  /// Despawn .mmap path markers older than 9s. Called from PollScheduledRestart
+  /// (main loop) so markers vanish on time even without another .mmap call.
+  void SweepExpiredMmapMarkers();
   bool HandleTele(std::shared_ptr<ICommandSession> session,
                   const std::vector<std::string> &args, PrivilegeOrigin origin);
   bool HandleHelp(std::shared_ptr<ICommandSession> session,
@@ -136,7 +150,17 @@ private:
   std::shared_ptr<CharacterService> _characterService;
   std::shared_ptr<GmTicketService> _gmTicketService;
   std::shared_ptr<IRbacRepository> _rbacRepo;
+  std::shared_ptr<ICommandDefinitionRepository> _commandDefRepo;
   std::map<std::string, CommandEntry> _commands;
+  /// .mmap path visual markers per player (key = player object guid). mapId is
+  /// stored so the background sweep can despawn them without a live session map.
+  struct MmapMarkerSet {
+    uint32_t mapId = 0;
+    std::vector<std::pair<uint64_t, std::chrono::steady_clock::time_point>>
+        markers;
+  };
+  std::mutex _mmapMarkersMutex;
+  std::unordered_map<uint64_t, MmapMarkerSet> _mmapMarkers;
 
   std::function<void()> _shutdownRequestHandler;
   std::optional<std::chrono::steady_clock::time_point> _restartDeadline;

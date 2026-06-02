@@ -38,6 +38,17 @@ public:
       const char *wildcard,
       const std::function<void(const std::string &)> &visitor);
 
+  // Extracts from the highest-priority archive containing `archivedPath`.
+  // This is useful for clients whose MPQs do not form a StormLib patch chain.
+  static bool ExtractFromBestArchive(
+      const std::vector<std::filesystem::path> &orderedArchives,
+      const char *archivedPath,
+      const std::filesystem::path &destPath);
+
+  static bool FileExistsInAnyArchive(
+      const std::vector<std::filesystem::path> &orderedArchives,
+      const char *archivedPath);
+
   bool IsOpen() const { return handle_ != nullptr; }
 
 private:
