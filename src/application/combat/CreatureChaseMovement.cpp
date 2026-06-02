@@ -1,6 +1,7 @@
 #include "CreatureChaseMovement.h"
 
 #include <shared/network/MovementFlags.h>
+#include <shared/network/MovementStateQueries.h>
 #include <application/ports/IMapCollisionQueries.h>
 #include <shared/Logger.h>
 #include <cmath>
@@ -171,8 +172,13 @@ CreatureChaseStepResult StepCreatureAlongNavMeshPath(
   // float on slopes (when climbing slowly) or sink into/pass through the slope (the Z value doesn’t rise
   // as fast as the terrain). Solving the Z value against the actual ground eliminates both
   // problems, and the creature always stays attached to the terrain.
+  // Only ground creatures get pinned to the floor. Airborne ones (flying /
+  // no-gravity / hover) keep the Z the step produced, so a flyer isn't yanked to
+  // the terrain while chasing. Today ground creatures carry no airborne flags, so
+  // this is inert for them and behaves exactly as before.
+  bool const airborne = Firelands::MovementIsAirborneTier(current);
   auto snapToGround = [&](CreatureChaseStepResult res) {
-    if (collision && res.moved) {
+    if (collision && res.moved && !airborne) {
       float const ground = collision->GetHeight(mapId, res.position.x,
                                                 res.position.y, res.position.z);
       if (std::isfinite(ground))

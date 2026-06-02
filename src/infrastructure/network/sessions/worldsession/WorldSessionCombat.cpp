@@ -24,6 +24,7 @@
 #include <shared/network/SpellCastWire.h>
 #include <shared/network/MonsterMovePackets.h>
 #include <shared/network/MovementFlags.h>
+#include <shared/network/MovementStateQueries.h>
 #include <shared/network/WorldPacket.h>
 #include <shared/network/packets/server/CombatPackets.h>
 
@@ -373,7 +374,11 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
   // ticks (otherwise an airborne player would trigger a replan every tick).
   // Home splines already track a grounded point.
   float const targetZRaw = targetZ;
-  if (collisionQueries && !returnHomeSpline) {
+  // Ground creatures pull the target down to the floor so they never chase a
+  // flying player up into the air. Airborne creatures (flyers) skip this and
+  // follow the target's real Z. Inert for ground creatures today (no airborne
+  // flags), so behaviour is unchanged for them.
+  if (collisionQueries && !returnHomeSpline && !MovementIsAirborneTier(from)) {
     float const projected = collisionQueries->GetHeight(map->GetMapId(),
                                                          targetX, targetY,
                                                          from.z);
@@ -433,7 +438,10 @@ bool TryBroadcastCreatureSplineStep(std::shared_ptr<Map> const &map,
 
   // Belt-and-suspenders: even when the step skipped Z motion (stop-range case
   // or 2D-only waypoint), keep the broadcast position on the navmesh floor.
-  if (collisionQueries && !returnHomeSpline) {
+  // Skip for airborne creatures (flying / no-gravity / hover): forcing their Z to
+  // the ground would yank a flyer down to the terrain. For ground creatures this
+  // is inert today (they carry no airborne flags) and clamps as before.
+  if (collisionQueries && !returnHomeSpline && !MovementIsAirborneTier(from)) {
     float const preClampZ = projected.position.z;
     float groundZ = collisionQueries->GetHeight(
         map->GetMapId(), projected.position.x, projected.position.y,

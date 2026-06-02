@@ -178,6 +178,8 @@ public:
     return _subject->GmRevivePlayer(playerGuid);
   }
 
+  bool GmReviveSelf() override { return _subject->GmReviveSelf(); }
+
   uint64_t GetClientSelectionGuid() const override {
     return _operatorSession ? _operatorSession->GetClientSelectionGuid() : 0;
   }
@@ -664,7 +666,21 @@ void CommandService::LoadCommandsFromDb() {
     return it != permDefaults.end() ? it->second : 0;
   };
 
-  // Load from DB first — only commands with handlers are registered
+  // From the server console these commands take an online character name as the
+  // first argument and delegate the action to that player. Without it they run
+  // against the console session (no character) and fail — e.g. `.revive` could
+  // only ever revive "self", which the console has none of.
+  auto consoleLayoutFor = [](std::string const &name) {
+    return name == "revive" ? ConsoleArgLayout::TargetOnlineCharacterFirst
+                            : ConsoleArgLayout::SameAsInGame;
+  };
+
+  // Load from DB first — only commands with handlers are registered. La tabla
+  // `firelands_commands` es la fuente autoritativa del permiso de EJECUCION (su
+  // columna required_permission_mask, donde 0 = cualquiera). Asi coincide con lo
+  // que filtra `.help`, que lee la misma tabla -> una sola fuente de verdad. El
+  // mapa hardcodeado permFor() solo queda como red de seguridad para comandos sin
+  // fila en la tabla (DB caida / tabla vacia).
   if (_commandDefRepo) {
     auto const defs = _commandDefRepo->LoadAll();
     for (auto const &def : defs) {
@@ -673,18 +689,22 @@ void CommandService::LoadCommandsFromDb() {
         continue;
       CommandEntry entry;
       entry.handler = hit->second;
-      entry.requiredPermissions = permFor(def.name);
+      entry.requiredPermissions = def.requiredPermissionMask;
+      entry.consoleLayout = consoleLayoutFor(def.name);
       _commands[def.name] = std::move(entry);
     }
   }
 
-  // Fallback: register any handler not yet in _commands (no DB row, but handler exists)
+  // Fallback: register any handler not yet in _commands (no DB row, but handler
+  // exists). Aqui SI usamos permFor() porque no hay fila de tabla de donde sacar
+  // el permiso, y un comando staff nunca debe quedar publico por accidente.
   for (auto &[name, handler] : handlers) {
     if (_commands.count(name) > 0)
       continue;
     CommandEntry entry;
     entry.handler = handler;
     entry.requiredPermissions = permFor(name);
+    entry.consoleLayout = consoleLayoutFor(name);
     _commands[name] = std::move(entry);
   }
 }
@@ -1418,16 +1438,18 @@ static void EmitFilteredStaffHelp(std::shared_ptr<ICommandSession> session,
 bool CommandService::HandleHelp(std::shared_ptr<ICommandSession> session,
                                 const std::vector<std::string> &,
                                 PrivilegeOrigin origin) {
-  // Emit commands from DB (firelands_commands table) filtered by access level
+  // Emit commands from DB (firelands_commands table) filtered by RBAC permission mask
   if (_commandDefRepo) {
     auto cmds = _commandDefRepo->LoadAll();
     if (!cmds.empty()) {
-      AccessLevel const level = session->GetAccountAccessLevel();
-      session->SendNotification("|cffFFD200--- Available Commands (Lvl " +
-                                std::to_string(static_cast<int>(level)) +
-                                ") ---|r");
+      PermissionMask const mask = session->GetAccountRolePermissionMask();
+      std::ostringstream hexMask;
+      hexMask << std::hex << static_cast<uint64_t>(mask);
+      session->SendNotification("|cffFFD200--- Available Commands (mask=0x" +
+                                hexMask.str() + ") ---|r");
       for (auto const &cmd : cmds) {
-        if (static_cast<int>(level) >= static_cast<int>(cmd.minAccessLevel)) {
+        if (cmd.requiredPermissionMask == 0 ||
+            (mask & cmd.requiredPermissionMask) == cmd.requiredPermissionMask) {
           std::string line = "|cffCCCCCC." + cmd.name + "|r";
           if (!cmd.syntax.empty())
             line += " |cff888888" + cmd.syntax + "|r";

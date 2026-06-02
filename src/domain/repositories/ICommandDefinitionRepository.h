@@ -11,7 +11,7 @@ struct CommandDefinition {
   std::string name;
   std::string description;
   std::string syntax;
-  uint8_t minAccessLevel = 0;
+  uint64_t requiredPermissionMask = 0;
 };
 
 class ICommandDefinitionRepository {
